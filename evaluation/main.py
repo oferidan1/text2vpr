@@ -66,9 +66,11 @@ def main(args):
     database_descriptors = all_descriptors[: test_ds.num_database]
 
     if args.save_descriptors:
-        logger.info(f"Saving the descriptors in {log_dir}")
-        np.save(log_dir / "queries_descriptors.npy", queries_descriptors)
-        np.save(log_dir / "database_descriptors.npy", database_descriptors)
+        logger.info(f"Saving the descriptors in {args.descriptor_dir}")
+        if not Path(args.descriptor_dir).exists():
+            Path(args.descriptor_dir).mkdir(parents=True, exist_ok=True)
+        np.save(args.descriptor_dir / "queries_descriptors.npy", queries_descriptors)
+        np.save(args.descriptor_dir / "database_descriptors.npy", database_descriptors)
 
     # Use a kNN to find predictions
     faiss_index = faiss.IndexFlatL2(args.descriptors_dimension)

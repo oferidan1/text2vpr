@@ -32,6 +32,7 @@ def parse_arguments():
     parser.add_argument(
         "--log_dir", type=str, default="default", help="experiment name, output logs will be saved under logs/log_dir"
     )
+    parser.add_argument("--descriptor_dir", type=str, default="descriptors", help="_")
     parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"], help="_")
     parser.add_argument(
         "--recall_values",
