@@ -52,7 +52,7 @@ class BLIPRetriever:
         
         # Default BLIP model if not specified
         if not hasattr(config, 'blip_model_name') or config.blip_model_name is None:
-            self.blip_model_name = "Salesforce/blip-image-captioning-base"
+            self.blip_model_name = "Salesforce/blip-itm-base-coco"
         else:
             self.blip_model_name = config.blip_model_name
         
@@ -62,18 +62,18 @@ class BLIPRetriever:
         # Load BLIP model and processor
         try:
             self.processor = BlipProcessor.from_pretrained(self.blip_model_name)
-            self.model = BlipForImageTextRetrieval.from_pretrained(self.blip_model_name)
+            self.model = BlipForImageTextRetrieval.from_pretrained(self.blip_model_name, torch_dtype=torch.bfloat16)
             self.model.to(self.device)
             self.model.eval()
         except Exception as e:
             print(f"Error loading BLIP model: {e}")
             print("Falling back to BLIP image captioning model...")
             try:
-                self.processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-                self.model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+                self.processor = BlipProcessor.from_pretrained("Salesforce/blip-itm-base-coco")
+                self.model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-itm-base-coco", torch_dtype=torch.bfloat16)
                 self.model.to(self.device)
                 self.model.eval()
-                self.blip_model_name = "Salesforce/blip-image-captioning-base"
+                self.blip_model_name = "Salesforce/blip-itm-base-coco"
             except Exception as e2:
                 raise RuntimeError(f"Failed to load any BLIP model: {e2}")
         
@@ -198,6 +198,7 @@ class BLIPRetriever:
         
         # Process images in smaller batches to avoid memory issues
         batch_size = min(4, len(images))  # BLIP is more memory intensive than CLIP
+        batch_size = len(images)
         features_list = []
         
         for i in range(0, len(images), batch_size):

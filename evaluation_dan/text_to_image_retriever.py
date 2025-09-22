@@ -32,8 +32,8 @@ except ImportError:
     import sys
     import os
     sys.path.append(os.path.join(os.path.dirname(__file__), 'retrieval_models '))
-    from clip_retriever import CLIPRetriever
-    from blip_retriever import BLIPRetriever
+    from retrieval_models.clip_retriever import CLIPRetriever
+    from retrieval_models.blip_retriever import BLIPRetriever    
     from config import CLIPConfig, CONFIG_PRESETS
 
 
@@ -450,11 +450,11 @@ Examples:
     )
     
     # Required arguments
-    parser.add_argument("--input", type=str, required=True,
+    parser.add_argument("--input", type=str, default='/mnt/d/dan/datasets/descriptions.csv',
                        help="Input CSV file with columns: image_path, description")
-    parser.add_argument("--database", type=str, required=True,
+    parser.add_argument("--database", type=str, default='/mnt/d/dan/datasets/sf_xl/processed/test/database/',
                        help="Image database directory or saved .npz database file")
-    parser.add_argument("--output", type=str, required=True,
+    parser.add_argument("--output", type=str, default='results.csv',
                        help="Output CSV file for results")
     
     # Optional arguments
@@ -466,20 +466,24 @@ Examples:
                        help="Use predefined configuration preset")
     parser.add_argument("--model", type=str, default=None,
                        help="Model variant (e.g., ViT-B/32, ViT-L/14 for CLIP)")
-    parser.add_argument("--model_type", type=str, choices=["clip", "blip"], default=None,
+    parser.add_argument("--model_type", type=str, choices=["clip", "blip"], default='blip',
                        help="Model type to use: 'clip' for CLIP (default) or 'blip' for BLIP with long text support")
-    parser.add_argument("--device", type=str, default=None,
+    parser.add_argument("--device", type=str, default='cuda',
                        help="Device to use (cuda, cpu, or auto-detect)")
+    parser.add_argument("--gpu", type=str, default='0',
+                       help="GPU device ID to use (default: 1)")
     parser.add_argument("--save_database", type=str, default=None,
                        help="Path to save database after building (for image directories)")
-    parser.add_argument("--batch_size", type=int, default=None,
+    parser.add_argument("--batch_size", type=int, default=32,
                        help="Batch size for GPU processing (auto-determined if not specified)")
-    parser.add_argument("--no_remove_duplicates", action="store_true",
+    parser.add_argument("--no_remove_duplicates", default=True,
                        help="Disable automatic duplicate removal to save memory")
-    parser.add_argument("--verbose", action="store_true",
+    parser.add_argument("--verbose", default=True,
                        help="Enable verbose output")
     
     args = parser.parse_args()
+    
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu if args.device == 'cuda' else ''
     
     # Validate input file
     if not os.path.exists(args.input):
