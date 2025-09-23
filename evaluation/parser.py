@@ -22,12 +22,13 @@ def parse_arguments():
         help="_",
     )
     parser.add_argument("--descriptors_dimension", type=int, default=256, help="_")
-    parser.add_argument("--database_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/database")
+    #parser.add_argument("--database_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/database")
+    parser.add_argument("--database_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/dummy")
     parser.add_argument("--queries_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/queries_night")
     parser.add_argument("--queries_csv", type=str, default="/mnt/d/dan/datasets/descriptions.csv")
     parser.add_argument("--num_workers", type=int, default=4, help="_")
     parser.add_argument(
-        "--batch_size", type=int, default=32, help="set to 1 if database images may have different resolution"
+        "--batch_size", type=int, default=128, help="set to 1 if database images may have different resolution"
     )
     parser.add_argument(
         "--log_dir", type=str, default="default", help="experiment name, output logs will be saved under logs/log_dir"
@@ -48,7 +49,7 @@ def parse_arguments():
         "do standard image retrieval given two folders of queries and DB",
     )
     parser.add_argument(
-        "--num_preds_to_save", type=int, default=0, help="set != 0 if you want to save predictions for each query"
+        "--num_preds_to_save", type=int, default=3, help="set != 0 if you want to save predictions for each query"
     )
     parser.add_argument(
         "--save_only_wrong_preds",
@@ -67,6 +68,7 @@ def parse_arguments():
         "--save_descriptors",
         action="store_true",
         help="set to True if you want to save the descriptors extracted by the model",
+        default=True,
     )
     
     args = parser.parse_args()

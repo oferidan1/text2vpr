@@ -49,7 +49,7 @@ def read_images_paths(dataset_folder):
 
 
 class TestDataset(data.Dataset):
-    def __init__(self, database_folder, queries_folder, processor, positive_dist_threshold=25, image_size=None, use_labels=True):
+    def __init__(self, database_folder, queries_folder, processor, positive_dist_threshold=25, image_size=None, use_labels=True, positives_per_query=None):
         """Dataset with images from database and queries, used for validation and test.
         Parameters
         ----------
@@ -65,7 +65,7 @@ class TestDataset(data.Dataset):
         self.database_paths = read_images_paths(database_folder)
         self.queries_paths = read_images_paths(queries_folder)
 
-        self.images_paths = list(self.database_paths)# + list(self.queries_paths)
+        self.images_paths = list(self.database_paths) + list(self.queries_paths)
         self.query_images_path = list(self.queries_paths)
 
         self.num_database = len(self.database_paths)
@@ -84,20 +84,23 @@ class TestDataset(data.Dataset):
                     "The path of images should be path/to/file/@utm_east@utm_north@...@.jpg "
                     f"but it is {image_path}, which does not contain the UTM coordinates."
                 )
+                
+            if positives_per_query is None:                            
+                self.database_utms = np.array(
+                    [(path.split("@")[1], path.split("@")[2]) for path in self.database_paths]
+                ).astype(float)
+                self.queries_utms = np.array(
+                    [(path.split("@")[1], path.split("@")[2]) for path in self.queries_paths]
+                ).astype(float)
 
-            self.database_utms = np.array(
-                [(path.split("@")[1], path.split("@")[2]) for path in self.database_paths]
-            ).astype(float)
-            self.queries_utms = np.array(
-                [(path.split("@")[1], path.split("@")[2]) for path in self.queries_paths]
-            ).astype(float)
-
-            # Find positives_per_query, which are within positive_dist_threshold (default 25 meters)
-            knn = NearestNeighbors(n_jobs=-1)
-            knn.fit(self.database_utms)
-            self.positives_per_query = knn.radius_neighbors(
-                self.queries_utms, radius=positive_dist_threshold, return_distance=False
-            )        
+                # Find positives_per_query, which are within positive_dist_threshold (default 25 meters)
+                knn = NearestNeighbors(n_jobs=-1)
+                knn.fit(self.database_utms)
+                self.positives_per_query = knn.radius_neighbors(
+                    self.queries_utms, radius=positive_dist_threshold, return_distance=False
+                )        
+            else:
+                self.positives_per_query = positives_per_query
         
         self.processor = processor
 
