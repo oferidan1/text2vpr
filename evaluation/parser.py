@@ -22,8 +22,8 @@ def parse_arguments():
         help="_",
     )
     parser.add_argument("--descriptors_dimension", type=int, default=256, help="_")
-    #parser.add_argument("--database_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/database")
-    parser.add_argument("--database_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/dummy")
+    parser.add_argument("--database_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/database")
+    #parser.add_argument("--database_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/dummy")
     parser.add_argument("--queries_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/queries_night")
     parser.add_argument("--queries_csv", type=str, default="/mnt/d/dan/datasets/descriptions.csv")
     parser.add_argument("--num_workers", type=int, default=4, help="_")
