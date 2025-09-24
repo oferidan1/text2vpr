@@ -7,7 +7,9 @@ from PIL import Image
 import json
 import base64
 from google.cloud import storage
-from google.cloud import aiplatform
+#from google.cloud import aiplatform
+import concurrent.futures
+import argparse
 
 def run_gemini(image_path):
 
@@ -38,24 +40,50 @@ def run_gemini(image_path):
     
     return response.text
 
+def upload_file(client, file_path):
+    """A helper function to upload a single file."""
+    try:
+        uploaded_file = client.files.upload(file=file_path)
+        print(f"Uploaded {file_path}. ID: {uploaded_file.name}")
+        return uploaded_file, file_path
+    except Exception as e:
+        print(f"Failed to upload {file_path}: {e}")
+        return None
 
-def describe_all_images(image_folder):
+def upload_all_files(client, file_paths):
+    """Uploads a list of files concurrently using a thread pool."""
+    file_ids = []
+    # Use max_workers to control the number of concurrent uploads
+    # upload files concurrently, return list of (file_id, file_path) tuples    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
+        futures = [executor.submit(upload_file, client, path) for path in file_paths]
+        for future in concurrent.futures.as_completed(futures):
+            file_id, file_path = future.result()
+            if file_id:
+                file_ids.append((file_id, file_path))
+    return file_ids
+
+
+def describe_all_images(args):
     # find all jpg file recursively using glob
-    image_paths = glob.glob(f"{image_folder}/**/*.jpg", recursive=True)
+    image_paths = glob.glob(f"{args.image_folder}/**/*.jpg", recursive=True)
     # prompt 
     prompt = 'describe this location for visual place recognition. Focus on: 1) Scene type and setting, 2) Distinctive landmarks and architecture, 3) Unique visual patterns/colors/textures, 4) Spatial layout, 5) Key identifying features that distinguish this place from similar locations. Be specific about permanent visual elements, avoid temporary objects like people, car ,weather and lighting conditions, provide textual descriptions of items you are certain about only. the output is one line of text listing the items from left to right, separated by commas.'
     # Prepare content for each image
     
     client = genai.Client()
     
-    aiplatform.init(project='gen-lang-client-0562403994', location='us-west1')
+    #aiplatform.init(project='gen-lang-client-0562403994', location='us-west1')
     
     start_time = time.time()
     
+    file_ids_path = upload_all_files(client, image_paths)
+    
     # Upload images to File API
     inline_requests = [] 
-    for image in image_paths:                
-        my_file = client.files.upload(file=image)
+    #for image in image_paths:                
+    for my_file, image_path in file_ids_path:
+        #my_file = client.files.upload(file=image)
         #my_files.append(my_file)
         inline_requests.append({
             "contents": [
@@ -68,7 +96,7 @@ def describe_all_images(image_folder):
         model="models/gemini-2.5-flash",
         src=inline_requests,
         config={
-            'display_name': "inlined-requests-job_1",
+            'display_name': args.job_name,
         },
     )
 
@@ -125,7 +153,7 @@ def describe_all_images(image_folder):
                     # Accessing response, structure may vary.
                     try:
                         print(inline_response.response.text)
-                        image_path = image_paths[i]
+                        my_file, image_path = file_ids_path[i]                        
                         results.append((image_path, inline_response.response.text))    
                     except AttributeError:
                         print(inline_response.response) # Fallback
@@ -142,7 +170,7 @@ def describe_all_images(image_folder):
     print(f"Total batch processing time: {end_time - start_time:.2f} seconds")
     
     ## save results to a csv file 
-    csv_path = "descriptions.csv"
+    csv_path = args.result
     with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(['image_path', 'description'])
@@ -207,11 +235,11 @@ def describe_all_images(image_folder):
     # print(f"Created batch job: {batch_job.name}")      
 
 if __name__ == '__main__':
-    #image_path = 'images/dizengoff.webp'
-    image_path = 'images/@0543158.27@4180593.76@10@S@037.77166@-122.50995@M7mOh9X4Xw_OHp-DYe5hQg@@206@@@@201311@@.jpg'
-    #run_intern_vl(image_path)
-    #run_gemini(image_path)  # Uncomment to run Gemini example
-    
-    image_folder = '/mnt/d/data/sf_xl/small/test'
-    describe_all_images(image_folder)
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--image_folder", default='/mnt/d/data/sf_xl/small/test/database', help="Path to the folder containing images")
+    parser.add_argument("--job_name", default='requests-job-1', help="Name of the batch job to check status")
+    parser.add_argument("--result", default='descriptions.csv', help="Path to the result CSV file")        
+    args = parser.parse_args()        
+
+    describe_all_images(args)
   

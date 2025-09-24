@@ -214,3 +214,31 @@ class BlipForImageTextRetrievalText(BlipPreTrainedModel):
 #       text_feat = normalize(self.text_proj(question_embeds[:, 0, :]), dim=-1)
 #       return text_feat
 
+if __name__ == '__main__':
+    from transformers import BlipProcessor, BlipModel
+    from PIL import Image
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model_name = 'Salesforce/blip-itm-base-coco'    
+    print('loading model...')
+    visual_model = BlipForImageTextRetrievalVision.from_pretrained(model_name).to(device)
+    text_model = BlipForImageTextRetrievalText.from_pretrained(model_name).to(device)
+    processor = BlipProcessor.from_pretrained(model_name)       
+
+    pil_img = Image.open('images/dog_man.jpg').convert('RGB')
+    
+    # Provide a list of text captions
+    texts = ["man and dog", "a man is talking to a woman", "a cute dog is walking outside"]
+
+    # 3. Process inputs
+    # The processor prepares the image and text for the model.
+    img_inputs = processor(images=pil_img, return_tensors="pt").pixel_values.to(device)
+    text_inputs = processor(text=texts, return_tensors="pt", padding=True).input_ids.to(device)
+
+    # 4. Get the image-text matching scores
+    # The model returns a similarity score for each image-text pair.
+    print('computing similarity...')
+    image_features = visual_model(img_inputs)
+    text_features = text_model(text_inputs)
+    
+    similarity = image_features @ text_features.t()
+    print(similarity)
