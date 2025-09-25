@@ -10,6 +10,7 @@ from google.cloud import storage
 #from google.cloud import aiplatform
 import concurrent.futures
 import argparse
+import sys
 
 def run_gemini(image_path):
 
@@ -77,6 +78,12 @@ def describe_all_images(args):
     
     start_time = time.time()
     
+    #gemini-2.5-flash have quata limit of 10000 requests per day
+    start_image = 0
+    end_image = start_image + 9800
+    image_paths = image_paths[start_image:end_image]
+    print("Limiting to first 9800 images due to Gemini API quota limits.")    
+    
     file_ids_path = upload_all_files(client, image_paths)
     
     # Upload images to File API
@@ -91,16 +98,29 @@ def describe_all_images(args):
                     {"text": prompt},
                 ],
         })    
+        
+    print(f"Uploaded {len(inline_requests)} files for batch processing.")
+    list_size = sys.getsizeof(inline_requests)
+    print(f"Size of the list object: {list_size} bytes")
     
-    batch_job = client.batches.create(
-        model="models/gemini-2.5-flash",
-        src=inline_requests,
-        config={
-            'display_name': args.job_name,
-        },
-    )
-
-    print(f"Created batch job: {batch_job.name}")    
+    # try/except to create batch job till success in a loop 
+    max_attempts = 10
+    attempts = 0
+    while attempts < max_attempts:
+        try:            
+            batch_job = client.batches.create(
+                model="models/gemini-2.5-flash",
+                src=inline_requests,
+                config={
+                    'display_name': args.job_name,
+                },
+            )
+            print(f"Created batch job: {batch_job.name}")    
+            break  # Exit the loop if successful
+        except Exception as e:
+            attempts += 1
+            print(f"Attempt {attempts} failed: {e}")
+            time.sleep(60)  # Wait before retrying    
     
      #Use the name of the job you want to check
     # e.g., inline_batch_job.name from the previous step
@@ -234,6 +254,42 @@ def describe_all_images(args):
 
     # print(f"Created batch job: {batch_job.name}")      
 
+def delete_single_file(client, file_name):
+    """A helper function to delete a single file."""
+    try:
+        client.files.delete(name=file_name)
+        print(f"Successfully deleted: {file_name}")
+    except genai.errors.ClientError as e:
+        print(f"Failed to delete {file_name}: {e}")
+
+def list_and_delete_all_files():
+    from concurrent.futures import ThreadPoolExecutor
+
+    client = genai.Client()
+    """Lists all files for the current project and deletes them concurrently."""
+    print("Fetching list of all uploaded files...")
+    try:
+        # Get a list of all files using client.files.list()
+        all_files = list(client.files.list())
+        
+        if not all_files:
+            print("No files found to delete.")
+            return
+
+        print(f"Found {len(all_files)} files. Starting deletion...")
+
+        file_names = [f.name for f in all_files]
+
+        # Use a thread pool to delete files concurrently
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            executor.map(delete_single_file, client, file_names)
+
+        print("Deletion process for all files initiated.")
+
+    except genai.errors.ClientError as e:
+        print(f"An error occurred while trying to list files: {e}")
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--image_folder", default='/mnt/d/data/sf_xl/small/test/database', help="Path to the folder containing images")
@@ -243,3 +299,4 @@ if __name__ == '__main__':
 
     describe_all_images(args)
   
+    #list_and_delete_all_files()
