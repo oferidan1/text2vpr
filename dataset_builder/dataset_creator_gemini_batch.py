@@ -21,7 +21,7 @@ def run_gemini(image_path):
         
     # prompt = 'describe all objects in this image from left to right in one line, including their attributes and colors, ignore dynamic objects like people and cars. in your response, use the format: object1, object2, object3, ...'
     # prompt = 'describe from left to right all distinctive features in one line for visual place recognition'
-    prompt = 'describe this location for visual place recognition. Focus on: 1) Scene type and setting, 2) Distinctive landmarks and architecture, 3) Unique visual patterns/colors/textures, 4) Spatial layout, 5) Key identifying features that distinguish this place from similar locations. Be specific about permanent visual elements, avoid temporary objects like people, car ,weather and lighting conditions, provide textual descriptions of items you are certain about only. the output is one line of text listing the items from left to right, separated by commas.'
+    prompt = 'Describe this location for visual place recognition. Focus on: 1) Scene type and setting, 2) Distinctive landmarks and architecture, 3) Unique visual patterns/colors/textures, 4) Spatial layout, 5) Key identifying features that distinguish this place from similar locations. Be specific about permanent visual elements, avoid temporary objects like people, car ,weather and lighting conditions, provide textual descriptions of items you are certain about only. the output is one line of text listing the items from left to right, separated by commas.'
 
     t1 = time.time()
     response = client.models.generate_content(
@@ -55,13 +55,18 @@ def upload_all_files(client, file_paths):
     """Uploads a list of files concurrently using a thread pool."""
     file_ids = []
     # Use max_workers to control the number of concurrent uploads
-    # upload files concurrently, return list of (file_id, file_path) tuples    
-    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
-        futures = [executor.submit(upload_file, client, path) for path in file_paths]
-        for future in concurrent.futures.as_completed(futures):
-            file_id, file_path = future.result()
-            if file_id:
-                file_ids.append((file_id, file_path))
+    #upload files concurrently, return list of (file_id, file_path) tuples    
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
+    #     futures = [executor.submit(upload_file, client, path) for path in file_paths]
+    #     for future in concurrent.futures.as_completed(futures):
+    #         file_id, file_path = future.result()
+    #         if file_id:
+    #             file_ids.append((file_id, file_path))                
+                
+    for file_path in file_paths:
+        file_id, file_path = upload_file(client, file_path)
+        if file_id:
+            file_ids.append((file_id, file_path))
     return file_ids
 
 
@@ -69,7 +74,7 @@ def describe_all_images(args):
     # find all jpg file recursively using glob
     image_paths = glob.glob(f"{args.image_folder}/**/*.jpg", recursive=True)
     # prompt 
-    prompt = 'describe this location for visual place recognition. Focus on: 1) Scene type and setting, 2) Distinctive landmarks and architecture, 3) Unique visual patterns/colors/textures, 4) Spatial layout, 5) Key identifying features that distinguish this place from similar locations. Be specific about permanent visual elements, avoid temporary objects like people, car ,weather and lighting conditions, provide textual descriptions of items you are certain about only. the output is one line of text listing the items from left to right, separated by commas.'
+    prompt = 'Describe this location for visual place recognition. Focus on: 1) Scene type and setting, 2) Distinctive landmarks and architecture, 3) Unique visual patterns/colors/textures, 4) Spatial layout, 5) Key identifying features that distinguish this place from similar locations. Be specific about permanent visual elements, avoid temporary objects like people, car ,weather and lighting conditions, provide textual descriptions of items you are certain about only. the output is one line of text listing the items from left to right, separated by commas.'
     # Prepare content for each image
     
     client = genai.Client()
@@ -79,10 +84,10 @@ def describe_all_images(args):
     start_time = time.time()
     
     #gemini-2.5-flash have quata limit of 10000 requests per day
-    start_image = 0
-    end_image = start_image + 9800
+    start_image = args.start_image
+    end_image = start_image + args.max_image
     image_paths = image_paths[start_image:end_image]
-    print("Limiting to first 9800 images due to Gemini API quota limits.")    
+    print("Limiting to first 10000 images due to Gemini API quota limits.")    
     
     file_ids_path = upload_all_files(client, image_paths)
     
@@ -124,9 +129,8 @@ def describe_all_images(args):
     
      #Use the name of the job you want to check
     # e.g., inline_batch_job.name from the previous step
-    job_name = batch_job.name  # (e.g. 'batches/your-batch-id')
-    batch_job = client.batches.get(name=job_name)
-
+    job_name = batch_job.name  # (e.g. 'batches/your-batch-id')    
+    
     completed_states = set([
         'JOB_STATE_SUCCEEDED',
         'JOB_STATE_FAILED',
@@ -144,10 +148,6 @@ def describe_all_images(args):
     print(f"Job finished with state: {batch_job.state.name}")
     if batch_job.state.name == 'JOB_STATE_FAILED':
         print(f"Error: {batch_job.error}")
-        
-    # Use the name of the job you want to check
-# e.g., inline_batch_job.name from the previous step
-    batch_job = client.batches.get(name=job_name)
 
     results = []            
     if batch_job.state.name == 'JOB_STATE_SUCCEEDED':
@@ -281,7 +281,7 @@ def list_and_delete_all_files():
         file_names = [f.name for f in all_files]
 
         # Use a thread pool to delete files concurrently
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=100) as executor:
             executor.map(delete_single_file, client, file_names)
 
         print("Deletion process for all files initiated.")
@@ -292,9 +292,11 @@ def list_and_delete_all_files():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--image_folder", default='/mnt/d/data/sf_xl/small/test/database', help="Path to the folder containing images")
+    parser.add_argument("--image_folder", default='/mnt/d/data/sf_xl/small/train', help="Path to the folder containing images")
     parser.add_argument("--job_name", default='requests-job-1', help="Name of the batch job to check status")
     parser.add_argument("--result", default='descriptions.csv', help="Path to the result CSV file")        
+    parser.add_argument("--start_image", type=int, default='0', help="start image index")        
+    parser.add_argument("--max_image", type=int, default='10000', help="maximum number of images to process")        
     args = parser.parse_args()        
 
     describe_all_images(args)

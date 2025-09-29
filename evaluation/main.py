@@ -63,22 +63,23 @@ def main(args):
             for images, indices in tqdm(database_dataloader):
                 descriptors = model.encode_images(images.to(args.device))            
                 all_descriptors[indices.numpy(), :] = descriptors
+                
+            database_descriptors = all_descriptors[: test_ds.num_database]
 
         #logger.debug("Extracting queries descriptors for evaluation/testing using batch size 1")
         # queries_subset_ds = Subset(
         #     test_ds, list(range(test_ds.num_database, test_ds.num_database + test_ds.num_queries))
         # )
         
-            queries_ds = QueryTextDataset(args.queries_csv, model.get_processor())        
-            queries_dataloader = DataLoader(dataset=queries_ds, num_workers=args.num_workers, batch_size=1)
-            for input_ids, indices in tqdm(queries_dataloader):
-                descriptors = model.encode_texts(input_ids.to(args.device))
-                all_descriptors[indices.numpy(), :] = descriptors
+        queries_descriptors = []
+        queries_ds = QueryTextDataset(args.queries_csv, model.get_processor())        
+        queries_dataloader = DataLoader(dataset=queries_ds, num_workers=args.num_workers, batch_size=1)
+        for input_ids, indices in tqdm(queries_dataloader):
+            descriptors = model.encode_texts(input_ids.to(args.device))
+            queries_descriptors.append(descriptors)
+        queries_descriptors = np.array(queries_descriptors).squeeze(1)
 
-            queries_descriptors = all_descriptors[test_ds.num_database :]
-            database_descriptors = all_descriptors[: test_ds.num_database]
-
-    if args.save_descriptors:
+    if args.save_descriptors and not is_database_descriptors_exist:
         logger.info(f"Saving the descriptors in {args.descriptor_dir}")
         if not Path(args.descriptor_dir).exists():
             Path(args.descriptor_dir).mkdir(parents=True, exist_ok=True)

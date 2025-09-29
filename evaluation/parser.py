@@ -25,7 +25,7 @@ def parse_arguments():
     parser.add_argument("--database_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/database")
     #parser.add_argument("--database_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/dummy")
     parser.add_argument("--queries_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/queries_night")
-    parser.add_argument("--queries_csv", type=str, default="/mnt/d/dan/datasets/descriptions.csv")
+    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/sf_xl/descriptions_queries_night.csv")
     parser.add_argument("--num_workers", type=int, default=4, help="_")
     parser.add_argument(
         "--batch_size", type=int, default=128, help="set to 1 if database images may have different resolution"
