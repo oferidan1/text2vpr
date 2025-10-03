@@ -289,9 +289,18 @@ class BLIP_Retrieval(nn.Module):
         image_embed = F.normalize(image_embed,dim=-1)      
         return image_embed  
 
-    def encode_text(self, text, device='cuda'):
+    def encode_text_caption(self, text, device='cuda'):
         text_input = self.tokenizer(text, padding='max_length', truncation=True, max_length=35, return_tensors="pt").to(device) 
         text_output = self.text_encoder(text_input.input_ids, attention_mask = text_input.attention_mask, mode='text')  
+        text_embed = F.normalize(self.text_proj(text_output.last_hidden_state[:,0,:]))
+        return text_embed
+    
+    def encode_text_tokens(self, tokens):
+        # create attention mask from tokens (1 for non-pad, 0 for pad)
+        attention_mask = torch.ones_like(tokens)
+        attention_mask[tokens==self.tokenizer.pad_token_id] = 0
+        # forward the text encoder        
+        text_output = self.text_encoder(tokens, attention_mask=attention_mask, mode='text')
         text_embed = F.normalize(self.text_proj(text_output.last_hidden_state[:,0,:]))
         return text_embed
 

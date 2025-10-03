@@ -79,7 +79,7 @@ def train(model, data_loader, optimizer, epoch, device, config):
             loss = loss_ita + loss_itm
         elif args.loss_type == 3:  # Triplet Loss
             # blip triplet loss
-            text_embeds  = model.encode_text(caption)            
+            text_embeds  = model.encode_text_caption(caption)            
             image_embeds = model.encode_image(image)     
             batch_size = text_embeds.size(0)
             loss_ita = triplet_loss(text_embeds, image_embeds, idx)  # idx is used to compute the triplet loss

@@ -1,4 +1,6 @@
-import parser
+import os
+os.environ["CUDA_VISIBLE_DEVICES"]  = '1'
+from evaluation import parser
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -10,14 +12,13 @@ from loguru import logger
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Subset
 from tqdm import tqdm
-from models import VLM_Model
+from evaluation.models import VLM_Model
 import os
-from test_dataset import TestDataset, QueryTextDataset
-import visualizations
+from evaluation.test_dataset import TestDataset, QueryTextDataset
+from evaluation import visualizations
 
 
-def main(args):
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+def main(args):    
     start_time = datetime.now()
 
     logger.remove()  # Remove possibly previously existing loggers
@@ -30,7 +31,7 @@ def main(args):
     logger.info(f"Testing with {args.method}")
     logger.info(f"The outputs are being saved in {log_dir}")
 
-    model = VLM_Model(args.model_name, args.lora_path)
+    model = VLM_Model(args)
     
     #if databaase descriptors already exist, skip their computation
     database_descriptors_path = os.path.join(args.descriptor_dir, "database_descriptors.npy")

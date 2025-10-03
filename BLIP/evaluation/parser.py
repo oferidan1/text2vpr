@@ -28,7 +28,7 @@ def parse_arguments():
     parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/sf_xl/descriptions_queries_night.csv")
     parser.add_argument("--num_workers", type=int, default=4, help="_")
     parser.add_argument(
-        "--batch_size", type=int, default=128, help="set to 1 if database images may have different resolution"
+        "--batch_size", type=int, default=64, help="set to 1 if database images may have different resolution"
     )
     parser.add_argument(
         "--log_dir", type=str, default="default", help="experiment name, output logs will be saved under logs/log_dir"
@@ -71,7 +71,9 @@ def parse_arguments():
     )
     parser.add_argument("--gpu", type=str, default="1", help="which gpu to use")
     parser.add_argument("--model_name", type=str, default="Salesforce/blip-itm-base-coco")
-    parser.add_argument("--lora_path", type=str, default=None)    
+    #parser.add_argument("--lora_path", type=str, default=None)
+    parser.add_argument("--lora_path", type=str, default="/mnt/d/ofer/localization/text2vpr/BLIP/output/Retrieval_coco")
+    parser.add_argument('--config', default='./configs/retrieval_coco.yaml')
 
     args = parser.parse_args()
     
