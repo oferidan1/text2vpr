@@ -290,6 +290,44 @@ def list_and_delete_all_files():
         print(f"An error occurred while trying to list files: {e}")
 
 
+
+def tmp():
+    import vertexai
+    from vertexai.preview.generative_models import GenerativeModel, Part
+    import google.cloud.aiplatform as aiplatform
+
+    PROJECT_ID = "gen-lang-client-0562403994"  # Replace with your project ID
+    LOCATION = "europe-west1"           # Replace with your desired region
+    MODEL_NAME = "gemini-2.5-flash"
+    
+    # Define GCS input and output URIs
+    GCS_INPUT_URI = "gs://ofer-idan-bucket/input.jsonl"
+    GCS_OUTPUT_URI = "gs://ofer-idan-bucket/output/"     
+
+    # Define GCS image URIs
+    gcs_image_1 = "gs://ofer-idan-bucket/dummy/@0543037.38@4180974.80@10@S@037.77510@-122.51130@1ooZhwTQyuNt0xiue5YhLg@@134@@@@201311@@.jpg"
+    gcs_image_2 = "gs://ofer-idan-bucket/dummy/@0543050.42@4181850.28@10@S@037.78299@-122.51110@OA95urczPlYG44VTBM9i9A@@0@@@@200802@@.jpg"
+
+    # Initialize Vertex AI
+    aiplatform.init(project=PROJECT_ID, location=LOCATION)
+
+    # Define the model ID. For the base Gemini model, this is the publisher name.
+    # Use aiplatform.get_publisher_model to get the full model resource name.
+    MODEL_RESOURCE_NAME = "publishers/google/models/gemini-2.5-flash"
+
+    # Create and start the BatchPredictionJob
+    job = aiplatform.BatchPredictionJob.create(
+        job_display_name="gemini_batch_prediction_job",
+        model_name=MODEL_RESOURCE_NAME,
+        instances_format="jsonl",
+        predictions_format="jsonl",
+        gcs_source=GCS_INPUT_URI,
+        gcs_destination_prefix=GCS_OUTPUT_URI,
+    )   
+    
+    print(f"Batch prediction job created: {job.display_name}")
+    print(f"Waiting for job to complete. State: {job.state}")
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--image_folder", default='/mnt/d/data/sf_xl/small/train', help="Path to the folder containing images")
@@ -299,6 +337,7 @@ if __name__ == '__main__':
     parser.add_argument("--max_image", type=int, default='10000', help="maximum number of images to process")        
     args = parser.parse_args()        
 
-    describe_all_images(args)
+    #describe_all_images(args)
+    tmp()
   
     #list_and_delete_all_files()
