@@ -50,7 +50,7 @@ logging.info(f"The outputs are being saved in {args.output_folder}")
 
 #### Model
 #model = cosplace_network.GeoLocalizationNet(args.backbone, args.fc_output_dim, args.train_all_layers)
-model = cosplace_network.text2vpr(args.backbone, args.fc_output_dim, args.train_all_layers, args.text_encoder, args)
+model = cosplace_network.cosplace_text(args.backbone, args.fc_output_dim, args.train_all_layers, args.text_encoder, args)
 
 logging.info(f"There are {torch.cuda.device_count()} GPUs and {multiprocessing.cpu_count()} CPUs.")
 
@@ -147,7 +147,13 @@ for epoch_num in range(start_epoch_num, args.epochs_num):
             vpr_descriptors, text_embeds = model(images, texts)
             output = classifiers[current_group_num](vpr_descriptors, targets)
             loss = criterion(output, targets)
-            logits = vpr_descriptors @ text_embeds.t()
+            # # find if there are same values for different index in an array torch use unique
+            # if len(targets) != len(torch.unique(targets)):
+            #     # use only unique indices, target is matrix not vector
+            #     _, unique_indices = torch.unique(targets, sorted=False, return_inverse=True)
+            #     vpr_descriptors = vpr_descriptors[unique_indices]
+            #     text_embeds = text_embeds[unique_indices]
+            logits = vpr_descriptors @ text_embeds.t()            
             loss += siglip_loss(logits)  # adding the siglip loss
             loss.backward()
             epoch_losses = np.append(epoch_losses, loss.item())
@@ -158,17 +164,11 @@ for epoch_num in range(start_epoch_num, args.epochs_num):
             with torch.cuda.amp.autocast():
                 vpr_descriptors, text_embeds = model(images, texts)
                 output = classifiers[current_group_num](vpr_descriptors, targets)
-                loss = criterion(output, targets)
-                # # find if there are same values for different index in an array torch use unique
-                # if len(targets) != len(torch.unique(targets)):
-                #     # use only unique indices, target is matrix not vector
-                #     _, unique_indices = torch.unique(targets, sorted=False, return_inverse=True)
-                #     vpr_descriptors = vpr_descriptors[unique_indices]
-                #     text_embeds = text_embeds[unique_indices]
+                loss = criterion(output, targets)             
                 # compute the logits
                 logits = vpr_descriptors @ text_embeds.t()            
-                #loss += siglip_loss(logits)  # adding the siglip loss
-                loss += contrastive_loss(logits)  # adding the contrastive loss
+                loss += siglip_loss(logits)  # adding the siglip loss
+                #loss += contrastive_loss(logits)  # adding the contrastive loss
             scaler.scale(loss).backward()
             epoch_losses = np.append(epoch_losses, loss.item())
             del loss, output, images

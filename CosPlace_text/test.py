@@ -8,6 +8,7 @@ from typing import Tuple
 from argparse import Namespace
 from torch.utils.data.dataset import Subset
 from torch.utils.data import DataLoader, Dataset
+from datasets.test_dataset import  QueryTextDataset
 
 import visualizations
 
@@ -19,7 +20,7 @@ RECALL_VALUES = [1, 5, 10, 20]
 def test(args: Namespace, eval_ds: Dataset, model: torch.nn.Module,
          num_preds_to_save: int = 0) -> Tuple[np.ndarray, str]:
     """Compute descriptors of the given dataset and compute the recalls."""
-    
+    queries_descriptors = []    
     model = model.eval()
     with torch.no_grad():
         logging.debug("Extracting database descriptors for evaluation/testing")
@@ -34,15 +35,24 @@ def test(args: Namespace, eval_ds: Dataset, model: torch.nn.Module,
         
         logging.debug("Extracting queries descriptors for evaluation/testing using batch size 1")
         queries_infer_batch_size = 1
-        queries_subset_ds = Subset(eval_ds, list(range(eval_ds.database_num, eval_ds.database_num+eval_ds.queries_num)))
-        queries_dataloader = DataLoader(dataset=queries_subset_ds, num_workers=args.num_workers,
-                                        batch_size=queries_infer_batch_size, pin_memory=(args.device == "cuda"))
+        queries_ds = QueryTextDataset(args.test_csv, args.image_root)        
+        queries_dataloader = DataLoader(dataset=queries_ds, num_workers=args.num_workers, batch_size=queries_infer_batch_size)
+        
         for images, indices, texts in tqdm(queries_dataloader, ncols=100):
-            descriptors, text_embeds = model(images.to(args.device), texts)
-            text_embeds = text_embeds.cpu().numpy()
-            all_descriptors[indices.numpy(), :] = text_embeds
+           descriptors, text_embeds = model(images.to(args.device), texts)
+           text_embeds = text_embeds.cpu().numpy()
+           queries_descriptors.append(text_embeds)
+        queries_descriptors = np.array(queries_descriptors).squeeze(1)
+        
+        # queries_subset_ds = Subset(eval_ds, list(range(eval_ds.database_num, eval_ds.database_num+eval_ds.queries_num)))
+        # queries_dataloader = DataLoader(dataset=queries_subset_ds, num_workers=args.num_workers,
+        #                                 batch_size=queries_infer_batch_size, pin_memory=(args.device == "cuda"))
+        # for images, indices, texts in tqdm(queries_dataloader, ncols=100):
+        #     descriptors, text_embeds = model(images.to(args.device), texts)
+        #     text_embeds = text_embeds.cpu().numpy()
+        #     all_descriptors[indices.numpy(), :] = text_embeds
     
-    queries_descriptors = all_descriptors[eval_ds.database_num:]
+    #queries_descriptors = all_descriptors[eval_ds.database_num:]
     database_descriptors = all_descriptors[:eval_ds.database_num]
     
     # Use a kNN to find predictions

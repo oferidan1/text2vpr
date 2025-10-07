@@ -1,3 +1,8 @@
+eval on night:
+python eval.py --resume_model logs/default/2025-08-26_13-01-26/best_model.pth --test_set_folder /mnt/d/dan/datasets/sf_xl/processed/test
+
+python eval.py --resume_model=logs/default/2025-10-02_20-06-55/best_model.pth --image_root=/mnt/d/dan/datasets/sf_xl/processed/test --test_csv=/mnt/d/data/sf_xl/descriptions_queries_night.csv --test_set_folder=/mnt/d/dan/datasets/sf_xl/processed/test/
+
 
 # Rethinking Visual Geo-localization for Large-Scale Applications
 

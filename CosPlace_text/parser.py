@@ -23,8 +23,7 @@ def parse_arguments(is_training: bool = True):
     parser.add_argument("--train_all_layers", default=False, action="store_true",
                         help="If true, train all layers of the backbone")
     # Training parameters
-    parser.add_argument("--use_amp16", action="store_true", default='True',
-                        help="use Automatic Mixed Precision")
+    parser.add_argument("--use_amp16", type=int, default="0", help="use Automatic Mixed Precision")
     parser.add_argument("--augmentation_device", type=str, default="cuda",
                         choices=["cuda", "cpu"],
                         help="on which device to run data augmentation")
@@ -52,8 +51,8 @@ def parse_arguments(is_training: bool = True):
     # Resume parameters
     parser.add_argument("--resume_train", type=str, default=None,
                         help="path to checkpoint to resume, e.g. logs/.../last_checkpoint.pth")
-    parser.add_argument("--resume_model", type=str, default='logs/default/2025-08-26_13-01-26/best_model.pth',
-                        help="path to model to resume, e.g. logs/.../best_model.pth")
+    parser.add_argument("--resume_model", type=str, default='logs/default/2025-08-26_13-01-26/best_model.pth', help="path to model to resume, e.g. logs/.../best_model.pth")
+    #parser.add_argument("--resume_model", type=str, default='logs/default/2025-10-02_20-06-55/best_model.pth', help="path to model to resume, e.g. logs/.../best_model.pth")
     # Other parameters
     parser.add_argument("--device", type=str, default="cuda",
                         choices=["cuda", "cpu"], help="_")
@@ -71,17 +70,20 @@ def parse_arguments(is_training: bool = True):
                             help="path of the folder with training images")
         parser.add_argument("--val_set_folder", type=str, default='/mnt/d/data/sf_xl/small/val',
                             help="path of the folder with val images (split in database/queries)")
-    parser.add_argument("--test_set_folder", type=str, default='/mnt/d/data/sf_xl/small/test',
-                        help="path of the folder with test images (split in database/queries)")
+    parser.add_argument("--test_set_folder", type=str, default='/mnt/d/data/sf_xl/small/test',  help="path of the folder with test images (split in database/queries)")
+    #parser.add_argument("--test_set_folder", type=str, default='/mnt/d/dan/datasets/sf_xl/processed/test/',  help="path of the folder with test images (split in database/queries)")  
     parser.add_argument("--save_dir", type=str, default="default",
                         help="name of directory on which to save the logs, under logs/save_dir")
     parser.add_argument("--gpu", type=str, default='0', help="gpu id(s) to use")
     parser.add_argument("--train_csv", type=str, default="/mnt/d/data/sf_xl/small/sf_xl_small_train_descriptions.csv")
     parser.add_argument("--val_csv", type=str, default="/mnt/d/data/sf_xl/small/sf_xl_small_val_queries_descriptions.csv")
     parser.add_argument("--test_csv", type=str, default="/mnt/d/data/sf_xl/small/sf_xl_small_test_queries_descriptions.csv")
+    #parser.add_argument("--test_csv", type=str, default="/mnt/d/data/sf_xl/descriptions_queries_night.csv")
     parser.add_argument("--image_root", type=str, default="/mnt/d/data/sf_xl/small/", help="root directory for images")
-    parser.add_argument("--text_encoder", type=str, default="BAAI/bge-large-en-v1.5", help="text encoder model name")
-    parser.add_argument("--is_freeze_text", type=int, default="1", help="freeze text encoder or not")
+    #parser.add_argument("--image_root", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test", help="root directory for images")
+    #parser.add_argument("--text_encoder", type=str, default="BAAI/bge-large-en-v1.5", help="text encoder model name")
+    parser.add_argument("--text_encoder", type=str, default="t5-large", help="text encoder model name")
+    parser.add_argument("--is_freeze_text", type=int, default="0", help="freeze text encoder or not")
     parser.add_argument("--is_freeze_vpr", type=int, default="0", help="freeze vpr encoder or not")
     
     args = parser.parse_args()

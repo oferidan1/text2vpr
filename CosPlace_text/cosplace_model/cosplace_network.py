@@ -7,6 +7,7 @@ from typing import Tuple
 
 from cosplace_model.layers import Flatten, L2Norm, GeM
 from sentence_transformers import SentenceTransformer
+from cosplace_model.t5_encoder import T5LanguageEncoder 
 
 
 # The number of channels in the last convolutional layer, the one before average pooling
@@ -26,17 +27,20 @@ CHANNELS_NUM_IN_LAST_CONV = {
     "EfficientNet_B7": 2560,
 }
 
-class text2vpr(nn.Module):
-    def __init__(self, backbone, fc_output_dim, train_all_layers, text_encoder, args):
+class cosplace_text(nn.Module):
+    def __init__(self, backbone, fc_output_dim, train_all_layers, text_encoder_name, args):
         super().__init__()
         
-        self.vpr_encoder = GeoLocalizationNet(backbone, fc_output_dim, train_all_layers)        
-        self.text_encoder = SentenceTransformer(text_encoder)
-        self.text_adapter = nn.Linear(1024, fc_output_dim)  # BGE large has 1024-dim embedding
-        # Xavier initialization
-        nn.init.xavier_uniform_(self.text_adapter.weight)
-        if self.text_adapter.bias is not None:
-            nn.init.constant_(self.text_adapter.bias, 0)
+        self.vpr_encoder = GeoLocalizationNet(backbone, fc_output_dim, train_all_layers)                
+        self.text_encoder_name = text_encoder_name
+        if 't5' in text_encoder_name:            
+            self.text_encoder = T5LanguageEncoder(fc_output_dim,hungging_model=text_encoder_name,fixed_embedding=True,intra_module_num_layers=1,intra_module_num_heads=4,is_fine = False,inter_module_num_layers=1,inter_module_num_heads=4) 
+        else:
+            self.text_encoder = SentenceTransformer(text_encoder_name)
+            self.text_adapter = nn.Linear(1024, fc_output_dim)  # BGE large has 1024-dim embedding
+            nn.init.xavier_uniform_(self.text_adapter.weight)
+            if self.text_adapter.bias is not None:
+                nn.init.constant_(self.text_adapter.bias, 0)
 
         if args.is_freeze_text:
         # Freeze text encoder parameters
@@ -54,8 +58,11 @@ class text2vpr(nn.Module):
         if text is None:
             return image_embeds, None
         
-        text_embeds = self.text_encoder.encode(text, normalize_embeddings=True, convert_to_tensor=True)
-        text_embeds = self.text_adapter(text_embeds)
+        if 't5' in self.text_encoder_name:
+            text_embeds = self.text_encoder(text)    
+        else:        
+            text_embeds = self.text_encoder.encode(text, normalize_embeddings=True, convert_to_tensor=True)
+            text_embeds = self.text_adapter(text_embeds)
             
         return image_embeds, text_embeds    
         

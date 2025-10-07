@@ -73,13 +73,13 @@ def get_mlp2(channels: List[int], add_batchnorm: bool = True) -> nn.Sequential:
             ]
         )
 
-class LanguageEncoder(torch.nn.Module):
+class T5LanguageEncoder(torch.nn.Module):
     def __init__(self, embedding_dim,  hungging_model = None, fixed_embedding=False, 
                  intra_module_num_layers=2, intra_module_num_heads=4, 
                  is_fine = False, inter_module_num_layers=2, inter_module_num_heads=4,
                  ):
         """Language encoder to encode a set of hints for each sentence"""
-        super(LanguageEncoder, self).__init__()
+        super(T5LanguageEncoder, self).__init__()
 
         self.is_fine = is_fine
         self.tokenizer = AutoTokenizer.from_pretrained(hungging_model)
@@ -97,7 +97,7 @@ class LanguageEncoder(torch.nn.Module):
 
         self.intra_module = nn.ModuleList([nn.TransformerEncoderLayer(input_dim, intra_module_num_heads,  dim_feedforward = input_dim * 4) for _ in range(intra_module_num_layers)])
 
-        # self.inter_mlp = get_mlp2([input_dim, embedding_dim], add_batchnorm=True)
+        self.inter_mlp = get_mlp2([input_dim, embedding_dim], add_batchnorm=True)
         
         # if not is_fine:
         #     self.inter_module = nn.ModuleList([nn.TransformerEncoderLayer(embedding_dim, inter_module_num_heads,  dim_feedforward = embedding_dim * 4) for _ in range(inter_module_num_layers)])
@@ -105,15 +105,14 @@ class LanguageEncoder(torch.nn.Module):
     
     def forward(self, descriptions):
 
-        split_union_sentences = []
-        for description in descriptions:
-            split_union_sentences.extend(text_tokenize.sent_tokenize(description))
-
+        # split_union_sentences = []
+        # for description in descriptions:
+        #     split_union_sentences.extend(text_tokenize.sent_tokenize(description))
         
         batch_size = len(descriptions)
-        num_sentence = len(split_union_sentences) // batch_size
+        # num_sentence = len(split_union_sentences) // batch_size
 
-        inputs = self.tokenizer(split_union_sentences, return_tensors="pt", padding = "longest")
+        inputs = self.tokenizer(descriptions, return_tensors="pt", padding = "longest")
         shorten_sentences_indices = inputs["input_ids"]
         attention_mask = inputs["attention_mask"]
 
@@ -134,17 +133,18 @@ class LanguageEncoder(torch.nn.Module):
         description_encodings = description_encodings.permute(1,0,2).contiguous()
         description_encodings = description_encodings.max(dim = 1)[0]
 
-        # description_encodings = self.inter_mlp(description_encodings)
-        # description_encodings = description_encodings.view(batch_size, num_sentence, -1)
+        description_encodings = self.inter_mlp(description_encodings)
+        #description_encodings = description_encodings.view(batch_size, num_sentence, -1)
         
-        # if self.is_fine:
-        #     return description_encodings
+        if self.is_fine:
+            return description_encodings
         
         # description_encodings = description_encodings.permute(1,0,2)
         # for idx in range(len(self.inter_module)):
-        #     description_encodings += self.inter_module[idx](description_encodings)
+        #     description_encodings += self.inter_module[idx](description_encodings)        
+        # description_encodings = description_encodings.max(dim = 0)[0]
         
-        description_encodings = description_encodings.max(dim = 0)[0]
+        description_encodings = F.normalize(description_encodings)
         return description_encodings
 
     @property
