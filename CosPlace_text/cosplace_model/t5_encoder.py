@@ -95,7 +95,7 @@ class T5LanguageEncoder(torch.nn.Module):
 
         input_dim = self.llm_model.encoder.embed_tokens.weight.shape[-1]
 
-        self.intra_module = nn.ModuleList([nn.TransformerEncoderLayer(input_dim, intra_module_num_heads,  dim_feedforward = input_dim * 4) for _ in range(intra_module_num_layers)])
+        self.intra_module = nn.ModuleList([nn.TransformerEncoderLayer(input_dim, intra_module_num_heads,  dim_feedforward = input_dim * 4, batch_first=True) for _ in range(intra_module_num_layers)])
 
         self.inter_mlp = get_mlp2([input_dim, embedding_dim], add_batchnorm=True)
         
@@ -126,11 +126,11 @@ class T5LanguageEncoder(torch.nn.Module):
         if self.fixed_embedding:
             description_encodings = description_encodings.detach()
 
-        description_encodings = description_encodings.permute(1,0,2)
+        #description_encodings = description_encodings.permute(1,0,2)
 
         for idx in range(len(self.intra_module)):
             description_encodings = self.intra_module[idx](description_encodings)
-        description_encodings = description_encodings.permute(1,0,2).contiguous()
+        #description_encodings = description_encodings.permute(1,0,2).contiguous()
         description_encodings = description_encodings.max(dim = 1)[0]
 
         description_encodings = self.inter_mlp(description_encodings)
@@ -144,7 +144,7 @@ class T5LanguageEncoder(torch.nn.Module):
         #     description_encodings += self.inter_module[idx](description_encodings)        
         # description_encodings = description_encodings.max(dim = 0)[0]
         
-        description_encodings = F.normalize(description_encodings)
+        description_encodings = F.normalize(description_encodings, dim=1)
         return description_encodings
 
     @property

@@ -81,8 +81,8 @@ def parse_arguments(is_training: bool = True):
     #parser.add_argument("--test_csv", type=str, default="/mnt/d/data/sf_xl/descriptions_queries_night.csv")
     parser.add_argument("--image_root", type=str, default="/mnt/d/data/sf_xl/small/", help="root directory for images")
     #parser.add_argument("--image_root", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test", help="root directory for images")
-    #parser.add_argument("--text_encoder", type=str, default="BAAI/bge-large-en-v1.5", help="text encoder model name")
-    parser.add_argument("--text_encoder", type=str, default="t5-large", help="text encoder model name")
+    parser.add_argument("--text_encoder", type=str, default="BAAI/bge-large-en-v1.5", help="text encoder model name")
+    #parser.add_argument("--text_encoder", type=str, default="t5-large", help="text encoder model name")
     parser.add_argument("--is_freeze_text", type=int, default="0", help="freeze text encoder or not")
     parser.add_argument("--is_freeze_vpr", type=int, default="0", help="freeze vpr encoder or not")
     

@@ -64,7 +64,7 @@ def create_gcs_json(local_folder, gcs_bucket, gcs_prefix, output_file):
                 f.write(json_line)
                 #print(f"Added entry for '{image_path.name}' to '{output_file}'.")
 
-def preduction_to_csv(pred_json):
+def prediction_to_csv(pred_json):
     import json
     import pandas as pd
 
@@ -79,7 +79,7 @@ def preduction_to_csv(pred_json):
     for item in data:
         try:
             description = item['response']['candidates'][0]['content']['parts'][0]['text']
-            image_uri = item['request']['contents'][0]['parts'][0]['file_data']['file_uri'].replace('gs://ofer-idan-bucket/sf-xl/','')
+            image_uri = item['request']['contents'][0]['parts'][0]['file_data']['file_uri'].replace('gs://ofer-idan-bucket/gsv_cities/Images','Images/')
             records.append({'image_path': image_uri, 'description': description})
         except (KeyError, IndexError) as e:
             print(f"Skipping an entry due to missing fields: {e}")
@@ -92,17 +92,17 @@ def preduction_to_csv(pred_json):
 
 # --- Example usage ---
 if __name__ == "__main__":
-    LOCAL_FOLDER = "/mnt/d/data/sf_xl/small/test/queries_v1/"
+    LOCAL_FOLDER = "/mnt/d/data/gsv_cities/Images/"
     BUCKET_NAME = "ofer-idan-bucket"
-    GCS_DESTINATION = "sf-xl/test/queries_v1/"    
+    GCS_DESTINATION = "gsv_cities/Images"    
     
     #upload_folder_many_filenames(BUCKET_NAME, LOCAL_FOLDER, GCS_DESTINATION)
     
     gcs_file = "input_gcs.jsonl"
     #create_gcs_json(LOCAL_FOLDER, BUCKET_NAME, GCS_DESTINATION, gcs_file)
     
-    pred_json = '/mnt/d/ofer/localization/text2vpr/dataset_builder/sf_xl_small_test_queries_predictions.jsonl'
-    preduction_to_csv(pred_json)
+    pred_json = '/mnt/d/ofer/localization/text2vpr/dataset_builder/gsv_cities_predictions.jsonl'
+    prediction_to_csv(pred_json)
 
     
 
