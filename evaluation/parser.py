@@ -13,22 +13,17 @@ def parse_arguments():
     parser.add_argument(
         "--method",
         type=str,
-        default="blip",
-        choices=[
-            "clip",
-            "blip",
-            "siglip",            
-        ],
+        default="mixvpr",
         help="_",
     )
-    parser.add_argument("--descriptors_dimension", type=int, default=256, help="_")
-    parser.add_argument("--database_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/database")
-    #parser.add_argument("--database_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/dummy")
-    parser.add_argument("--queries_folder", type=str, default="/mnt/d/dan/datasets/sf_xl/processed/test/queries_night")
-    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/sf_xl/descriptions_queries_night.csv")
+    parser.add_argument("--descriptors_dimension", type=int, default=1536, help="_")
+    parser.add_argument("--database_folder", type=str, default="/mnt/d/data/amstertime/test/database")    
+    parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")
+    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
+    parser.add_argument("--image_root", type=str, default="/mnt/d/data/amstertime/test")
     parser.add_argument("--num_workers", type=int, default=4, help="_")
     parser.add_argument(
-        "--batch_size", type=int, default=128, help="set to 1 if database images may have different resolution"
+        "--batch_size", type=int, default=64, help="set to 1 if database images may have different resolution"
     )
     parser.add_argument(
         "--log_dir", type=str, default="default", help="experiment name, output logs will be saved under logs/log_dir"
@@ -70,7 +65,9 @@ def parse_arguments():
         help="set to True if you want to save the descriptors extracted by the model",
     )
     parser.add_argument("--gpu", type=str, default="1", help="which gpu to use")
-    parser.add_argument("--model_name", type=str, default="Salesforce/blip-itm-base-coco")
+    parser.add_argument("--model_name", type=str, default=None)
+    parser.add_argument("--vision_model_name", type=str, default="mixvpr")
+    parser.add_argument("--text_model_name", type=str, default="BAAI/bge-large-en-v1.5")
     parser.add_argument("--lora_path", type=str, default=None)    
 
     args = parser.parse_args()

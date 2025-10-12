@@ -12,7 +12,7 @@ from torch.utils.data.dataset import Subset
 from tqdm import tqdm
 from models import VLM_Model
 import os
-from test_dataset import TestDataset, QueryTextDataset
+from test_dataset import TestDataset
 import visualizations
 
 
@@ -30,7 +30,7 @@ def main(args):
     logger.info(f"Testing with {args.method}")
     logger.info(f"The outputs are being saved in {log_dir}")
 
-    model = VLM_Model(args.model_name, args.lora_path)
+    model = VLM_Model(args)
     
     #if databaase descriptors already exist, skip their computation
     database_descriptors_path = os.path.join(args.descriptor_dir, "database_descriptors.npy")
@@ -45,11 +45,11 @@ def main(args):
     test_ds = TestDataset(
         args.database_folder,   
         args.queries_folder,
-        model.get_processor(),
+        args.queries_csv,
+        args.image_root,        
         positive_dist_threshold=args.positive_dist_threshold,
         image_size=args.image_size,
         use_labels=args.use_labels,
-        positives_per_query=positives_per_query,
     )
     logger.info(f"Testing on {test_ds}")
 
@@ -60,25 +60,25 @@ def main(args):
             dataset=database_subset_ds, num_workers=args.num_workers, batch_size=args.batch_size
         )
         all_descriptors = np.empty((len(test_ds), args.descriptors_dimension), dtype="float32")
-        if not is_database_descriptors_exist:
-            for images, indices in tqdm(database_dataloader):
-                descriptors = model.encode_images(images.to(args.device))            
-                all_descriptors[indices.numpy(), :] = descriptors
-                
-            database_descriptors = all_descriptors[: test_ds.num_database]
+        for images, indices, texts in tqdm(database_dataloader):
+            image_features, text_features = model.encode(images.to(args.device), texts)
+            descriptors = torch.cat((image_features, text_features), dim=1)
+            descriptors = descriptors.cpu().numpy()
+            all_descriptors[indices.numpy(), :] = descriptors
 
-        #logger.debug("Extracting queries descriptors for evaluation/testing using batch size 1")
-        # queries_subset_ds = Subset(
-        #     test_ds, list(range(test_ds.num_database, test_ds.num_database + test_ds.num_queries))
-        # )
-        
-        queries_descriptors = []
-        queries_ds = QueryTextDataset(args.queries_csv, model.get_processor())        
-        queries_dataloader = DataLoader(dataset=queries_ds, num_workers=args.num_workers, batch_size=1)
-        for input_ids, indices in tqdm(queries_dataloader):
-            descriptors = model.encode_texts(input_ids.to(args.device))
-            queries_descriptors.append(descriptors)
-        queries_descriptors = np.array(queries_descriptors).squeeze(1)
+        logger.debug("Extracting queries descriptors for evaluation/testing using batch size 1")
+        queries_subset_ds = Subset(
+            test_ds, list(range(test_ds.num_database, test_ds.num_database + test_ds.num_queries))
+        )
+        queries_dataloader = DataLoader(dataset=queries_subset_ds, num_workers=args.num_workers, batch_size=1)
+        for images, indices, texts in tqdm(queries_dataloader):
+            image_features, text_features = model.encode(images.to(args.device), texts)
+            descriptors = torch.cat((image_features, text_features), dim=1)
+            descriptors = descriptors.cpu().numpy()
+            all_descriptors[indices.numpy(), :] = descriptors
+
+    queries_descriptors = all_descriptors[test_ds.num_database :]
+    database_descriptors = all_descriptors[: test_ds.num_database]
 
     if args.save_descriptors and not is_database_descriptors_exist:
         logger.info(f"Saving the descriptors in {args.descriptor_dir}")
