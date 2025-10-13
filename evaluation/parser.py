@@ -73,8 +73,9 @@ def parse_arguments():
     parser.add_argument("--vision_model_name", type=str, default="mixvpr")
     parser.add_argument("--text_model_name", type=str, default="BAAI/bge-large-en-v1.5")
     parser.add_argument("--lora_path", type=str, default=None)    
-    parser.add_argument("--is_dual_encoder", type=int, default="1")    
+    parser.add_argument("--is_dual_encoder", type=int, default="0")    
     parser.add_argument("--dual_encoder_fusion", type=str, default="each", help="cat/each")    
+    parser.add_argument("--encode_mode", type=str, default="both", help="both/image/text")    
 
     args = parser.parse_args()
     

@@ -17,7 +17,17 @@ import visualizations
 
 
 def encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors):
-    if args.is_dual_encoder:
+    if args.encode_mode == 'text':
+        # single vector - text
+        descriptors = model.encode_text(texts)
+        descriptors = descriptors.cpu().numpy()
+        all_descriptors[indices.numpy(), :] = descriptors        
+    elif args.encode_mode == 'image':
+        # single vector - image
+        descriptors = model.encode_image(images.to(args.device))
+        descriptors = descriptors.cpu().numpy()
+        all_descriptors[indices.numpy(), :] = descriptors    
+    elif args.is_dual_encoder:
         image_features, text_features = model.encode_dual(images.to(args.device), texts)
         # cat fusion: concat text and vision vectors
         if args.dual_encoder_fusion == 'cat':
@@ -31,15 +41,15 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
             text_features = text_features.cpu().numpy()
             text_descriptors[indices.numpy(), :] = text_features                    
     else:
-        # single vector 
+        # single vector of both image and text
         descriptors = model.encode_single(images.to(args.device), texts)
         descriptors = descriptors.cpu().numpy()
         all_descriptors[indices.numpy(), :] = descriptors
         
 def get_queries_predictions(encoder_dim, database_descriptors, all_descriptors, queries_descriptors):
      # Use a kNN to find predictions
-    #faiss_index = faiss.IndexFlatL2(encoder_dim)
-    faiss_index = faiss.IndexFlatIP(encoder_dim)
+    faiss_index = faiss.IndexFlatL2(encoder_dim)
+    #faiss_index = faiss.IndexFlatIP(encoder_dim)
     faiss_index.add(database_descriptors)
     del database_descriptors, all_descriptors
 
@@ -94,11 +104,13 @@ def main(args):
         database_dataloader = DataLoader(
             dataset=database_subset_ds, num_workers=args.num_workers, batch_size=args.batch_size
         )
-        if args.dual_encoder_fusion == 'each':
+        
+        if args.is_dual_encoder and args.dual_encoder_fusion == 'each':
             vision_descriptors = np.empty((len(test_ds), model.vision_encoder_dim), dtype="float32")
             text_descriptors = np.empty((len(test_ds), model.text_encoder_dim), dtype="float32")            
         else:            
             all_descriptors = np.empty((len(test_ds), model.encoder_dim), dtype="float32")
+            
         for images, indices, texts in tqdm(database_dataloader):
             encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors)
 
@@ -137,7 +149,7 @@ def main(args):
         queries_descriptors = all_descriptors[test_ds.num_database :]
         database_descriptors = all_descriptors[: test_ds.num_database]    
         # get queries predictions
-        scores, predictions = get_queries_predictions(model, database_descriptors, all_descriptors, queries_descriptors)
+        scores, predictions = get_queries_predictions(model.encoder_dim, database_descriptors, all_descriptors, queries_descriptors)
     
     if args.save_descriptors and not is_database_descriptors_exist:
         logger.info(f"Saving the descriptors in {args.descriptor_dir}")
