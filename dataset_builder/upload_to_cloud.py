@@ -103,13 +103,13 @@ if __name__ == "__main__":
     LOCAL_FOLDER = "/mnt/d/data/nordland/images/test/"
     GCS_DESTINATION = "nordland/images/test/"    
     
-    upload_folder_many_filenames(BUCKET_NAME, LOCAL_FOLDER, GCS_DESTINATION)
+    # upload_folder_many_filenames(BUCKET_NAME, LOCAL_FOLDER, GCS_DESTINATION)
     
-    gcs_file = "input_gcs.jsonl"
-    create_gcs_json(LOCAL_FOLDER, BUCKET_NAME, GCS_DESTINATION, gcs_file)
+    # gcs_file = "input_gcs.jsonl"
+    # create_gcs_json(LOCAL_FOLDER, BUCKET_NAME, GCS_DESTINATION, gcs_file)
     
-    pred_json = '/mnt/d/ofer/localization/text2vpr/dataset_builder/amstertime_test_predictions.jsonl'
-    # prediction_to_csv(BUCKET_NAME, GCS_DESTINATION, pred_json)
+    pred_json = '/mnt/d/ofer/localization/text2vpr/dataset_builder/predictions/nordland_predictions.jsonl'
+    prediction_to_csv(BUCKET_NAME, GCS_DESTINATION, pred_json)
 
     
 

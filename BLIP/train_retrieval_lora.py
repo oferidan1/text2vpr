@@ -441,7 +441,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size_test', default=256, type=int)
     parser.add_argument('--is_train', default=1, type=int)
     parser.add_argument('--is_itc_only', default=1, type=int)    
-    parser.add_argument('--loss_type', default=1, type=int, choices=['1', '2', '3'], help='1: ITC only, 2: ITC + ITM, 3: Triplet Loss')    
+    parser.add_argument('--loss_type', default=2, type=int, choices=['1', '2', '3'], help='1: ITC only, 2: ITC + ITM, 3: Triplet Loss')    
     parser.add_argument('--pretrained', default='https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base.pth')    
     parser.add_argument('--eval_on', default='both', type=str, choices=['val', 'test', 'both'], help='which set to evaluate on')
     

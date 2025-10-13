@@ -16,8 +16,40 @@ from test_dataset import TestDataset
 import visualizations
 
 
+def encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors):
+    if args.is_dual_encoder:
+        image_features, text_features = model.encode_dual(images.to(args.device), texts)
+        # cat fusion: concat text and vision vectors
+        if args.dual_encoder_fusion == 'cat':
+            descriptors = torch.cat((image_features, text_features), dim=1)
+            descriptors = descriptors.cpu().numpy()
+            all_descriptors[indices.numpy(), :] = descriptors
+        else:
+            # each fusion: save each modality
+            image_features = image_features.cpu().numpy()
+            vision_descriptors[indices.numpy(), :] = image_features
+            text_features = text_features.cpu().numpy()
+            text_descriptors[indices.numpy(), :] = text_features                    
+    else:
+        # single vector 
+        descriptors = model.encode_single(images.to(args.device), texts)
+        descriptors = descriptors.cpu().numpy()
+        all_descriptors[indices.numpy(), :] = descriptors
+        
+def get_queries_predictions(encoder_dim, database_descriptors, all_descriptors, queries_descriptors):
+     # Use a kNN to find predictions
+    #faiss_index = faiss.IndexFlatL2(encoder_dim)
+    faiss_index = faiss.IndexFlatIP(encoder_dim)
+    faiss_index.add(database_descriptors)
+    del database_descriptors, all_descriptors
+
+    logger.debug("Calculating recalls")
+    scores, predictions = faiss_index.search(queries_descriptors, max(args.recall_values))
+    return scores, predictions
+
 def main(args):
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+    os.environ["TOKENIZERS_PARALLELISM"] = "False"
     start_time = datetime.now()
 
     logger.remove()  # Remove possibly previously existing loggers
@@ -52,6 +84,9 @@ def main(args):
         use_labels=args.use_labels,
     )
     logger.info(f"Testing on {test_ds}")
+    all_descriptors = None
+    vision_descriptors = None
+    text_descriptors = None
 
     with torch.inference_mode():
         logger.debug("Extracting database descriptors for evaluation/testing")
@@ -59,12 +94,13 @@ def main(args):
         database_dataloader = DataLoader(
             dataset=database_subset_ds, num_workers=args.num_workers, batch_size=args.batch_size
         )
-        all_descriptors = np.empty((len(test_ds), args.descriptors_dimension), dtype="float32")
+        if args.dual_encoder_fusion == 'each':
+            vision_descriptors = np.empty((len(test_ds), model.vision_encoder_dim), dtype="float32")
+            text_descriptors = np.empty((len(test_ds), model.text_encoder_dim), dtype="float32")            
+        else:            
+            all_descriptors = np.empty((len(test_ds), model.encoder_dim), dtype="float32")
         for images, indices, texts in tqdm(database_dataloader):
-            image_features, text_features = model.encode(images.to(args.device), texts)
-            descriptors = torch.cat((image_features, text_features), dim=1)
-            descriptors = descriptors.cpu().numpy()
-            all_descriptors[indices.numpy(), :] = descriptors
+            encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors)
 
         logger.debug("Extracting queries descriptors for evaluation/testing using batch size 1")
         queries_subset_ds = Subset(
@@ -72,14 +108,37 @@ def main(args):
         )
         queries_dataloader = DataLoader(dataset=queries_subset_ds, num_workers=args.num_workers, batch_size=1)
         for images, indices, texts in tqdm(queries_dataloader):
-            image_features, text_features = model.encode(images.to(args.device), texts)
-            descriptors = torch.cat((image_features, text_features), dim=1)
-            descriptors = descriptors.cpu().numpy()
-            all_descriptors[indices.numpy(), :] = descriptors
+            encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors)
 
-    queries_descriptors = all_descriptors[test_ds.num_database :]
-    database_descriptors = all_descriptors[: test_ds.num_database]
-
+    if args.is_dual_encoder and args.dual_encoder_fusion=='each':
+        max_results = max(args.recall_values)
+        # vision
+        vision_queries_descriptors = vision_descriptors[test_ds.num_database :]
+        vision_database_descriptors = vision_descriptors[: test_ds.num_database]    
+        vision_scores, vision_predictions = get_queries_predictions(model.vision_encoder_dim, vision_database_descriptors, vision_descriptors, vision_queries_descriptors)
+        # text
+        text_queries_descriptors = text_descriptors[test_ds.num_database :]
+        text_database_descriptors = text_descriptors[: test_ds.num_database]    
+        text_scores, text_predictions = get_queries_predictions(model.text_encoder_dim, text_database_descriptors, text_descriptors, text_queries_descriptors)
+        # join vision and text predictions
+        predictions = []        
+        for query_vision, query_text, v_score, t_score in zip(vision_predictions, text_predictions, vision_scores, text_scores):
+            predictions_per_query = []
+            for pred_vision, pred_text, v_score1, t_score1 in zip(query_vision, query_text, v_score, t_score):
+                if v_score1 > 0.1:
+                    predictions_per_query.append(pred_vision)
+                if t_score1 > 0.8:
+                    predictions_per_query.append(pred_text)
+            # only unique values
+            predictions_per_query = list(set(predictions_per_query))[:max_results]            
+            predictions.append(predictions_per_query)            
+        predictions = np.array(predictions)        
+    else:
+        queries_descriptors = all_descriptors[test_ds.num_database :]
+        database_descriptors = all_descriptors[: test_ds.num_database]    
+        # get queries predictions
+        scores, predictions = get_queries_predictions(model, database_descriptors, all_descriptors, queries_descriptors)
+    
     if args.save_descriptors and not is_database_descriptors_exist:
         logger.info(f"Saving the descriptors in {args.descriptor_dir}")
         if not Path(args.descriptor_dir).exists():
@@ -88,14 +147,6 @@ def main(args):
         np.save(os.path.join(args.descriptor_dir, "database_descriptors.npy"), database_descriptors)
         positives_per_query = test_ds.get_positives()
         np.save(os.path.join(args.descriptor_dir, "positives_per_query.npy"), positives_per_query)
-
-    # Use a kNN to find predictions
-    faiss_index = faiss.IndexFlatL2(args.descriptors_dimension)
-    faiss_index.add(database_descriptors)
-    del database_descriptors, all_descriptors
-
-    logger.debug("Calculating recalls")
-    _, predictions = faiss_index.search(queries_descriptors, max(args.recall_values))
 
     # For each query, check if the predictions are correct
     if args.use_labels:

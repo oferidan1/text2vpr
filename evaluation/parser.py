@@ -16,11 +16,15 @@ def parse_arguments():
         default="mixvpr",
         help="_",
     )
-    parser.add_argument("--descriptors_dimension", type=int, default=1536, help="_")
+    parser.add_argument("--descriptors_dimension", type=int, default=512, help="_")
     parser.add_argument("--database_folder", type=str, default="/mnt/d/data/amstertime/test/database")    
     parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")
     parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
     parser.add_argument("--image_root", type=str, default="/mnt/d/data/amstertime/test")
+    # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/nordland/images/test/database")    
+    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/nordland/images/test/queries")
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/nordland/images/test/nordland_predictions.csv")
+    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/nordland/images/test")
     parser.add_argument("--num_workers", type=int, default=4, help="_")
     parser.add_argument(
         "--batch_size", type=int, default=64, help="set to 1 if database images may have different resolution"
@@ -44,7 +48,7 @@ def parse_arguments():
         "do standard image retrieval given two folders of queries and DB",
     )
     parser.add_argument(
-        "--num_preds_to_save", type=int, default=3, help="set != 0 if you want to save predictions for each query"
+        "--num_preds_to_save", type=int, default=0, help="set != 0 if you want to save predictions for each query"
     )
     parser.add_argument(
         "--save_only_wrong_preds",
@@ -69,6 +73,8 @@ def parse_arguments():
     parser.add_argument("--vision_model_name", type=str, default="mixvpr")
     parser.add_argument("--text_model_name", type=str, default="BAAI/bge-large-en-v1.5")
     parser.add_argument("--lora_path", type=str, default=None)    
+    parser.add_argument("--is_dual_encoder", type=int, default="1")    
+    parser.add_argument("--dual_encoder_fusion", type=str, default="each", help="cat/each")    
 
     args = parser.parse_args()
     
