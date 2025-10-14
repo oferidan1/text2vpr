@@ -531,7 +531,7 @@ if __name__ == '__main__':
     pl.utilities.seed.seed_everything(seed=190223, workers=True)
     
     args = parse_arguments()
-    os.envrion['CUDA_VISIBLE_DEVICES'] = args.gpu
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
         
     datamodule = GSVCitiesDataModule(
         batch_size=120,
@@ -629,8 +629,8 @@ if __name__ == '__main__':
         # fast_dev_run=True # uncomment or dev mode (only runs a one iteration train and validation, no checkpointing).
     )
     
-    # Manually call validation
-    trainer.validate(model=model, datamodule=datamodule)
+    # # Manually call validation
+    # trainer.validate(model=model, datamodule=datamodule)
 
     # we call the trainer, we give it the model and the datamodule
     trainer.fit(model=model, datamodule=datamodule)
