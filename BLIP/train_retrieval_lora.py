@@ -42,7 +42,7 @@ def sattolos_shuffle(indices):
         indices[i], indices[j] = indices[j], indices[i]
     return indices
 
-def train(model, data_loader, optimizer, epoch, device, config):
+def train(model, data_loader, optimizer, epoch, device, config, args):
     # train
     model.train()  
     
@@ -95,6 +95,10 @@ def train(model, data_loader, optimizer, epoch, device, config):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()           
+        
+        # Clear cache periodically to avoid fragmentation
+        if args.empty_cache_freq > 0 and (i + 1) % args.empty_cache_freq == 0:
+            torch.cuda.empty_cache()
         
         metric_logger.update(loss_itm=loss_itm.item())
         metric_logger.update(loss_ita=loss_ita.item())
@@ -313,14 +317,23 @@ def main(args, config):
     print("Creating model")
     model = blip_retrieval(pretrained=args.pretrained, image_size=config['image_size'], vit=config['vit'], 
                              vit_grad_ckpt=config['vit_grad_ckpt'], vit_ckpt_layer=config['vit_ckpt_layer'], 
-                             queue_size=config['queue_size'], negative_all_rank=config['negative_all_rank'], distributed=args.distributed, loss_type=args.loss_type)
+                             queue_size=config['queue_size'], negative_all_rank=config['negative_all_rank'], 
+                             distributed=args.distributed, loss_type=args.loss_type, max_text_length=args.max_text_length)
 
     model = model.to(device)   
     
     model_without_ddp = model
     if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=False)
-        model_without_ddp = model.module   
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True, static_graph=True)
+        model_without_ddp = model.module
+    
+    # Enable gradient checkpointing to save memory
+    if args.gradient_checkpointing:
+        print("Enabling gradient checkpointing...")
+        if hasattr(model_without_ddp.text_encoder, 'gradient_checkpointing_enable'):
+            model_without_ddp.text_encoder.gradient_checkpointing_enable()
+        if hasattr(model_without_ddp.text_encoder_m, 'gradient_checkpointing_enable'):
+            model_without_ddp.text_encoder_m.gradient_checkpointing_enable()   
         
     if args.lora:        
         # loop pver model parameters and set requires_grad=False
@@ -358,7 +371,7 @@ def main(args, config):
                 
             cosine_lr_schedule(optimizer, epoch, config['max_epoch'], config['init_lr'], config['min_lr'])
             
-            train_stats = train(model, train_loader, optimizer, epoch, device, config)  
+            train_stats = train(model, train_loader, optimizer, epoch, device, config, args)  
             
         # if args.eval_on == 'val' or args.eval_on == 'both':
         #     score_val_i2t, score_val_t2i, = evaluation(model_without_ddp, val_loader, device, config, args)
@@ -441,9 +454,12 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size_test', default=256, type=int)
     parser.add_argument('--is_train', default=1, type=int)
     parser.add_argument('--is_itc_only', default=1, type=int)    
-    parser.add_argument('--loss_type', default=2, type=int, choices=['1', '2', '3'], help='1: ITC only, 2: ITC + ITM, 3: Triplet Loss')    
+    parser.add_argument('--loss_type', default=2, type=int, choices=[1, 2, 3], help='1: ITC only, 2: ITC + ITM, 3: Triplet Loss')    
     parser.add_argument('--pretrained', default='https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base.pth')    
     parser.add_argument('--eval_on', default='both', type=str, choices=['val', 'test', 'both'], help='which set to evaluate on')
+    parser.add_argument('--max_text_length', default=35, type=int, help='maximum length for text tokenizer')
+    parser.add_argument('--gradient_checkpointing', default=0, type=int, help='enable gradient checkpointing to save memory')
+    parser.add_argument('--empty_cache_freq', default=0, type=int, help='empty CUDA cache every N iterations (0=disabled)')
     
     args = parser.parse_args()
 

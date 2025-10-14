@@ -20,6 +20,7 @@ class BLIP_Retrieval(nn.Module):
                  negative_all_rank = False,
                  distributed = False,
                  loss_type = 1,
+                 max_text_length = 35,
                  ):
         """
         Args:
@@ -28,6 +29,8 @@ class BLIP_Retrieval(nn.Module):
             vit (str): model size of vision transformer
         """               
         super().__init__()
+        
+        self.max_text_length = max_text_length
         
         self.visual_encoder, vision_width = create_vit(vit,image_size, vit_grad_ckpt, vit_ckpt_layer)
         self.tokenizer = init_tokenizer()   
@@ -83,7 +86,7 @@ class BLIP_Retrieval(nn.Module):
         image_atts = torch.ones(image_embeds.size()[:-1],dtype=torch.long).to(image.device)        
         image_feat = F.normalize(self.vision_proj(image_embeds[:,0,:]),dim=-1)    
         
-        text = self.tokenizer(caption, padding='max_length', truncation=True, max_length=512, 
+        text = self.tokenizer(caption, padding='max_length', truncation=True, max_length=self.max_text_length, 
                               return_tensors="pt").to(image.device) 
         
         text_output = self.text_encoder(text.input_ids, attention_mask = text.attention_mask,                      
@@ -290,7 +293,7 @@ class BLIP_Retrieval(nn.Module):
         return image_embed  
 
     def encode_text_caption(self, text, device='cuda'):
-        text_input = self.tokenizer(text, padding='max_length', truncation=True, max_length=35, return_tensors="pt").to(device) 
+        text_input = self.tokenizer(text, padding='max_length', truncation=True, max_length=self.max_text_length, return_tensors="pt").to(device) 
         text_output = self.text_encoder(text_input.input_ids, attention_mask = text_input.attention_mask, mode='text')  
         text_embed = F.normalize(self.text_proj(text_output.last_hidden_state[:,0,:]))
         return text_embed
