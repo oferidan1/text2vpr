@@ -16,15 +16,15 @@ def parse_arguments():
         default="mixvpr",
         help="_",
     )
-    parser.add_argument("--descriptors_dimension", type=int, default=512, help="_")
-    parser.add_argument("--database_folder", type=str, default="/mnt/d/data/amstertime/test/database")    
-    parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")
-    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
-    parser.add_argument("--image_root", type=str, default="/mnt/d/data/amstertime/test")
-    # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/nordland/images/test/database")    
-    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/nordland/images/test/queries")
-    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/nordland/images/test/nordland_predictions.csv")
-    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/nordland/images/test")
+    parser.add_argument("--descriptors_dimension", type=int, default=1024, help="_")
+    # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/amstertime/test/database")    
+    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
+    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/amstertime/test")
+    parser.add_argument("--database_folder", type=str, default="/mnt/d/data/nordland/images/test/database")    
+    parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/nordland/images/test/queries")
+    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/nordland/images/test/nordland_predictions.csv")
+    parser.add_argument("--image_root", type=str, default="/mnt/d/data/nordland/images/test")
     parser.add_argument("--num_workers", type=int, default=4, help="_")
     parser.add_argument(
         "--batch_size", type=int, default=64, help="set to 1 if database images may have different resolution"
@@ -58,7 +58,7 @@ def parse_arguments():
     parser.add_argument(
         "--image_size",
         type=int,
-        default=None,
+        default=320,
         nargs="+",
         help="Resizing shape for images (HxW). If a single int is passed, set the"
         "smallest edge of all images to this value, while keeping aspect ratio",
@@ -69,7 +69,7 @@ def parse_arguments():
         help="set to True if you want to save the descriptors extracted by the model",
     )
     parser.add_argument("--gpu", type=str, default="1", help="which gpu to use")
-    parser.add_argument("--model_name", type=str, default=None)
+    parser.add_argument("--model_name", type=str, default='/mnt/d/ofer/localization/text2vpr/MixVPR_text/LOGS/resnet50/lightning_logs/version_0/checkpoints/resnet50_epoch(07)_step(4168)_R1[0.9027]_R5[0.9505].ckpt')
     parser.add_argument("--vision_model_name", type=str, default="mixvpr")
     parser.add_argument("--text_model_name", type=str, default="BAAI/bge-large-en-v1.5")
     parser.add_argument("--lora_path", type=str, default=None)    

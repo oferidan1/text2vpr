@@ -16,9 +16,11 @@ amstertime mixvpr_bge_each 1:1 			R@1: 1.9,  R@5: 8.2,  R@10: 18.4, R@20: 36.6
 amstertime mixvpr_bge_each 0.1/0.8 		R@1: 3.0,  R@5: 14.2, R@10: 27.9, R@20: 56.6 
 amstertime mixvpr orig [4096]:     		R@1: 40.8, R@5: 58.9, R@10: 65.6, R@20: 72.1
 amstertime mixvpr_bge_concat [5120]: 	R@1: 39.3, R@5: 60.0, R@10: 66.6, R@20: 72.4
+amstertime mixvpr_bge_fusion_mlp [1024]:R@1: 30.1, R@5: 48.9, R@10: 55.5, R@20: 63.6
 
 nordland bge text only:                 R@1: 4.8,  R@5: 11.3, R@10: 15.7, R@20: 21.6
 nordland mixvpr orig [512]:        		R@1: 66.6, R@5: 80.8, R@10: 85.7, R@20: 89.9
 nordland mixvpr_bge_concat [1536]: 		R@1: 59.7, R@5: 76.3, R@10: 82.3, R@20: 87.4
 nordland mixvpr orig [4096]:       		R@1: 76.4, R@5: 87.1, R@10: 90.6, R@20: 93.6
 nordland mixvpr_bge_concat [5120]:		R@1: 66.2, R@5: 80.6, R@10: 85.3, R@20: 89.6
+nordland mixvpr_bge_fusion_mlp [1024]:  R@1: 62.1, R@5: 76.8, R@10: 82.3, R@20: 87.1

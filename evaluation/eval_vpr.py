@@ -10,7 +10,7 @@ from loguru import logger
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Subset
 from tqdm import tqdm
-from models import VLM_Model
+from vlm_model import VLM_Model
 import os
 from test_dataset import TestDataset
 import visualizations
