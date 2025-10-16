@@ -1,0 +1,28 @@
+# Example configuration file for dataset analysis
+# Copy this to config.yaml and modify the paths as needed
+
+datasets:
+  - name: "sf_xl_small_train"
+    csv_path: "/mnt/d/data/sf_xl/small/sf_xl_small_train_descriptions.csv"
+    output_base_dir: "/mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output"
+    image_prefix: "/mnt/d/data/sf_xl"
+    
+  # Add more datasets as needed:
+  # - name: "another_dataset"
+  #   csv_path: "/path/to/another/dataset.csv"
+  #   output_base_dir: "/path/to/output/directory"
+  #   image_prefix: "/path/to/image/directory"
+
+# Analysis options
+analysis_options:
+  run_description_analysis: true
+  run_token_analysis: true
+  run_image_examples: true
+  
+# Global settings
+global_settings:
+  # Whether to create timestamped subdirectories for each run
+  use_timestamps: true
+  
+  # Whether to overwrite existing output directories
+  overwrite_existing: false

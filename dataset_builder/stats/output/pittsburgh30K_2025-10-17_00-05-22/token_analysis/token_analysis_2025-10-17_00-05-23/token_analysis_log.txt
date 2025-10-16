@@ -1,0 +1,34 @@
+======================================================================
+TOKEN LENGTH ANALYSIS
+======================================================================
+Timestamp: 2025-10-17 00:05:39
+Dataset: /mnt/d/data/Pittsburgh30K/images/test/Pittsburgh30K_test_predictions.csv
+Total Samples: 16810
+Tokenizer: bert-base-uncased (BLIP's tokenizer)
+
+STATISTICS:
+  Mean:   68.66 tokens
+  Median: 66 tokens
+  Min:    14 tokens
+  Max:    227 tokens
+  Std:    22.74 tokens
+
+PERCENTILES:
+  50th: 66 tokens
+  75th: 81 tokens
+  90th: 98 tokens
+  95th: 109 tokens
+  99th: 135 tokens
+  99.5th: 147 tokens
+  99.9th: 184 tokens
+
+======================================================================
+RECOMMENDATIONS:
+
+Very Aggressive (95% coverage): 109 tokens
+
+Recommended (99% coverage): 135 tokens
+
+Conservative (99.9% coverage): 185 tokens
+
+Full Coverage (100%): 227 tokens

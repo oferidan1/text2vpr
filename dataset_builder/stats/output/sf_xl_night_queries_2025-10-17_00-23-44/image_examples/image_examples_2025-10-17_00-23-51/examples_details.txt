@@ -1,0 +1,34 @@
+================================================================================
+IMAGE EXAMPLES DETAILS
+================================================================================
+Generated at: 2025-10-17 00:23:58
+CSV file: /mnt/d/data/sf_xl/descriptions_queries_night.csv
+Image prefix: /mnt/d/data/sf_xl/processed/test
+Number of examples: 3
+Random seed: None
+================================================================================
+
+EXAMPLE 1:
+  Index: 325
+  Image path: queries_night/@0551573.39@4177030.84@10@S@37.739134@-122.41467@2011667898@@@@@@20071114@@.jpg
+  Full path: /mnt/d/data/sf_xl/processed/test/queries_night/@0551573.39@4177030.84@10@S@37.739134@-122.41467@2011667898@@@@@@20071114@@.jpg
+  Exists: Yes
+  Description: Light-colored two-story building with multiple rectangular windows and a visible roofline, a dark trash bin at its base, an illuminated narrow alleyway between buildings, a concrete sidewalk with a tall streetlight featuring an orange globe, a red octagonal STOP sign, overhead power lines crisscrossing the dark sky, a prominent dark church with a bell tower and a cross in the background, and a darker building with a rectangular window on the far right.
+--------------------------------------------------------------------------------
+
+EXAMPLE 2:
+  Index: 417
+  Image path: queries_night/@0553330.94@4183279.84@10@S@37.795441@-122.39411@49206469508@@@@@@20191212@@.jpg
+  Full path: /mnt/d/data/sf_xl/processed/test/queries_night/@0553330.94@4183279.84@10@S@37.795441@-122.39411@49206469508@@@@@@20191212@@.jpg
+  Exists: Yes
+  Description: Multi-story light-colored neoclassical-style building with repeating arched window facade and multiple flagpoles, ornate classic multi-luminary street lamps, prominent tall white square clock tower with multi-tiered architectural design and four large internally yellow-illuminated clock faces topped by a spire, wide multi-lane paved road with painted lane markings, sidewalk area with regularly spaced deciduous trees, covered bus shelters, and modern spherical ground-level light fixtures, distinctive modern tall two-tiered geometric lamp posts, large suspension bridge with visible towers and a pattern of vertical lights in the distant background.
+--------------------------------------------------------------------------------
+
+EXAMPLE 3:
+  Index: 400
+  Image path: queries_night/@0552645.02@4181511.37@10@S@37.779399@-122.402266@51914274062@@@@@@20220303@@.jpg
+  Full path: /mnt/d/data/sf_xl/processed/test/queries_night/@0552645.02@4181511.37@10@S@37.779399@-122.402266@51914274062@@@@@@20220303@@.jpg
+  Exists: Yes
+  Description: Large "Ohio" billboard with red top and white bottom stating "Startup where you can actually afford to start up. OhioIsForLeaders.com", bare tree branches, "Allstars DONUTS" sign with "SANDWICHES" below, street-level sign about "Thinking about Retirement? my Social Security", street light pole with a circular banner depicting a group of people, traffic light pole with multiple traffic signals, elevated concrete overpass structure, green and white billboard advertising "The first hiring app for founders." showing a man in a basketball jersey, empty billboard structure.
+--------------------------------------------------------------------------------
+

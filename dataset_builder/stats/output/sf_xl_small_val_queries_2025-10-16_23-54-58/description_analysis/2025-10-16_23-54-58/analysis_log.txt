@@ -1,0 +1,46 @@
+============================================================
+DATASET ANALYSIS LOG
+============================================================
+Timestamp: 2025-10-16 23:54:59
+Dataset CSV: /mnt/d/data/sf_xl/small/sf_xl_small_val_queries_descriptions.csv
+Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_val_queries_2025-10-16_23-54-58/description_analysis/2025-10-16_23-54-58
+Total Samples: 7993
+Columns: ['image_path', 'description', 'description_length']
+Description Column: description
+Image Column: image_path
+============================================================
+
+DESCRIPTION LENGTH STATISTICS
+============================================================
+Mean length:   55.12 words
+Median length: 52.00 words
+Min length:    7 words
+Max length:    203 words
+Std deviation: 21.48 words
+============================================================
+
+
+SHORTEST DESCRIPTION
+============================================================
+Image: val/queries/@0543600.25@4179955.90@10@S@037.76589@-122.50497@QrF1nTEzTseGJLc3SJjnDA@@60@@@@200806@@.jpg
+Length: 7 words
+Text: Dense evergreen hedge, paved road, clear sky.
+============================================================
+
+LONGEST DESCRIPTION
+============================================================
+Image: val/queries/@0548008.91@4174609.21@10@S@037.71748@-122.45527@C9lxDI0IzrBWnRbu8YqP_A@@30@@@@201709@@.jpg
+Length: 203 words
+Text: A residential street with a row of multi-story, flat-roofed houses sloping uphill, from left to right: a two-story house with teal/blue-green horizontal siding on the upper level, a metal balcony railing, and a garage door with horizontal blue/green stripes on the lower level; followed by a two-story house with a prominent red roof fascia, light brown/beige siding on the upper level with large horizontal windows, and a white garage door with red horizontal stripes on the lower level; followed by a two-story house with a light brown/beige roof fascia, light brown/beige siding on the upper level with horizontal windows, and a light brown garage door on the lower level, possibly with stone cladding; followed by a two-story house with a maroon/dark red roof fascia, maroon/dark red siding on the upper level with horizontal windows, and a light brown/beige garage door on the lower level, possibly with stone cladding; followed by a partially visible two-story house with a light colored roof fascia, white siding on the upper level with horizontal windows, and a garage on the lower level; a concrete street and sidewalk sloping uphill; a utility pole further down the street on the right; and an overcast sky with multiple overhead utility lines.
+============================================================
+
+============================================================
+OUTPUT FILES GENERATED
+============================================================
+1. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_val_queries_2025-10-16_23-54-58/description_analysis/2025-10-16_23-54-58/analysis_log.txt - This log file
+2. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_val_queries_2025-10-16_23-54-58/description_analysis/2025-10-16_23-54-58/description_statistics.csv - Statistics summary
+3. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_val_queries_2025-10-16_23-54-58/description_analysis/2025-10-16_23-54-58/description_length_analysis.png - Visualizations
+4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_val_queries_2025-10-16_23-54-58/description_analysis/2025-10-16_23-54-58/min_description.txt - Shortest description
+5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_val_queries_2025-10-16_23-54-58/description_analysis/2025-10-16_23-54-58/max_description.txt - Longest description
+============================================================
+Analysis completed at: 2025-10-16 23:54:59

@@ -1,0 +1,34 @@
+======================================================================
+TOKEN LENGTH ANALYSIS
+======================================================================
+Timestamp: 2025-10-17 00:06:20
+Dataset: /mnt/d/data/nordland/images/test/nordland_predictions.csv
+Total Samples: 55184
+Tokenizer: bert-base-uncased (BLIP's tokenizer)
+
+STATISTICS:
+  Mean:   48.51 tokens
+  Median: 46 tokens
+  Min:    12 tokens
+  Max:    198 tokens
+  Std:    15.00 tokens
+
+PERCENTILES:
+  50th: 46 tokens
+  75th: 56 tokens
+  90th: 68 tokens
+  95th: 76 tokens
+  99th: 95 tokens
+  99.5th: 103 tokens
+  99.9th: 123 tokens
+
+======================================================================
+RECOMMENDATIONS:
+
+Very Aggressive (95% coverage): 76 tokens
+
+Recommended (99% coverage): 95 tokens
+
+Conservative (99.9% coverage): 123 tokens
+
+Full Coverage (100%): 198 tokens

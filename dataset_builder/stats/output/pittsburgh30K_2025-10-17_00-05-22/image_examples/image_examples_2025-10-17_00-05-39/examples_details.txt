@@ -1,0 +1,34 @@
+================================================================================
+IMAGE EXAMPLES DETAILS
+================================================================================
+Generated at: 2025-10-17 00:05:42
+CSV file: /mnt/d/data/Pittsburgh30K/images/test/Pittsburgh30K_test_predictions.csv
+Image prefix: /mnt/d/data/Pittsburgh30K/images/test
+Number of examples: 3
+Random seed: None
+================================================================================
+
+EXAMPLE 1:
+  Index: 6997
+  Image path: queries/@0584635.84@4476970.45@17@T@040.43908@-080.00207@007319@03@@@@@@pitch1_yaw4@.jpg
+  Full path: /mnt/d/data/Pittsburgh30K/images/test/queries/@0584635.84@4476970.45@17@T@040.43908@-080.00207@007319@03@@@@@@pitch1_yaw4@.jpg
+  Exists: Yes
+  Description: Upper level concrete facade with an orange light fixture and a red horizontal pipe, upper level concrete building section with multiple rectangular windows, lower level entrance to a concrete parking structure with internal exposed lights, a vertical metal structure, a black metal grate fence, yellow safety markings on the ground inside, a white pole with a "no parking" sign, a concrete pillar, a yellow vertical bollard, a concrete curb in the foreground.
+--------------------------------------------------------------------------------
+
+EXAMPLE 2:
+  Index: 14041
+  Image path: database/@0584584.10@4477060.66@17@T@040.43990@-080.00266@002184@03@@@@@@pitch1_yaw4@.jpg
+  Full path: /mnt/d/data/Pittsburgh30K/images/test/database/@0584584.10@4477060.66@17@T@040.43990@-080.00266@002184@03@@@@@@pitch1_yaw4@.jpg
+  Exists: Yes
+  Description: Reflective glass building facade, dark horizontal slatted wall, plain dark wall, recessed architectural framing with vertical and horizontal elements.
+--------------------------------------------------------------------------------
+
+EXAMPLE 3:
+  Index: 4545
+  Image path: queries/@0584543.17@4476809.77@17@T@040.43764@-080.00318@003833@33@@@@@@pitch2_yaw10@.jpg
+  Full path: /mnt/d/data/Pittsburgh30K/images/test/queries/@0584543.17@4476809.77@17@T@040.43764@-080.00318@003833@33@@@@@@pitch2_yaw10@.jpg
+  Exists: Yes
+  Description: Curved street light pole, tree-covered hill, multiple buildings on the hill, tall antenna on the hill, angular street light pole, partially cloudy blue sky.
+--------------------------------------------------------------------------------
+
