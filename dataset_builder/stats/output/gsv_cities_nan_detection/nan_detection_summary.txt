@@ -1,0 +1,12 @@
+============================================================
+NaN DETECTION SUMMARY - gsv_cities
+============================================================
+Dataset: gsv_cities
+CSV file: /mnt/d/data/gsv_cities/gsv_cities_predictions.csv
+Analysis date: 2025-10-17 09:12:53
+Total samples: 529,506
+NaN descriptions: 6
+Percentage: 0.00%
+Valid descriptions: 529,500
+============================================================
+NaN samples saved to: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities_nan_detection/nan_descriptions.csv
