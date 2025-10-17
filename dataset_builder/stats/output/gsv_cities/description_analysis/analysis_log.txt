@@ -1,11 +1,11 @@
 ============================================================
 DATASET ANALYSIS LOG
 ============================================================
-Timestamp: 2025-10-17 01:21:50
+Timestamp: 2025-10-17 08:44:17
 Dataset CSV: /mnt/d/data/gsv_cities/gsv_cities_predictions.csv
 Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis
 Total Samples: 529506
-Columns: ['image_path', 'description', 'description_length']
+Original CSV Columns: ['image_path', 'description']
 Description Column: description
 Image Column: image_path
 ============================================================
@@ -43,4 +43,4 @@ OUTPUT FILES GENERATED
 4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis/min_description.txt - Shortest description
 5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis/max_description.txt - Longest description
 ============================================================
-Analysis completed at: 2025-10-17 01:21:51
+Analysis completed at: 2025-10-17 08:44:17

@@ -1,7 +1,7 @@
 ================================================================================
 IMAGE EXAMPLES DETAILS
 ================================================================================
-Generated at: 2025-10-17 01:20:20
+Generated at: 2025-10-17 08:42:48
 CSV file: /mnt/d/data/sf_xl/small/sf_xl_small_test_queries_descriptions.csv
 Image prefix: /mnt/d/data/sf_xl/small
 Number of examples: 3
@@ -9,26 +9,26 @@ Random seed: None
 ================================================================================
 
 EXAMPLE 1:
-  Index: 56
-  Image path: test/queries_v1/@0550870.41@4180331.21@10@S@037.76889@-122.42240@26310587615@@@@@@20160408@@.jpg
-  Full path: /mnt/d/data/sf_xl/small/test/queries_v1/@0550870.41@4180331.21@10@S@037.76889@-122.42240@26310587615@@@@@@20160408@@.jpg
+  Index: 299
+  Image path: test/queries_v1/@0545605.97@4176519.03@10@S@037.73481@-122.48241@21523860520@@@@@@20150925@@.jpg
+  Full path: /mnt/d/data/sf_xl/small/test/queries_v1/@0545605.97@4176519.03@10@S@037.73481@-122.48241@21523860520@@@@@@20150925@@.jpg
   Exists: Yes
-  Description: Asphalt street with white painted parking lines, a row of mature green trees lining the street, a multi-story yellow building with white window frames, a brown "PAULINE'S PIZZA" sign with an orange pizza logo affixed to the building's corner, a smaller "OUTFRONT" sign below the pizza sign, a street sign on a pole reading "BROSNAN" at the building's corner, ground-floor windows with white vertical security bars, a large billboard on the upper part of the yellow building advertising "MARIN MARATHON" with runners and "www.marinmarathon.com", a large tree trunk in the right foreground, and a low brick retaining wall along the sidewalk.
+  Description: Dense dark green tree, light-colored outdoor staircase, house number "148" on a light wall, pink stucco house wall, large multi-pane white-framed bay window reflecting an arched structure and chimney, decorative stepped gable detail, red clay tile roof, two adjacent arched recesses on the upper level forming small balconies, left arched balcony with a dark door and white wrought iron railing, right arched balcony with a white wrought iron railing, smaller white-framed rectangular windows on the lower level, dark green trimmed hedge, adjacent light-colored building with a red tile roof on the far right.
 --------------------------------------------------------------------------------
 
 EXAMPLE 2:
-  Index: 605
-  Image path: test/queries_v1/@0550958.29@4182725.58@10@S@037.79047@-122.42123@38676606124@@@@@@20171230@@.jpg
-  Full path: /mnt/d/data/sf_xl/small/test/queries_v1/@0550958.29@4182725.58@10@S@037.79047@-122.42123@38676606124@@@@@@20171230@@.jpg
+  Index: 872
+  Image path: test/queries_v1/@0552103.78@4183290.63@10@S@037.79550@-122.40818@51319986351@@@@@@20210718@@.jpg
+  Full path: /mnt/d/data/sf_xl/small/test/queries_v1/@0552103.78@4183290.63@10@S@037.79550@-122.40818@51319986351@@@@@@20210718@@.jpg
   Exists: Yes
-  Description: A leafy green tree, a light-colored building with multiple windows above a red awning inscribed with "KWSF", a tall multi-story brick building with green bay windows and visible metal fire escapes, a distinctive modern Chase bank building with light-colored arched facade elements and blue "CHASE" signs, a city street sloping downhill with pedestrian crosswalks and traffic signal poles, and a distant cityscape featuring several high-rise buildings including one with a pointed spire.
+  Description: A brick building with windows and a shop awning partially displaying "VELRY" above a security gate, followed by a multi-story brick building with multiple windows, balconies with iron railings, and a prominent metal fire escape zig-zagging down its right side, its ground floor featuring a lighter facade with a window, a recessed doorway, a grand central entrance with two columns, stairs leading to double doors, decorative shield-like elements flanking the stairs, and "NSGS CACA" inscribed above the entrance, and a shop sign extending from the building's right side displaying Chinese characters, "Kang Hua Trading Inc.", and "Tel: 416-985-4817", all lining a street with a sidewalk.
 --------------------------------------------------------------------------------
 
 EXAMPLE 3:
-  Index: 442
-  Image path: test/queries_v1/@0550728.87@4178085.65@10@S@037.74866@-122.42416@3707183149@@@@@@20090710@@.jpg
-  Full path: /mnt/d/data/sf_xl/small/test/queries_v1/@0550728.87@4178085.65@10@S@037.74866@-122.42416@3707183149@@@@@@20090710@@.jpg
+  Index: 335
+  Image path: test/queries_v1/@0551345.89@4178034.10@10@S@037.74816@-122.41716@7754624816@@@@@@20120810@@.jpg
+  Full path: /mnt/d/data/sf_xl/small/test/queries_v1/@0551345.89@4178034.10@10@S@037.74816@-122.41716@7754624816@@@@@@20120810@@.jpg
   Exists: Yes
-  Description: Tree foliage, red-brown wooden fence, light green house with white trim, green garage door, two arched windows with blue frames, long green staircase, blue front door, dark blue roof with white decorative trim, bush with reddish foliage, concrete driveway, asphalt street with cracks.
+  Description: Multi-story building with grey/blue and light-colored facades, featuring a yellow "BELISO KARATE SCHOOL 550-9000" sign on its left side; a wooden utility pole; concrete construction barriers; large cylindrical concrete pipes; streetlights; and distant buildings.
 --------------------------------------------------------------------------------
 

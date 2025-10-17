@@ -1,7 +1,7 @@
 ================================================================================
 IMAGE EXAMPLES DETAILS
 ================================================================================
-Generated at: 2025-10-17 01:20:14
+Generated at: 2025-10-17 08:42:43
 CSV file: /mnt/d/data/sf_xl/descriptions_queries_night.csv
 Image prefix: /mnt/d/data/sf_xl/processed/test
 Number of examples: 3
@@ -9,26 +9,26 @@ Random seed: None
 ================================================================================
 
 EXAMPLE 1:
-  Index: 400
-  Image path: queries_night/@0552645.02@4181511.37@10@S@37.779399@-122.402266@51914274062@@@@@@20220303@@.jpg
-  Full path: /mnt/d/data/sf_xl/processed/test/queries_night/@0552645.02@4181511.37@10@S@37.779399@-122.402266@51914274062@@@@@@20220303@@.jpg
+  Index: 122
+  Image path: queries_night/@0546899.15@4176537.38@10@S@37.734915@-122.467728@49436101541@@@@@@20200124@@.jpg
+  Full path: /mnt/d/data/sf_xl/processed/test/queries_night/@0546899.15@4176537.38@10@S@37.734915@-122.467728@49436101541@@@@@@20200124@@.jpg
   Exists: Yes
-  Description: Large "Ohio" billboard with red top and white bottom stating "Startup where you can actually afford to start up. OhioIsForLeaders.com", bare tree branches, "Allstars DONUTS" sign with "SANDWICHES" below, street-level sign about "Thinking about Retirement? my Social Security", street light pole with a circular banner depicting a group of people, traffic light pole with multiple traffic signals, elevated concrete overpass structure, green and white billboard advertising "The first hiring app for founders." showing a man in a basketball jersey, empty billboard structure.
+  Description: Tall trees lining an avenue, pillar-mounted street light with a spherical lamp, circular landscaped area with hedges, multi-tiered stone fountain, traffic sign with a four-way arrow/roundabout symbol, pillar-mounted street light with a spherical lamp, tall trees lining an avenue.
 --------------------------------------------------------------------------------
 
 EXAMPLE 2:
-  Index: 52
-  Image path: queries_night/@0545740.01@4174608.75@10@S@37.717532@-122.481044@16439129602@@@@@@20150204@@.jpg
-  Full path: /mnt/d/data/sf_xl/processed/test/queries_night/@0545740.01@4174608.75@10@S@37.717532@-122.481044@16439129602@@@@@@20150204@@.jpg
+  Index: 117
+  Image path: queries_night/@0546878.37@4176534.82@10@S@37.734953@-122.46797@49436102801@@@@@@20200124@@.jpg
+  Full path: /mnt/d/data/sf_xl/processed/test/queries_night/@0546878.37@4176534.82@10@S@37.734953@-122.46797@49436102801@@@@@@20200124@@.jpg
   Exists: Yes
-  Description: Dense trees/foliage, paved street/road with parking areas, street light pole, two-story dark-toned residential building with a dark roof, multiple window openings, and a prominent front entrance structure, shrubbery and hedges, diamond-shaped road sign on a pole displaying a black "merge/lane ends" symbol, more shrubbery and hedges, light-toned multi-story residential building with a dark roof and visible window openings, street light pole, and additional background residential buildings.
+  Description: Large multi-branched trees, paved road with a street light pole and street signs, a prominent multi-tiered white classical-style stone fountain featuring a decorative scrollwork base, a twisted central column, and an ornate upper basin, and a terracotta-colored building with a dark tiled roof, an arched entrance, and decorative architectural details including white-framed windows.
 --------------------------------------------------------------------------------
 
 EXAMPLE 3:
-  Index: 434
-  Image path: queries_night/@0553638.75@4176406.81@10@S@37.73338@-122.391348@19099852831@@@@@@20150623@@.jpg
-  Full path: /mnt/d/data/sf_xl/processed/test/queries_night/@0553638.75@4176406.81@10@S@37.73338@-122.391348@19099852831@@@@@@20150623@@.jpg
+  Index: 334
+  Image path: queries_night/@0551674.79@4180602.06@10@S@37.771326@-122.413405@51025883407@@@@@@20210311@@.jpg
+  Full path: /mnt/d/data/sf_xl/processed/test/queries_night/@0551674.79@4180602.06@10@S@37.771326@-122.413405@51025883407@@@@@@20210311@@.jpg
   Exists: Yes
-  Description: Light-colored building with 'BIG SAVE MARKET' and 'TOP LINE APPAREL' signs including 'Authentic Urban Wear Men Women & Children' and 'AROUND THE CORNER' arrow, traffic light pole with 'no U-turn' sign, corner building storefront featuring 'BIG SAVE MARKET LIQUOR' and multiple adjacent signs like 'BEER & WINE', 'ATM', 'CIGARETTES', 'GROCERIES & PRODUCE', 'FRESH FOODS' and a glass entrance, utility pole with 'SHOP SMALL EVERY DAY BY THE BAY' banner, large rooftop billboard, multi-story brick building with ornate arched upper-story windows and a projecting bay window, street light on a curved pole, traffic sign with a curved arrow and line through it, darker background buildings with visible windows, bare trees along the sidewalk, and crosswalk markings on the street.
+  Description: Overhead concrete/metal bridge structure, dark utility pole with red "NO PARKING" sign, grey paved sidewalk, yellow-topped parking meter, red brick building facade with recessed rectangular window, lower stone block foundation, dark building overhang, orange/red neon sign "Slim's", horizontal blue neon light strip, recessed entrance area with brick walls, U-shaped dark metal bicycle rack, dark commercial entrance with glass panels, large red brick archway with small white sign.
 --------------------------------------------------------------------------------
 

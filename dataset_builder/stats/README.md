@@ -75,16 +75,45 @@ python main.py --config config.yaml
 
 ## CSV File Format
 
-The CSV files should contain at least:
-- A column with "description" in the name (case-insensitive)
-- A column with "image" in the name (case-insensitive)
+**STRICT REQUIREMENT**: CSV files must have exactly 2 columns:
+- **Column 1**: Must contain "image" in the name (case-insensitive)
+- **Column 2**: Must contain "description" in the name (case-insensitive)
 
-Example:
+### Valid Examples:
 ```csv
-image_path,description
+# Example 1: Standard format
+Image_path,Description
+/path/to/image1.jpg,"A beautiful sunset over the mountains"
+/path/to/image2.jpg,"A cat sitting on a windowsill"
+
+# Example 2: Different naming
+image_file,text_description
 queries_night/@0543030.55@4180984.98@10@S@37.775128@-122.51158@31760538811@@@@@@20161226@@.jpg,"Stepped concrete sidewalk, STOP painted on asphalt road, pedestrian crossing with white zebra stripes, red octagonal stop sign on a pole, multi-story buildings, multiple street light poles receding into the distance."
-queries_night/@0543102.49@4180346.93@10@S@37.76941@-122.510462@28026809684@@@@@@20160730@@.jpg,"A large, rectangular outdoor business sign with a thick, dark wooden frame and an overhead linear light fixture; the sign's light beige face features The Beach Chalet in large, stylized"
+
+# Example 3: Case variations
+IMAGE_PATH,DESCRIPTION
+/path/to/image1.jpg,"A beautiful sunset"
 ```
+
+### Invalid Examples:
+```csv
+# ❌ Too many columns
+Image_path,Description,Category,Confidence
+/path/to/image1.jpg,"A sunset","nature",0.95
+
+# ❌ Too few columns
+Image_path
+/path/to/image1.jpg
+
+# ❌ Wrong column names
+File,Text
+/path/to/image1.jpg,"A sunset"
+```
+
+### Error Handling:
+- **Invalid format**: Creates error log in `{dataset_name}_csv_format_error/` directory
+- **Wrong column names**: Creates error log in `{dataset_name}_column_name_error/` directory
+- **Continues processing**: Other datasets are processed normally
 
 The `image_prefix` in the config will be prepended to the `image_path` from the CSV to create the full path to the image file.
 

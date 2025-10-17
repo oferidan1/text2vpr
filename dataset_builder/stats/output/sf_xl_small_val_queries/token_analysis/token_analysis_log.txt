@@ -1,7 +1,7 @@
 ======================================================================
 TOKEN LENGTH ANALYSIS
 ======================================================================
-Timestamp: 2025-10-17 01:20:30
+Timestamp: 2025-10-17 08:42:58
 Dataset: /mnt/d/data/sf_xl/small/sf_xl_small_val_queries_descriptions.csv
 Total Samples: 7993
 Tokenizer: bert-base-uncased (BLIP's tokenizer)

@@ -61,6 +61,12 @@ def generate_image_examples(csv_path, image_prefix_path, output_dir=None, num_ex
     df.columns = df.columns.str.strip().str.strip("'\"")
     print(f"CSV columns found: {df.columns.tolist()}")
     
+    # Validate CSV format: must have exactly 2 columns
+    if len(df.columns) != 2:
+        error_msg = f"Invalid CSV format: Expected exactly 2 columns, found {len(df.columns)}. Columns: {list(df.columns)}"
+        print(f"❌ {error_msg}")
+        raise ValueError(error_msg)
+    
     # Find the image and description columns
     image_col = None
     description_col = None

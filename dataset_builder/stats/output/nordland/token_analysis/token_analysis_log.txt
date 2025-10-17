@@ -1,7 +1,7 @@
 ======================================================================
 TOKEN LENGTH ANALYSIS
 ======================================================================
-Timestamp: 2025-10-17 01:31:41
+Timestamp: 2025-10-17 08:54:09
 Dataset: /mnt/d/data/nordland/images/test/nordland_predictions.csv
 Total Samples: 55184
 Tokenizer: bert-base-uncased (BLIP's tokenizer)

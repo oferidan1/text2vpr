@@ -1,11 +1,11 @@
 ============================================================
 DATASET ANALYSIS LOG
 ============================================================
-Timestamp: 2025-10-17 07:42:01
+Timestamp: 2025-10-17 08:43:03
 Dataset CSV: /mnt/d/data/sf_xl/small/sf_xl_small_train_descriptions.csv
 Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_train/description_analysis
 Total Samples: 59649
-Columns: ['image_path', 'description', 'description_length']
+Original CSV Columns: ['image_path', 'description']
 Description Column: description
 Image Column: image_path
 ============================================================
@@ -43,4 +43,4 @@ OUTPUT FILES GENERATED
 4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_train/description_analysis/min_description.txt - Shortest description
 5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_train/description_analysis/max_description.txt - Longest description
 ============================================================
-Analysis completed at: 2025-10-17 07:42:01
+Analysis completed at: 2025-10-17 08:43:03

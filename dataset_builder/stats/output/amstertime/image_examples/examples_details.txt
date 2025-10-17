@@ -1,7 +1,7 @@
 ================================================================================
 IMAGE EXAMPLES DETAILS
 ================================================================================
-Generated at: 2025-10-17 01:31:50
+Generated at: 2025-10-17 08:54:17
 CSV file: /mnt/d/data/amstertime/test/amstertime_test_predictions.csv
 Image prefix: /mnt/d/data/amstertime/test
 Number of examples: 3
@@ -9,26 +9,26 @@ Random seed: None
 ================================================================================
 
 EXAMPLE 1:
-  Index: 972
-  Image path: database/@0@742000@@@@@0742@@@@@@@@.jpg
-  Full path: /mnt/d/data/amstertime/test/database/@0@742000@@@@@0742@@@@@@@@.jpg
+  Index: 486
+  Image path: queries/@0@167000@@@@@0167@@@@@@@@.jpg
+  Full path: /mnt/d/data/amstertime/test/queries/@0@167000@@@@@0167@@@@@@@@.jpg
   Exists: Yes
-  Description: Multi-story grey classic building with arched ground floor and gabled roof, tall narrow dark brick building with stepped gable, large flat grey stone-paved urban square, grand classical revival building with central domed tower and "DE BIJENKORF" sign, tall thick silver metal pillar in foreground.
+  Description: White wooden veranda-style building with decorative supports and railing, paved forecourt, asphalt road with white line, substantial red brick wall, ornate brick gateway with two prominent pillars and dark caps, unreadable light-colored sign above gateway, bare tree behind gateway, classic ornate street lamp with curved arm, dark-roofed buildings behind the brick wall.
 --------------------------------------------------------------------------------
 
 EXAMPLE 2:
-  Index: 136
-  Image path: queries/@0@316000@@@@@0316@@@@@@@@.jpg
-  Full path: /mnt/d/data/amstertime/test/queries/@0@316000@@@@@0316@@@@@@@@.jpg
+  Index: 1109
+  Image path: database/@0@1299000@@@@@1299@@@@@@@@.jpg
+  Full path: /mnt/d/data/amstertime/test/database/@0@1299000@@@@@1299@@@@@@@@.jpg
   Exists: Yes
-  Description: Bare trees and green foliage, a prominent corner building with red brick and extensive white trim featuring a rounded bay window and a white balustrade balcony, a small white street sign on the corner of the building, a central building with matching red brick and white trim, steps leading to a central wooden double door entrance, a yellow and white striped awning above the entrance, two white ornate balustrade balconies on the central building, smaller yellow and white striped awnings above some windows, a dark mansard roofline with a central pediment dormer and two oval dormers, a partially visible red brick building to the right with white trim, clear blue sky above.
+  Description: Grey brick apartment building with curved balconies, patterned paved sidewalk, low green bushes, asphalt road with white pedestrian crossing markings, street light pole with blue circular sign, evergreen and deciduous trees, green hedges, black house with castellated parapet and multiple windows, house in background.
 --------------------------------------------------------------------------------
 
 EXAMPLE 3:
-  Index: 1740
-  Image path: database/@0@1354000@@@@@1354@@@@@@@@.jpg
-  Full path: /mnt/d/data/amstertime/test/database/@0@1354000@@@@@1354@@@@@@@@.jpg
+  Index: 86
+  Image path: queries/@0@758000@@@@@0758@@@@@@@@.jpg
+  Full path: /mnt/d/data/amstertime/test/queries/@0@758000@@@@@0758@@@@@@@@.jpg
   Exists: Yes
-  Description: A white four-story apartment building with a red tiled gabled roof and rectangular windows on the far left, a large light-colored paved parking area with rectangular pavers, a narrow street paved with dark reddish-brown rectangular pavers, a long brown brick five-story apartment building with numerous balconies with metal railings and rectangular windows on the right side of the street, a light-colored utility pole on the far right.
+  Description: Ornate street lamppost, red-brown brick building facade, wavy dark lines on the upper brick wall, white-framed window, dark entrance door with decorative glass pattern (numbered 10), dark entrance door with decorative glass pattern (numbered 11), brick structure above the doors, white rectangular relief sculpture on the brick structure, arched upper-level entrance, number 13 on the left of the arched entrance, number 12 on the right of the arched entrance, brick steps leading upwards.
 --------------------------------------------------------------------------------
 

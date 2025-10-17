@@ -38,6 +38,12 @@ def analyze_token_lengths(csv_path, output_dir=None):
     # Clean column names
     df.columns = df.columns.str.strip().str.strip("'\"")
     
+    # Validate CSV format: must have exactly 2 columns
+    if len(df.columns) != 2:
+        error_msg = f"Invalid CSV format: Expected exactly 2 columns, found {len(df.columns)}. Columns: {list(df.columns)}"
+        print(f"❌ {error_msg}")
+        raise ValueError(error_msg)
+    
     # Find description column
     description_col = None
     for col in df.columns:

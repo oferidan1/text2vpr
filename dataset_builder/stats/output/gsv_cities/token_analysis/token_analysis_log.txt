@@ -1,7 +1,7 @@
 ======================================================================
 TOKEN LENGTH ANALYSIS
 ======================================================================
-Timestamp: 2025-10-17 01:30:32
+Timestamp: 2025-10-17 08:53:01
 Dataset: /mnt/d/data/gsv_cities/gsv_cities_predictions.csv
 Total Samples: 529506
 Tokenizer: bert-base-uncased (BLIP's tokenizer)

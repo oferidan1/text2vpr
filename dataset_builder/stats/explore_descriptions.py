@@ -52,6 +52,12 @@ def analyze_descriptions(csv_path, output_dir=None):
     
     print(f"Cleaned column names: {df.columns.tolist()}")
     
+    # Validate CSV format: must have exactly 2 columns
+    if len(df.columns) != 2:
+        error_msg = f"Invalid CSV format: Expected exactly 2 columns, found {len(df.columns)}. Columns: {list(df.columns)}"
+        print(f"❌ {error_msg}")
+        raise ValueError(error_msg)
+    
     # Try to find the description column (case-insensitive)
     description_col = None
     image_col = None
@@ -69,6 +75,9 @@ def analyze_descriptions(csv_path, output_dir=None):
     if image_col is None:
         raise ValueError(f"Could not find image column! Available columns: {df.columns.tolist()}")
     
+    # Store original columns for logging (before adding description_length)
+    original_columns = df.columns.tolist()
+    
     # Calculate description lengths in words
     df['description_length'] = df[description_col].astype(str).apply(lambda x: len(x.split()))
     
@@ -82,7 +91,7 @@ def analyze_descriptions(csv_path, output_dir=None):
         f.write(f"Dataset CSV: {Path(csv_path).absolute()}\n")
         f.write(f"Output Directory: {output_dir.absolute()}\n")
         f.write(f"Total Samples: {len(df)}\n")
-        f.write(f"Columns: {df.columns.tolist()}\n")
+        f.write(f"Original CSV Columns: {original_columns}\n")
         f.write(f"Description Column: {description_col}\n")
         f.write(f"Image Column: {image_col}\n")
         f.write("="*60 + "\n\n")

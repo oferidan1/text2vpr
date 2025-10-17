@@ -1,7 +1,7 @@
 ================================================================================
 IMAGE EXAMPLES DETAILS
 ================================================================================
-Generated at: 2025-10-17 01:31:43
+Generated at: 2025-10-17 08:54:11
 CSV file: /mnt/d/data/nordland/images/test/nordland_predictions.csv
 Image prefix: /mnt/d/data/nordland/images/test
 Number of examples: 3
@@ -9,26 +9,26 @@ Random seed: None
 ================================================================================
 
 EXAMPLE 1:
-  Index: 43400
-  Image path: queries/@0@48473.8@@@@@20359@@@@@@@@.jpg
-  Full path: /mnt/d/data/nordland/images/test/queries/@0@48473.8@@@@@20359@@@@@@@@.jpg
+  Index: 17032
+  Image path: database/@0@46902.4@@@@@19699@@@@@@@@.jpg
+  Full path: /mnt/d/data/nordland/images/test/database/@0@46902.4@@@@@19699@@@@@@@@.jpg
   Exists: Yes
-  Description: Dense coniferous forest on left slope, double railway tracks curving right and receding, dense coniferous forest on right slope.
+  Description: Dense green coniferous forest, green overgrown vegetation on a left embankment, left rail of a train track, gravel ballast bed between tracks, right rail of a train track, green overgrown vegetation on a right embankment, small white square sign on a pole, dense green coniferous forest, distant green hills.
 --------------------------------------------------------------------------------
 
 EXAMPLE 2:
-  Index: 47773
-  Image path: queries/@0@24500.0@@@@@10290@@@@@@@@.jpg
-  Full path: /mnt/d/data/nordland/images/test/queries/@0@24500.0@@@@@10290@@@@@@@@.jpg
+  Index: 33007
+  Image path: database/@0@00814.3@@@@@342@@@@@@@@.jpg
+  Full path: /mnt/d/data/nordland/images/test/database/@0@00814.3@@@@@342@@@@@@@@.jpg
   Exists: Yes
-  Description: Snow-covered forested hillside with mixed coniferous and bare deciduous trees, snow-filled gully, partially obscured signpost, snow-covered railway tracks, high snowbanks bordering the railway tracks, snow-covered coniferous forest, distant snow-covered hills, overcast sky.
+  Description: Partially visible yellow building, traditional yellow railway station building with a gray roof and white-framed windows, green trees, multiple parallel railway tracks on gravel ballast, a bridge spanning over the railway tracks, green foliage, grassy field, several buildings (some under construction), a tall construction crane, distant hills, and an overcast sky.
 --------------------------------------------------------------------------------
 
 EXAMPLE 3:
-  Index: 18474
-  Image path: queries/@0@23419.0@@@@@9836@@@@@@@@.jpg
-  Full path: /mnt/d/data/nordland/images/test/queries/@0@23419.0@@@@@9836@@@@@@@@.jpg
+  Index: 15183
+  Image path: queries/@0@51331.0@@@@@21559@@@@@@@@.jpg
+  Full path: /mnt/d/data/nordland/images/test/queries/@0@51331.0@@@@@21559@@@@@@@@.jpg
   Exists: Yes
-  Description: Dense coniferous forest, snow-covered ground forming a bank, two parallel railway tracks extending into the distance, snow-covered ground forming a bank, dense coniferous forest, distant forested hills, sky.
+  Description: Dense coniferous forest on a snow-covered hillside, snow-covered ground with sparse small trees, two parallel railway tracks lightly dusted with snow and curving to the right, dense coniferous forest on a snow-covered hillside, distant snow-covered mountains, partly cloudy sky.
 --------------------------------------------------------------------------------
 

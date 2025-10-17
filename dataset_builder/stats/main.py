@@ -155,7 +155,41 @@ def detect_nan_descriptions(datasets_to_run, analysis_options, global_settings):
             # Clean column names
             df.columns = df.columns.str.strip().str.strip("'\"")
             
-            # Find description column
+            # Validate CSV format: must have exactly 2 columns
+            if len(df.columns) != 2:
+                print(f"   ❌ Invalid CSV format: Expected exactly 2 columns, found {len(df.columns)}")
+                print(f"   📋 Found columns: {list(df.columns)}")
+                
+                # Create error log
+                output_base_dir = Path(dataset_config['output_base_dir'])
+                error_output_dir = output_base_dir / f"{name}_csv_format_error"
+                error_output_dir.mkdir(parents=True, exist_ok=True)
+                
+                error_log_path = error_output_dir / 'csv_format_error.txt'
+                with open(error_log_path, 'w') as f:
+                    f.write("="*60 + "\n")
+                    f.write(f"CSV FORMAT ERROR - {name}\n")
+                    f.write("="*60 + "\n")
+                    f.write(f"Dataset: {name}\n")
+                    f.write(f"CSV file: {csv_path}\n")
+                    f.write(f"Error date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"Expected: Exactly 2 columns\n")
+                    f.write(f"Found: {len(df.columns)} columns\n")
+                    f.write(f"Columns found: {list(df.columns)}\n")
+                    f.write("="*60 + "\n")
+                    f.write("REQUIRED FORMAT:\n")
+                    f.write("Column 1: Image_path (or any column with 'image' in name)\n")
+                    f.write("Column 2: Description (or any column with 'description' in name)\n")
+                    f.write("="*60 + "\n")
+                    f.write("EXAMPLE:\n")
+                    f.write("Image_path,Description\n")
+                    f.write("/path/to/image1.jpg,\"A beautiful sunset\"\n")
+                    f.write("/path/to/image2.jpg,\"A cat sitting\"\n")
+                
+                print(f"   📄 Error log saved to: {error_log_path}")
+                continue
+            
+            # Find description and image columns
             description_col = None
             image_col = None
             
@@ -166,7 +200,35 @@ def detect_nan_descriptions(datasets_to_run, analysis_options, global_settings):
                     image_col = col
             
             if description_col is None or image_col is None:
-                print(f"   ❌ Could not find required columns, skipping...")
+                print(f"   ❌ Invalid column names: Expected columns with 'image' and 'description' in names")
+                print(f"   📋 Found columns: {list(df.columns)}")
+                
+                # Create error log
+                output_base_dir = Path(dataset_config['output_base_dir'])
+                error_output_dir = output_base_dir / f"{name}_column_name_error"
+                error_output_dir.mkdir(parents=True, exist_ok=True)
+                
+                error_log_path = error_output_dir / 'column_name_error.txt'
+                with open(error_log_path, 'w') as f:
+                    f.write("="*60 + "\n")
+                    f.write(f"COLUMN NAME ERROR - {name}\n")
+                    f.write("="*60 + "\n")
+                    f.write(f"Dataset: {name}\n")
+                    f.write(f"CSV file: {csv_path}\n")
+                    f.write(f"Error date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"Found columns: {list(df.columns)}\n")
+                    f.write("="*60 + "\n")
+                    f.write("REQUIRED COLUMN NAMES:\n")
+                    f.write("• One column must contain 'image' in the name (case-insensitive)\n")
+                    f.write("• One column must contain 'description' in the name (case-insensitive)\n")
+                    f.write("="*60 + "\n")
+                    f.write("VALID EXAMPLES:\n")
+                    f.write("• Image_path, Description\n")
+                    f.write("• image_file, text_description\n")
+                    f.write("• IMAGE_PATH, DESCRIPTION\n")
+                    f.write("• image, description\n")
+                
+                print(f"   📄 Error log saved to: {error_log_path}")
                 continue
             
             print(f"   Found {len(df)} samples")

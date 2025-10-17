@@ -1,7 +1,7 @@
 ================================================================================
 COMBINED DATASET ANALYSIS SUMMARY
 ================================================================================
-Generated at: 2025-10-17 07:47:15
+Generated at: 2025-10-17 08:54:18
 Total datasets analyzed: 8
 ================================================================================
 
@@ -11,11 +11,11 @@ DATASET: sf_xl_night_queries
 ============================================================
 DATASET ANALYSIS LOG
 ============================================================
-Timestamp: 2025-10-17 01:20:05
+Timestamp: 2025-10-17 08:42:36
 Dataset CSV: /mnt/d/data/sf_xl/descriptions_queries_night.csv
 Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_night_queries/description_analysis
-Total Samples: 463
-Columns: ['image_path', 'description', 'description_length']
+Total Samples: 467
+Original CSV Columns: ['image_path', 'description']
 Description Column: description
 Image Column: image_path
 ============================================================
@@ -26,7 +26,7 @@ Mean length:   65.57 words
 Median length: 63.00 words
 Min length:    21 words
 Max length:    135 words
-Std deviation: 21.45 words
+Std deviation: 21.37 words
 ============================================================
 
 
@@ -53,7 +53,7 @@ OUTPUT FILES GENERATED
 4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_night_queries/description_analysis/min_description.txt - Shortest description
 5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_night_queries/description_analysis/max_description.txt - Longest description
 ============================================================
-Analysis completed at: 2025-10-17 01:20:06
+Analysis completed at: 2025-10-17 08:42:37
 
 
 ============================================================
@@ -62,11 +62,11 @@ DATASET: sf_xl_small_test_queries
 ============================================================
 DATASET ANALYSIS LOG
 ============================================================
-Timestamp: 2025-10-17 01:20:14
+Timestamp: 2025-10-17 08:42:44
 Dataset CSV: /mnt/d/data/sf_xl/small/sf_xl_small_test_queries_descriptions.csv
 Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_test_queries/description_analysis
 Total Samples: 1000
-Columns: ['image_path', 'description', 'description_length']
+Original CSV Columns: ['image_path', 'description']
 Description Column: description
 Image Column: image_path
 ============================================================
@@ -104,7 +104,7 @@ OUTPUT FILES GENERATED
 4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_test_queries/description_analysis/min_description.txt - Shortest description
 5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_test_queries/description_analysis/max_description.txt - Longest description
 ============================================================
-Analysis completed at: 2025-10-17 01:20:15
+Analysis completed at: 2025-10-17 08:42:44
 
 
 ============================================================
@@ -113,11 +113,11 @@ DATASET: sf_xl_small_val_queries
 ============================================================
 DATASET ANALYSIS LOG
 ============================================================
-Timestamp: 2025-10-17 01:20:21
+Timestamp: 2025-10-17 08:42:49
 Dataset CSV: /mnt/d/data/sf_xl/small/sf_xl_small_val_queries_descriptions.csv
 Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_val_queries/description_analysis
 Total Samples: 7993
-Columns: ['image_path', 'description', 'description_length']
+Original CSV Columns: ['image_path', 'description']
 Description Column: description
 Image Column: image_path
 ============================================================
@@ -155,7 +155,7 @@ OUTPUT FILES GENERATED
 4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_val_queries/description_analysis/min_description.txt - Shortest description
 5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_val_queries/description_analysis/max_description.txt - Longest description
 ============================================================
-Analysis completed at: 2025-10-17 01:20:21
+Analysis completed at: 2025-10-17 08:42:49
 
 
 ============================================================
@@ -164,11 +164,11 @@ DATASET: sf_xl_small_train
 ============================================================
 DATASET ANALYSIS LOG
 ============================================================
-Timestamp: 2025-10-17 07:42:01
+Timestamp: 2025-10-17 08:43:03
 Dataset CSV: /mnt/d/data/sf_xl/small/sf_xl_small_train_descriptions.csv
 Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_train/description_analysis
 Total Samples: 59649
-Columns: ['image_path', 'description', 'description_length']
+Original CSV Columns: ['image_path', 'description']
 Description Column: description
 Image Column: image_path
 ============================================================
@@ -206,7 +206,7 @@ OUTPUT FILES GENERATED
 4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_train/description_analysis/min_description.txt - Shortest description
 5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_train/description_analysis/max_description.txt - Longest description
 ============================================================
-Analysis completed at: 2025-10-17 07:42:01
+Analysis completed at: 2025-10-17 08:43:03
 
 
 ============================================================
@@ -215,11 +215,11 @@ DATASET: gsv_cities
 ============================================================
 DATASET ANALYSIS LOG
 ============================================================
-Timestamp: 2025-10-17 01:21:50
+Timestamp: 2025-10-17 08:44:17
 Dataset CSV: /mnt/d/data/gsv_cities/gsv_cities_predictions.csv
 Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis
 Total Samples: 529506
-Columns: ['image_path', 'description', 'description_length']
+Original CSV Columns: ['image_path', 'description']
 Description Column: description
 Image Column: image_path
 ============================================================
@@ -257,7 +257,7 @@ OUTPUT FILES GENERATED
 4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis/min_description.txt - Shortest description
 5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis/max_description.txt - Longest description
 ============================================================
-Analysis completed at: 2025-10-17 01:21:51
+Analysis completed at: 2025-10-17 08:44:17
 
 
 ============================================================
@@ -266,11 +266,11 @@ DATASET: pittsburgh30K
 ============================================================
 DATASET ANALYSIS LOG
 ============================================================
-Timestamp: 2025-10-17 01:30:43
+Timestamp: 2025-10-17 08:53:11
 Dataset CSV: /mnt/d/data/Pittsburgh30K/images/test/Pittsburgh30K_test_predictions.csv
 Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/pittsburgh30K/description_analysis
 Total Samples: 16810
-Columns: ['image_path', 'description', 'description_length']
+Original CSV Columns: ['image_path', 'description']
 Description Column: description
 Image Column: image_path
 ============================================================
@@ -308,7 +308,7 @@ OUTPUT FILES GENERATED
 4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/pittsburgh30K/description_analysis/min_description.txt - Shortest description
 5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/pittsburgh30K/description_analysis/max_description.txt - Longest description
 ============================================================
-Analysis completed at: 2025-10-17 01:30:44
+Analysis completed at: 2025-10-17 08:53:11
 
 
 ============================================================
@@ -317,11 +317,11 @@ DATASET: nordland
 ============================================================
 DATASET ANALYSIS LOG
 ============================================================
-Timestamp: 2025-10-17 01:31:03
+Timestamp: 2025-10-17 08:53:31
 Dataset CSV: /mnt/d/data/nordland/images/test/nordland_predictions.csv
 Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/nordland/description_analysis
 Total Samples: 55184
-Columns: ['image_path', 'description', 'description_length']
+Original CSV Columns: ['image_path', 'description']
 Description Column: description
 Image Column: image_path
 ============================================================
@@ -359,7 +359,7 @@ OUTPUT FILES GENERATED
 4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/nordland/description_analysis/min_description.txt - Shortest description
 5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/nordland/description_analysis/max_description.txt - Longest description
 ============================================================
-Analysis completed at: 2025-10-17 01:31:04
+Analysis completed at: 2025-10-17 08:53:31
 
 
 ============================================================
@@ -368,11 +368,11 @@ DATASET: amstertime
 ============================================================
 DATASET ANALYSIS LOG
 ============================================================
-Timestamp: 2025-10-17 01:31:43
+Timestamp: 2025-10-17 08:54:11
 Dataset CSV: /mnt/d/data/amstertime/test/amstertime_test_predictions.csv
 Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/amstertime/description_analysis
 Total Samples: 2462
-Columns: ['image_path', 'description', 'description_length']
+Original CSV Columns: ['image_path', 'description']
 Description Column: description
 Image Column: image_path
 ============================================================
@@ -410,4 +410,4 @@ OUTPUT FILES GENERATED
 4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/amstertime/description_analysis/min_description.txt - Shortest description
 5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/amstertime/description_analysis/max_description.txt - Longest description
 ============================================================
-Analysis completed at: 2025-10-17 01:31:44
+Analysis completed at: 2025-10-17 08:54:12

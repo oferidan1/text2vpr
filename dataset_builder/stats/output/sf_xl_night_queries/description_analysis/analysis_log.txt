@@ -1,11 +1,11 @@
 ============================================================
 DATASET ANALYSIS LOG
 ============================================================
-Timestamp: 2025-10-17 01:20:05
+Timestamp: 2025-10-17 08:42:36
 Dataset CSV: /mnt/d/data/sf_xl/descriptions_queries_night.csv
 Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_night_queries/description_analysis
-Total Samples: 463
-Columns: ['image_path', 'description', 'description_length']
+Total Samples: 467
+Original CSV Columns: ['image_path', 'description']
 Description Column: description
 Image Column: image_path
 ============================================================
@@ -16,7 +16,7 @@ Mean length:   65.57 words
 Median length: 63.00 words
 Min length:    21 words
 Max length:    135 words
-Std deviation: 21.45 words
+Std deviation: 21.37 words
 ============================================================
 
 
@@ -43,4 +43,4 @@ OUTPUT FILES GENERATED
 4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_night_queries/description_analysis/min_description.txt - Shortest description
 5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_night_queries/description_analysis/max_description.txt - Longest description
 ============================================================
-Analysis completed at: 2025-10-17 01:20:06
+Analysis completed at: 2025-10-17 08:42:37

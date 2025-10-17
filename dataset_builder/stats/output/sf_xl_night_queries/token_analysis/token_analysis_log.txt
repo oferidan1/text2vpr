@@ -1,9 +1,9 @@
 ======================================================================
 TOKEN LENGTH ANALYSIS
 ======================================================================
-Timestamp: 2025-10-17 01:20:08
+Timestamp: 2025-10-17 08:42:39
 Dataset: /mnt/d/data/sf_xl/descriptions_queries_night.csv
-Total Samples: 463
+Total Samples: 467
 Tokenizer: bert-base-uncased (BLIP's tokenizer)
 
 STATISTICS:
@@ -11,12 +11,12 @@ STATISTICS:
   Median: 87 tokens
   Min:    29 tokens
   Max:    197 tokens
-  Std:    28.78 tokens
+  Std:    28.69 tokens
 
 PERCENTILES:
   50th: 87 tokens
   75th: 107 tokens
-  90th: 130 tokens
+  90th: 129 tokens
   95th: 144 tokens
   99th: 173 tokens
   99.5th: 188 tokens
