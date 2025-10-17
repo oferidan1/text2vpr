@@ -10,6 +10,11 @@ from pathlib import Path
 from datetime import datetime
 import argparse
 import traceback
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
+import numpy as np
+import pandas as pd
 
 # Import the analysis functions
 from explore_descriptions import analyze_descriptions
@@ -69,6 +74,624 @@ def validate_config(config):
     if not isinstance(analysis_opts.get('run_image_examples', True), bool):
         print("Error: 'run_image_examples' must be a boolean")
         sys.exit(1)
+    if not isinstance(analysis_opts.get('whole_dataset_analysis', False), bool):
+        print("Error: 'whole_dataset_analysis' must be a boolean")
+        sys.exit(1)
+    if not isinstance(analysis_opts.get('summary_only_mode', False), bool):
+        print("Error: 'summary_only_mode' must be a boolean")
+        sys.exit(1)
+
+
+def check_individual_analyses_exist(datasets_to_run, analysis_options):
+    """Check if all required individual analyses exist for the datasets."""
+    missing_analyses = []
+    
+    for dataset_config in datasets_to_run:
+        name = dataset_config['name']
+        output_base_dir = Path(dataset_config['output_base_dir'])
+        dataset_output_dir = output_base_dir / name
+        
+        if not dataset_output_dir.exists():
+            missing_analyses.append(f"{name}: No output directory")
+            continue
+        
+        # Check for description analysis
+        if analysis_options.get('run_description_analysis', True):
+            desc_dir = dataset_output_dir / "description_analysis"
+            if not desc_dir.exists():
+                missing_analyses.append(f"{name}: Missing description_analysis directory")
+            else:
+                stats_file = desc_dir / 'description_statistics.csv'
+                if not stats_file.exists():
+                    missing_analyses.append(f"{name}: Missing description_statistics.csv")
+        
+        # Check for token analysis
+        if analysis_options.get('run_token_analysis', True):
+            token_dir = dataset_output_dir / "token_analysis"
+            if not token_dir.exists():
+                missing_analyses.append(f"{name}: Missing token_analysis directory")
+            else:
+                dist_file = token_dir / 'token_length_distribution.csv'
+                if not dist_file.exists():
+                    missing_analyses.append(f"{name}: Missing token_length_distribution.csv")
+    
+    return len(missing_analyses) == 0, missing_analyses
+
+
+def create_summary_analysis(datasets_to_run, analysis_options, global_settings):
+    """Create a summary analysis combining results from all datasets."""
+    if not datasets_to_run:
+        print("❌ No datasets to summarize")
+        return False
+    
+    # Create summary output directory
+    summary_output_dir = Path(datasets_to_run[0]['output_base_dir']) / "summary_analysis"
+    summary_output_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"\n{'='*80}")
+    print(f"CREATING SUMMARY ANALYSIS")
+    print(f"{'='*80}")
+    print(f"Summary directory: {summary_output_dir}")
+    print(f"Combining {len(datasets_to_run)} datasets...")
+    
+    all_description_stats = []
+    all_token_stats = []
+    all_logs = []
+    
+    for dataset_config in datasets_to_run:
+        name = dataset_config['name']
+        csv_path = dataset_config['csv_path']
+        
+        print(f"\n📊 Processing {name}...")
+        
+        # Check if CSV exists
+        if not Path(csv_path).exists():
+            print(f"  ⚠️  Skipping {name}: CSV file not found")
+            continue
+        
+        try:
+            # Run description analysis
+            if analysis_options.get('run_description_analysis', True):
+                print(f"  📊 Running description analysis...")
+                temp_dir = summary_output_dir / "temp" / name
+                temp_dir.mkdir(parents=True, exist_ok=True)
+                
+                from explore_descriptions import analyze_descriptions
+                df_desc = analyze_descriptions(csv_path, str(temp_dir))
+                
+                # Collect statistics
+                stats = {
+                    'dataset': name,
+                    'total_samples': len(df_desc),
+                    'mean_length': df_desc['description_length'].mean(),
+                    'median_length': df_desc['description_length'].median(),
+                    'min_length': df_desc['description_length'].min(),
+                    'max_length': df_desc['description_length'].max(),
+                    'std_length': df_desc['description_length'].std()
+                }
+                all_description_stats.append(stats)
+                
+                # Read the log file
+                log_file = temp_dir / 'analysis_log.txt'
+                if log_file.exists():
+                    with open(log_file, 'r') as f:
+                        log_content = f.read()
+                    all_logs.append(f"\n{'='*60}\nDATASET: {name}\n{'='*60}\n{log_content}")
+            
+            # Run token analysis
+            if analysis_options.get('run_token_analysis', True):
+                print(f"  🔤 Running token analysis...")
+                temp_dir = summary_output_dir / "temp" / name
+                temp_dir.mkdir(parents=True, exist_ok=True)
+                
+                from calculate_optimal_token_length import analyze_token_lengths
+                df_tokens = analyze_token_lengths(csv_path, str(temp_dir))
+                
+                # Collect token statistics
+                token_stats = {
+                    'dataset': name,
+                    'total_samples': len(df_tokens),
+                    'mean_tokens': df_tokens['token_length'].mean(),
+                    'median_tokens': df_tokens['token_length'].median(),
+                    'min_tokens': df_tokens['token_length'].min(),
+                    'max_tokens': df_tokens['token_length'].max(),
+                    'std_tokens': df_tokens['token_length'].std()
+                }
+                all_token_stats.append(token_stats)
+            
+            print(f"  ✅ {name} processed successfully")
+            
+        except Exception as e:
+            print(f"  ❌ Error processing {name}: {e}")
+            continue
+    
+    # Create consolidated summaries
+    print(f"\n📝 Creating consolidated summaries...")
+    
+    # Description summary
+    if all_description_stats:
+        desc_summary_df = pd.DataFrame(all_description_stats)
+        desc_summary_file = summary_output_dir / 'description_summary.csv'
+        desc_summary_df.to_csv(desc_summary_file, index=False)
+        print(f"  ✅ Description summary saved to: {desc_summary_file}")
+    
+    # Token summary
+    if all_token_stats:
+        token_summary_df = pd.DataFrame(all_token_stats)
+        token_summary_file = summary_output_dir / 'token_summary.csv'
+        token_summary_df.to_csv(token_summary_file, index=False)
+        print(f"  ✅ Token summary saved to: {token_summary_file}")
+    
+    # Combined log file
+    if all_logs:
+        combined_log_file = summary_output_dir / 'combined_analysis_log.txt'
+        with open(combined_log_file, 'w') as f:
+            f.write("="*80 + "\n")
+            f.write("COMBINED DATASET ANALYSIS SUMMARY\n")
+            f.write("="*80 + "\n")
+            f.write(f"Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Total datasets analyzed: {len(datasets_to_run)}\n")
+            f.write("="*80 + "\n")
+            f.write("\n".join(all_logs))
+        print(f"  ✅ Combined log saved to: {combined_log_file}")
+    
+    # Create overall statistics
+    if all_description_stats and all_token_stats:
+        overall_stats_file = summary_output_dir / 'overall_statistics.txt'
+        with open(overall_stats_file, 'w') as f:
+            f.write("="*80 + "\n")
+            f.write("OVERALL STATISTICS ACROSS ALL DATASETS\n")
+            f.write("="*80 + "\n")
+            f.write(f"Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Total datasets: {len(all_description_stats)}\n\n")
+            
+            # Description statistics
+            f.write("DESCRIPTION LENGTH STATISTICS:\n")
+            f.write("-" * 40 + "\n")
+            total_samples = sum(s['total_samples'] for s in all_description_stats)
+            weighted_mean_desc = sum(s['mean_length'] * s['total_samples'] for s in all_description_stats) / total_samples
+            f.write(f"Total samples: {total_samples:,}\n")
+            f.write(f"Weighted mean length: {weighted_mean_desc:.2f} words\n")
+            f.write(f"Min length (across datasets): {min(s['min_length'] for s in all_description_stats)} words\n")
+            f.write(f"Max length (across datasets): {max(s['max_length'] for s in all_description_stats)} words\n\n")
+            
+            # Token statistics
+            f.write("TOKEN LENGTH STATISTICS:\n")
+            f.write("-" * 40 + "\n")
+            weighted_mean_tokens = sum(s['mean_tokens'] * s['total_samples'] for s in all_token_stats) / total_samples
+            f.write(f"Weighted mean tokens: {weighted_mean_tokens:.2f} tokens\n")
+            f.write(f"Min tokens (across datasets): {min(s['min_tokens'] for s in all_token_stats)} tokens\n")
+            f.write(f"Max tokens (across datasets): {max(s['max_tokens'] for s in all_token_stats)} tokens\n")
+        
+        print(f"  ✅ Overall statistics saved to: {overall_stats_file}")
+    
+    # Create summary visualizations
+    if all_description_stats and all_token_stats:
+        print(f"\n📊 Creating summary visualizations...")
+        
+        # Create summary plots
+        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+        fig.suptitle('Summary Analysis Across All Datasets', fontsize=16, fontweight='bold')
+        
+        # Extract data for plotting
+        datasets = [s['dataset'] for s in all_description_stats]
+        desc_means = [s['mean_length'] for s in all_description_stats]
+        desc_medians = [s['median_length'] for s in all_description_stats]
+        desc_stds = [s['std_length'] for s in all_description_stats]
+        sample_counts = [s['total_samples'] for s in all_description_stats]
+        
+        token_means = [s['mean_tokens'] for s in all_token_stats]
+        token_medians = [s['median_tokens'] for s in all_token_stats]
+        token_stds = [s['std_tokens'] for s in all_token_stats]
+        
+        # 1. Description length comparison
+        x_pos = np.arange(len(datasets))
+        width = 0.35
+        
+        axes[0, 0].bar(x_pos - width/2, desc_means, width, label='Mean', alpha=0.8, color='skyblue')
+        axes[0, 0].bar(x_pos + width/2, desc_medians, width, label='Median', alpha=0.8, color='lightcoral')
+        axes[0, 0].set_xlabel('Datasets')
+        axes[0, 0].set_ylabel('Description Length (words)')
+        axes[0, 0].set_title('Description Length Comparison')
+        axes[0, 0].set_xticks(x_pos)
+        axes[0, 0].set_xticklabels([d.replace('_', '\n') for d in datasets], rotation=45, ha='right')
+        axes[0, 0].legend()
+        axes[0, 0].grid(True, alpha=0.3, axis='y')
+        
+        # 2. Token length comparison
+        axes[0, 1].bar(x_pos - width/2, token_means, width, label='Mean', alpha=0.8, color='lightgreen')
+        axes[0, 1].bar(x_pos + width/2, token_medians, width, label='Median', alpha=0.8, color='orange')
+        axes[0, 1].set_xlabel('Datasets')
+        axes[0, 1].set_ylabel('Token Length (tokens)')
+        axes[0, 1].set_title('Token Length Comparison')
+        axes[0, 1].set_xticks(x_pos)
+        axes[0, 1].set_xticklabels([d.replace('_', '\n') for d in datasets], rotation=45, ha='right')
+        axes[0, 1].legend()
+        axes[0, 1].grid(True, alpha=0.3, axis='y')
+        
+        # 3. Sample size comparison
+        axes[1, 0].bar(x_pos, sample_counts, alpha=0.8, color='purple')
+        axes[1, 0].set_xlabel('Datasets')
+        axes[1, 0].set_ylabel('Number of Samples')
+        axes[1, 0].set_title('Dataset Size Comparison')
+        axes[1, 0].set_xticks(x_pos)
+        axes[1, 0].set_xticklabels([d.replace('_', '\n') for d in datasets], rotation=45, ha='right')
+        axes[1, 0].grid(True, alpha=0.3, axis='y')
+        
+        # Add sample count labels on bars
+        for i, v in enumerate(sample_counts):
+            axes[1, 0].text(i, v + max(sample_counts)*0.01, f'{v:,}', ha='center', va='bottom', fontsize=8)
+        
+        # 4. Description vs Token length scatter plot
+        axes[1, 1].scatter(desc_means, token_means, s=100, alpha=0.7, c='red')
+        
+        # Add dataset labels to scatter points
+        for i, dataset in enumerate(datasets):
+            axes[1, 1].annotate(dataset.replace('_', '\n'), 
+                               (desc_means[i], token_means[i]),
+                               xytext=(5, 5), textcoords='offset points',
+                               fontsize=8, ha='left')
+        
+        axes[1, 1].set_xlabel('Mean Description Length (words)')
+        axes[1, 1].set_ylabel('Mean Token Length (tokens)')
+        axes[1, 1].set_title('Description vs Token Length Correlation')
+        axes[1, 1].grid(True, alpha=0.3)
+        
+        # Add correlation line
+        z = np.polyfit(desc_means, token_means, 1)
+        p = np.poly1d(z)
+        axes[1, 1].plot(desc_means, p(desc_means), "r--", alpha=0.8, linewidth=2)
+        
+        # Calculate and display correlation coefficient
+        correlation = np.corrcoef(desc_means, token_means)[0, 1]
+        axes[1, 1].text(0.05, 0.95, f'Correlation: {correlation:.3f}', 
+                        transform=axes[1, 1].transAxes, 
+                        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
+                        fontsize=10)
+        
+        plt.tight_layout()
+        
+        # Save the summary plot
+        summary_plot_path = summary_output_dir / 'summary_analysis_plots.png'
+        plt.savefig(summary_plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"  ✅ Summary plots saved to: {summary_plot_path}")
+        
+        # Create individual comparison plots
+        # Description length distribution comparison
+        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        
+        # Create violin plot for description lengths
+        desc_data = []
+        labels = []
+        for stats in all_description_stats:
+            # For violin plot, we'll use the mean and std to create a normal distribution approximation
+            # This is a simplified representation since we don't have the raw data
+            mean = stats['mean_length']
+            std = stats['std_length']
+            # Generate synthetic data based on normal distribution
+            synthetic_data = np.random.normal(mean, std, min(1000, stats['total_samples']))
+            desc_data.append(synthetic_data)
+            labels.append(stats['dataset'].replace('_', '\n'))
+        
+        parts = ax.violinplot(desc_data, positions=range(len(datasets)), showmeans=True, showmedians=True)
+        
+        # Customize violin plot colors
+        colors = plt.cm.Set3(np.linspace(0, 1, len(datasets)))
+        for i, pc in enumerate(parts['bodies']):
+            pc.set_facecolor(colors[i])
+            pc.set_alpha(0.7)
+        
+        ax.set_xlabel('Datasets')
+        ax.set_ylabel('Description Length (words)')
+        ax.set_title('Description Length Distribution Comparison')
+        ax.set_xticks(range(len(datasets)))
+        ax.set_xticklabels(labels, rotation=45, ha='right')
+        ax.grid(True, alpha=0.3, axis='y')
+        
+        plt.tight_layout()
+        
+        # Save the violin plot
+        violin_plot_path = summary_output_dir / 'description_distribution_comparison.png'
+        plt.savefig(violin_plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"  ✅ Description distribution plot saved to: {violin_plot_path}")
+    
+    # Clean up temp directories
+    temp_dir = summary_output_dir / "temp"
+    if temp_dir.exists():
+        import shutil
+        shutil.rmtree(temp_dir)
+    
+    print(f"\n🎉 Summary analysis completed!")
+    print(f"   Results saved to: {summary_output_dir}")
+    
+    return True
+
+
+def create_summary_from_existing_results(datasets_to_run, analysis_options, global_settings):
+    """Create summary analysis from existing individual dataset results."""
+    if not datasets_to_run:
+        print("❌ No datasets to summarize")
+        return False
+    
+    # Create summary output directory
+    summary_output_dir = Path(datasets_to_run[0]['output_base_dir']) / "summary_analysis"
+    summary_output_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"Summary directory: {summary_output_dir}")
+    print(f"Combining results from {len(datasets_to_run)} datasets...")
+    
+    all_description_stats = []
+    all_token_stats = []
+    all_logs = []
+    
+    for dataset_config in datasets_to_run:
+        name = dataset_config['name']
+        output_base_dir = Path(dataset_config['output_base_dir'])
+        dataset_output_dir = output_base_dir / name
+        
+        print(f"\n📊 Processing results from {name}...")
+        
+        # Check if individual results exist
+        if not dataset_output_dir.exists():
+            print(f"  ⚠️  Skipping {name}: No individual results found")
+            continue
+        
+        try:
+            # Read description analysis results
+            if analysis_options.get('run_description_analysis', True):
+                desc_dir = dataset_output_dir / "description_analysis"
+                if desc_dir.exists():
+                    # Read the statistics CSV
+                    stats_file = desc_dir / 'description_statistics.csv'
+                    if stats_file.exists():
+                        stats_df = pd.read_csv(stats_file)
+                        # Convert to dictionary format
+                        stats_dict = {}
+                        for _, row in stats_df.iterrows():
+                            stats_dict[row['Statistic']] = row['Value']
+                        
+                        desc_stats = {
+                            'dataset': name,
+                            'total_samples': int(stats_dict.get('Total Samples', 0)),
+                            'mean_length': stats_dict.get('Mean', 0),
+                            'median_length': stats_dict.get('Median', 0),
+                            'min_length': stats_dict.get('Min', 0),
+                            'max_length': stats_dict.get('Max', 0),
+                            'std_length': stats_dict.get('Std Dev', 0)
+                        }
+                        all_description_stats.append(desc_stats)
+                        
+                        # Read the log file
+                        log_file = desc_dir / 'analysis_log.txt'
+                        if log_file.exists():
+                            with open(log_file, 'r') as f:
+                                log_content = f.read()
+                            all_logs.append(f"\n{'='*60}\nDATASET: {name}\n{'='*60}\n{log_content}")
+            
+            # Read token analysis results
+            if analysis_options.get('run_token_analysis', True):
+                token_dir = dataset_output_dir / "token_analysis"
+                if token_dir.exists():
+                    # Read the token length distribution CSV
+                    dist_file = token_dir / 'token_length_distribution.csv'
+                    if dist_file.exists():
+                        dist_df = pd.read_csv(dist_file)
+                        # Get statistics from the describe() output
+                        token_stats = {
+                            'dataset': name,
+                            'total_samples': int(dist_df.loc[dist_df['Unnamed: 0'] == 'count', 'token_length'].iloc[0]) if 'count' in dist_df['Unnamed: 0'].values else 0,
+                            'mean_tokens': dist_df.loc[dist_df['Unnamed: 0'] == 'mean', 'token_length'].iloc[0] if 'mean' in dist_df['Unnamed: 0'].values else 0,
+                            'median_tokens': dist_df.loc[dist_df['Unnamed: 0'] == '50%', 'token_length'].iloc[0] if '50%' in dist_df['Unnamed: 0'].values else 0,
+                            'min_tokens': dist_df.loc[dist_df['Unnamed: 0'] == 'min', 'token_length'].iloc[0] if 'min' in dist_df['Unnamed: 0'].values else 0,
+                            'max_tokens': dist_df.loc[dist_df['Unnamed: 0'] == 'max', 'token_length'].iloc[0] if 'max' in dist_df['Unnamed: 0'].values else 0,
+                            'std_tokens': dist_df.loc[dist_df['Unnamed: 0'] == 'std', 'token_length'].iloc[0] if 'std' in dist_df['Unnamed: 0'].values else 0
+                        }
+                        all_token_stats.append(token_stats)
+            
+            print(f"  ✅ {name} results processed successfully")
+            
+        except Exception as e:
+            print(f"  ❌ Error processing results from {name}: {e}")
+            continue
+    
+    # Create consolidated summaries (same as before)
+    print(f"\n📝 Creating consolidated summaries...")
+    
+    # Description summary
+    if all_description_stats:
+        desc_summary_df = pd.DataFrame(all_description_stats)
+        desc_summary_file = summary_output_dir / 'description_summary.csv'
+        desc_summary_df.to_csv(desc_summary_file, index=False)
+        print(f"  ✅ Description summary saved to: {desc_summary_file}")
+    
+    # Token summary
+    if all_token_stats:
+        token_summary_df = pd.DataFrame(all_token_stats)
+        token_summary_file = summary_output_dir / 'token_summary.csv'
+        token_summary_df.to_csv(token_summary_file, index=False)
+        print(f"  ✅ Token summary saved to: {token_summary_file}")
+    
+    # Combined log file
+    if all_logs:
+        combined_log_file = summary_output_dir / 'combined_analysis_log.txt'
+        with open(combined_log_file, 'w') as f:
+            f.write("="*80 + "\n")
+            f.write("COMBINED DATASET ANALYSIS SUMMARY\n")
+            f.write("="*80 + "\n")
+            f.write(f"Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Total datasets analyzed: {len(datasets_to_run)}\n")
+            f.write("="*80 + "\n")
+            f.write("\n".join(all_logs))
+        print(f"  ✅ Combined log saved to: {combined_log_file}")
+    
+    # Create overall statistics
+    if all_description_stats and all_token_stats:
+        overall_stats_file = summary_output_dir / 'overall_statistics.txt'
+        with open(overall_stats_file, 'w') as f:
+            f.write("="*80 + "\n")
+            f.write("OVERALL STATISTICS ACROSS ALL DATASETS\n")
+            f.write("="*80 + "\n")
+            f.write(f"Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Total datasets: {len(all_description_stats)}\n\n")
+            
+            # Description statistics
+            f.write("DESCRIPTION LENGTH STATISTICS:\n")
+            f.write("-" * 40 + "\n")
+            total_samples = sum(s['total_samples'] for s in all_description_stats)
+            weighted_mean_desc = sum(s['mean_length'] * s['total_samples'] for s in all_description_stats) / total_samples
+            f.write(f"Total samples: {total_samples:,}\n")
+            f.write(f"Weighted mean length: {weighted_mean_desc:.2f} words\n")
+            f.write(f"Min length (across datasets): {min(s['min_length'] for s in all_description_stats)} words\n")
+            f.write(f"Max length (across datasets): {max(s['max_length'] for s in all_description_stats)} words\n\n")
+            
+            # Token statistics
+            f.write("TOKEN LENGTH STATISTICS:\n")
+            f.write("-" * 40 + "\n")
+            weighted_mean_tokens = sum(s['mean_tokens'] * s['total_samples'] for s in all_token_stats) / total_samples
+            f.write(f"Weighted mean tokens: {weighted_mean_tokens:.2f} tokens\n")
+            f.write(f"Min tokens (across datasets): {min(s['min_tokens'] for s in all_token_stats)} tokens\n")
+            f.write(f"Max tokens (across datasets): {max(s['max_tokens'] for s in all_token_stats)} tokens\n")
+        
+        print(f"  ✅ Overall statistics saved to: {overall_stats_file}")
+    
+    # Create summary visualizations (same as before)
+    if all_description_stats and all_token_stats:
+        print(f"\n📊 Creating summary visualizations...")
+        
+        # Create summary plots
+        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+        fig.suptitle('Summary Analysis Across All Datasets', fontsize=16, fontweight='bold')
+        
+        # Extract data for plotting
+        datasets = [s['dataset'] for s in all_description_stats]
+        desc_means = [s['mean_length'] for s in all_description_stats]
+        desc_medians = [s['median_length'] for s in all_description_stats]
+        desc_stds = [s['std_length'] for s in all_description_stats]
+        sample_counts = [s['total_samples'] for s in all_description_stats]
+        
+        token_means = [s['mean_tokens'] for s in all_token_stats]
+        token_medians = [s['median_tokens'] for s in all_token_stats]
+        token_stds = [s['std_tokens'] for s in all_token_stats]
+        
+        # 1. Description length comparison
+        x_pos = np.arange(len(datasets))
+        width = 0.35
+        
+        axes[0, 0].bar(x_pos - width/2, desc_means, width, label='Mean', alpha=0.8, color='skyblue')
+        axes[0, 0].bar(x_pos + width/2, desc_medians, width, label='Median', alpha=0.8, color='lightcoral')
+        axes[0, 0].set_xlabel('Datasets')
+        axes[0, 0].set_ylabel('Description Length (words)')
+        axes[0, 0].set_title('Description Length Comparison')
+        axes[0, 0].set_xticks(x_pos)
+        axes[0, 0].set_xticklabels([d.replace('_', '\n') for d in datasets], rotation=45, ha='right')
+        axes[0, 0].legend()
+        axes[0, 0].grid(True, alpha=0.3, axis='y')
+        
+        # 2. Token length comparison
+        axes[0, 1].bar(x_pos - width/2, token_means, width, label='Mean', alpha=0.8, color='lightgreen')
+        axes[0, 1].bar(x_pos + width/2, token_medians, width, label='Median', alpha=0.8, color='orange')
+        axes[0, 1].set_xlabel('Datasets')
+        axes[0, 1].set_ylabel('Token Length (tokens)')
+        axes[0, 1].set_title('Token Length Comparison')
+        axes[0, 1].set_xticks(x_pos)
+        axes[0, 1].set_xticklabels([d.replace('_', '\n') for d in datasets], rotation=45, ha='right')
+        axes[0, 1].legend()
+        axes[0, 1].grid(True, alpha=0.3, axis='y')
+        
+        # 3. Sample size comparison
+        axes[1, 0].bar(x_pos, sample_counts, alpha=0.8, color='purple')
+        axes[1, 0].set_xlabel('Datasets')
+        axes[1, 0].set_ylabel('Number of Samples')
+        axes[1, 0].set_title('Dataset Size Comparison')
+        axes[1, 0].set_xticks(x_pos)
+        axes[1, 0].set_xticklabels([d.replace('_', '\n') for d in datasets], rotation=45, ha='right')
+        axes[1, 0].grid(True, alpha=0.3, axis='y')
+        
+        # Add sample count labels on bars
+        for i, v in enumerate(sample_counts):
+            axes[1, 0].text(i, v + max(sample_counts)*0.01, f'{v:,}', ha='center', va='bottom', fontsize=8)
+        
+        # 4. Description vs Token length scatter plot
+        axes[1, 1].scatter(desc_means, token_means, s=100, alpha=0.7, c='red')
+        
+        # Add dataset labels to scatter points
+        for i, dataset in enumerate(datasets):
+            axes[1, 1].annotate(dataset.replace('_', '\n'), 
+                               (desc_means[i], token_means[i]),
+                               xytext=(5, 5), textcoords='offset points',
+                               fontsize=8, ha='left')
+        
+        axes[1, 1].set_xlabel('Mean Description Length (words)')
+        axes[1, 1].set_ylabel('Mean Token Length (tokens)')
+        axes[1, 1].set_title('Description vs Token Length Correlation')
+        axes[1, 1].grid(True, alpha=0.3)
+        
+        # Add correlation line
+        z = np.polyfit(desc_means, token_means, 1)
+        p = np.poly1d(z)
+        axes[1, 1].plot(desc_means, p(desc_means), "r--", alpha=0.8, linewidth=2)
+        
+        # Calculate and display correlation coefficient
+        correlation = np.corrcoef(desc_means, token_means)[0, 1]
+        axes[1, 1].text(0.05, 0.95, f'Correlation: {correlation:.3f}', 
+                        transform=axes[1, 1].transAxes, 
+                        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
+                        fontsize=10)
+        
+        plt.tight_layout()
+        
+        # Save the summary plot
+        summary_plot_path = summary_output_dir / 'summary_analysis_plots.png'
+        plt.savefig(summary_plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"  ✅ Summary plots saved to: {summary_plot_path}")
+        
+        # Create individual comparison plots
+        # Description length distribution comparison
+        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        
+        # Create violin plot for description lengths
+        desc_data = []
+        labels = []
+        for stats in all_description_stats:
+            # For violin plot, we'll use the mean and std to create a normal distribution approximation
+            # This is a simplified representation since we don't have the raw data
+            mean = stats['mean_length']
+            std = stats['std_length']
+            # Generate synthetic data based on normal distribution
+            synthetic_data = np.random.normal(mean, std, min(1000, stats['total_samples']))
+            desc_data.append(synthetic_data)
+            labels.append(stats['dataset'].replace('_', '\n'))
+        
+        parts = ax.violinplot(desc_data, positions=range(len(datasets)), showmeans=True, showmedians=True)
+        
+        # Customize violin plot colors
+        colors = plt.cm.Set3(np.linspace(0, 1, len(datasets)))
+        for i, pc in enumerate(parts['bodies']):
+            pc.set_facecolor(colors[i])
+            pc.set_alpha(0.7)
+        
+        ax.set_xlabel('Datasets')
+        ax.set_ylabel('Description Length (words)')
+        ax.set_title('Description Length Distribution Comparison')
+        ax.set_xticks(range(len(datasets)))
+        ax.set_xticklabels(labels, rotation=45, ha='right')
+        ax.grid(True, alpha=0.3, axis='y')
+        
+        plt.tight_layout()
+        
+        # Save the violin plot
+        violin_plot_path = summary_output_dir / 'description_distribution_comparison.png'
+        plt.savefig(violin_plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"  ✅ Description distribution plot saved to: {violin_plot_path}")
+    
+    print(f"\n🎉 Summary analysis completed!")
+    print(f"   Results saved to: {summary_output_dir}")
+    
+    return True
 
 
 def run_analysis_for_dataset(dataset_config, analysis_options, global_settings):
@@ -92,11 +715,7 @@ def run_analysis_for_dataset(dataset_config, analysis_options, global_settings):
         return False
     
     # Create dataset-specific output directory
-    if global_settings.get('use_timestamps', True):
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        dataset_output_dir = output_base_dir / f"{name}_{timestamp}"
-    else:
-        dataset_output_dir = output_base_dir / name
+    dataset_output_dir = output_base_dir / name
     
     # Check if output directory exists and handle overwrite
     if dataset_output_dir.exists():
@@ -111,6 +730,7 @@ def run_analysis_for_dataset(dataset_config, analysis_options, global_settings):
     
     success = True
     
+    # Run individual analyses (always run these)
     # Run description analysis
     if analysis_options.get('run_description_analysis', True):
         try:
@@ -208,30 +828,98 @@ def main():
     print(f"Description analysis: {'✅' if config['analysis_options'].get('run_description_analysis', True) else '❌'}")
     print(f"Token analysis: {'✅' if config['analysis_options'].get('run_token_analysis', True) else '❌'}")
     print(f"Image examples: {'✅' if config['analysis_options'].get('run_image_examples', True) else '❌'}")
+    print(f"Whole dataset analysis: {'✅' if config['analysis_options'].get('whole_dataset_analysis', False) else '❌'}")
+    print(f"Summary-only mode: {'✅' if config['analysis_options'].get('summary_only_mode', False) else '❌'}")
     print("="*80)
     
-    # Run analysis for each dataset
-    successful_runs = 0
-    failed_runs = 0
-    
-    for dataset_config in datasets_to_run:
+    # Check if we should run in summary-only mode
+    if config['analysis_options'].get('summary_only_mode', False):
+        print(f"\n{'='*80}")
+        print("SUMMARY-ONLY MODE: Checking existing individual analyses")
+        print(f"{'='*80}")
+        
+        # Check if all individual analyses exist
+        all_exist, missing = check_individual_analyses_exist(datasets_to_run, config['analysis_options'])
+        
+        if not all_exist:
+            print("❌ Cannot run summary-only mode. Missing individual analyses:")
+            for item in missing:
+                print(f"   • {item}")
+            print("\n💡 To fix this, either:")
+            print("   1. Set 'summary_only_mode: false' to run individual analyses first")
+            print("   2. Run individual analyses manually")
+            sys.exit(1)
+        
+        print("✅ All individual analyses found!")
+        
+        # Run summary analysis only
         try:
-            success = run_analysis_for_dataset(
-                dataset_config, 
-                config['analysis_options'], 
+            success = create_summary_from_existing_results(
+                datasets_to_run,
+                config['analysis_options'],
                 config.get('global_settings', {})
             )
             if success:
-                successful_runs += 1
+                successful_runs = len(datasets_to_run)
+                failed_runs = 0
+                print(f"✅ Summary analysis completed successfully")
             else:
-                failed_runs += 1
+                successful_runs = 0
+                failed_runs = len(datasets_to_run)
+                print(f"⚠️  Summary analysis had some issues")
         except KeyboardInterrupt:
-            print(f"\n⚠️  Analysis interrupted by user")
-            break
+            print(f"\n⚠️  Summary analysis interrupted by user")
         except Exception as e:
-            print(f"\n❌ Unexpected error analyzing {dataset_config['name']}: {e}")
+            print(f"\n❌ Unexpected error in summary analysis: {e}")
             print(f"   Traceback: {traceback.format_exc()}")
-            failed_runs += 1
+            successful_runs = 0
+            failed_runs = len(datasets_to_run)
+    
+    else:
+        # Run individual dataset analysis first
+        successful_runs = 0
+        failed_runs = 0
+        
+        for dataset_config in datasets_to_run:
+            try:
+                success = run_analysis_for_dataset(
+                    dataset_config, 
+                    config['analysis_options'], 
+                    config.get('global_settings', {})
+                )
+                if success:
+                    successful_runs += 1
+                else:
+                    failed_runs += 1
+            except KeyboardInterrupt:
+                print(f"\n⚠️  Analysis interrupted by user")
+                break
+            except Exception as e:
+                print(f"\n❌ Unexpected error analyzing {dataset_config['name']}: {e}")
+                print(f"   Traceback: {traceback.format_exc()}")
+                failed_runs += 1
+        
+        # If summary analysis is enabled, create summary after individual analyses
+        if config['analysis_options'].get('whole_dataset_analysis', False):
+            print(f"\n{'='*80}")
+            print("CREATING SUMMARY ANALYSIS FROM INDIVIDUAL RESULTS")
+            print(f"{'='*80}")
+            
+            try:
+                success = create_summary_from_existing_results(
+                    datasets_to_run,
+                    config['analysis_options'],
+                    config.get('global_settings', {})
+                )
+                if success:
+                    print(f"✅ Summary analysis completed successfully")
+                else:
+                    print(f"⚠️  Summary analysis had some issues")
+            except KeyboardInterrupt:
+                print(f"\n⚠️  Summary analysis interrupted by user")
+            except Exception as e:
+                print(f"\n❌ Unexpected error in summary analysis: {e}")
+                print(f"   Traceback: {traceback.format_exc()}")
     
     # Final summary
     print(f"\n{'='*80}")

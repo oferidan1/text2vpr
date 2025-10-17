@@ -1,0 +1,46 @@
+============================================================
+DATASET ANALYSIS LOG
+============================================================
+Timestamp: 2025-10-17 01:20:05
+Dataset CSV: /mnt/d/data/sf_xl/descriptions_queries_night.csv
+Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_night_queries/description_analysis
+Total Samples: 463
+Columns: ['image_path', 'description', 'description_length']
+Description Column: description
+Image Column: image_path
+============================================================
+
+DESCRIPTION LENGTH STATISTICS
+============================================================
+Mean length:   65.57 words
+Median length: 63.00 words
+Min length:    21 words
+Max length:    135 words
+Std deviation: 21.45 words
+============================================================
+
+
+SHORTEST DESCRIPTION
+============================================================
+Image: queries_night/@0544585.93@4176422.92@10@S@37.733967@-122.493989@49519879692@@@@@@20200211@@.jpg
+Length: 21 words
+Text: Paved road with faint lane markings, area with gnarled bare trees, long weathered concrete balustrade featuring square-profile balusters, dark paved walkway.
+============================================================
+
+LONGEST DESCRIPTION
+============================================================
+Image: queries_night/@0544758.83@4177507.74@10@S@37.743917@-122.491882@31781279861@@@@@@20161226@@.jpg
+Length: 135 words
+Text: Residential two-story brick house with a pitched roof, featuring a lawn and tiered retaining wall on the left adorned with vertical blue and purple heart-shaped string lights, a Mickey Mouse light pattern on the lower left house wall, a lower left window framed by lights, a central lower dark window/doorway area framed by red heart-shaped string lights, a prominent green garland nativity scene arch with a white star and colorful lights positioned at the entrance, and a paved pathway extending to the right foreground; the upper left, middle, and right windows are all framed by multi-colored heart-shaped string lights, with the upper middle window showcasing a dense white tree-shaped light display; a vertical string of green and blue heart-shaped lights descends the right house wall, and multi-colored heart-shaped string lights extensively outline the entire roofline.
+============================================================
+
+============================================================
+OUTPUT FILES GENERATED
+============================================================
+1. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_night_queries/description_analysis/analysis_log.txt - This log file
+2. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_night_queries/description_analysis/description_statistics.csv - Statistics summary
+3. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_night_queries/description_analysis/description_length_analysis.png - Visualizations
+4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_night_queries/description_analysis/min_description.txt - Shortest description
+5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_night_queries/description_analysis/max_description.txt - Longest description
+============================================================
+Analysis completed at: 2025-10-17 01:20:06

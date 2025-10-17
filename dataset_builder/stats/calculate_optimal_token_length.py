@@ -14,8 +14,6 @@ def analyze_token_lengths(csv_path, output_dir=None):
     else:
         output_dir = Path(output_dir)
     
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    output_dir = output_dir / f"token_analysis_{timestamp}"
     output_dir.mkdir(parents=True, exist_ok=True)
     
     print(f"Output directory: {output_dir.absolute()}\n")

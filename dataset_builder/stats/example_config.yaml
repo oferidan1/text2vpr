@@ -18,11 +18,9 @@ analysis_options:
   run_description_analysis: true
   run_token_analysis: true
   run_image_examples: true
+  whole_dataset_analysis: false
   
 # Global settings
 global_settings:
-  # Whether to create timestamped subdirectories for each run
-  use_timestamps: true
-  
   # Whether to overwrite existing output directories
   overwrite_existing: false

@@ -36,9 +36,6 @@ def generate_image_examples(csv_path, image_prefix_path, output_dir=None, num_ex
     else:
         output_dir = Path(output_dir)
     
-    # Create timestamped subdirectory
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    output_dir = output_dir / f"image_examples_{timestamp}"
     output_dir.mkdir(parents=True, exist_ok=True)
     
     print(f"Output directory: {output_dir.absolute()}")

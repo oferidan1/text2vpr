@@ -1,0 +1,46 @@
+============================================================
+DATASET ANALYSIS LOG
+============================================================
+Timestamp: 2025-10-17 01:31:43
+Dataset CSV: /mnt/d/data/amstertime/test/amstertime_test_predictions.csv
+Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/amstertime/description_analysis
+Total Samples: 2462
+Columns: ['image_path', 'description', 'description_length']
+Description Column: description
+Image Column: image_path
+============================================================
+
+DESCRIPTION LENGTH STATISTICS
+============================================================
+Mean length:   60.38 words
+Median length: 57.00 words
+Min length:    10 words
+Max length:    184 words
+Std deviation: 22.05 words
+============================================================
+
+
+SHORTEST DESCRIPTION
+============================================================
+Image: database/@0@551000@@@@@0551@@@@@@@@.jpg
+Length: 10 words
+Text: Dense tree canopy, dark standing human statue, dense tree canopy.
+============================================================
+
+LONGEST DESCRIPTION
+============================================================
+Image: database/@0@123000@@@@@0123@@@@@@@@.jpg
+Length: 184 words
+Text: Brick facade building, left side features a white-framed window (partially visible top left), below that a large rectangular white-framed window with dark panes and light curtains, and below that a basement-level rectangular window with dark panes and a grid pattern; moving right, another large rectangular white-framed window with dark panes and light curtains above another basement-level rectangular window with dark panes and a grid pattern; centered is a main entrance area with a dark double door, ornate white trim, and a decorative transom window, accessed by stone steps with a black metal railing; above the main entrance is a white-framed rectangular window with dark panes reflecting trees; to the immediate right of the main door is a wall-mounted dark lantern; below the main steps is a dark rectangular basement door; further to the right, a large rectangular white-framed window with dark panes and light curtains, above a similar window reflecting trees; furthest right, another large rectangular white-framed window with dark panes and light curtains, and a partially obscured basement-level rectangular window with dark panes and a grid pattern, with a green shrub in front.
+============================================================
+
+============================================================
+OUTPUT FILES GENERATED
+============================================================
+1. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/amstertime/description_analysis/analysis_log.txt - This log file
+2. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/amstertime/description_analysis/description_statistics.csv - Statistics summary
+3. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/amstertime/description_analysis/description_length_analysis.png - Visualizations
+4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/amstertime/description_analysis/min_description.txt - Shortest description
+5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/amstertime/description_analysis/max_description.txt - Longest description
+============================================================
+Analysis completed at: 2025-10-17 01:31:44

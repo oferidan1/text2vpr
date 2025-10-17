@@ -1,0 +1,46 @@
+============================================================
+DATASET ANALYSIS LOG
+============================================================
+Timestamp: 2025-10-17 01:21:50
+Dataset CSV: /mnt/d/data/gsv_cities/gsv_cities_predictions.csv
+Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis
+Total Samples: 529506
+Columns: ['image_path', 'description', 'description_length']
+Description Column: description
+Image Column: image_path
+============================================================
+
+DESCRIPTION LENGTH STATISTICS
+============================================================
+Mean length:   52.78 words
+Median length: 50.00 words
+Min length:    1 words
+Max length:    236 words
+Std deviation: 19.31 words
+============================================================
+
+
+SHORTEST DESCRIPTION
+============================================================
+Image: Images/Melbourne/Melbourne_0003999_2013_05_290_-37.81485952867477_145.0030071402997_sO6wJc11JHvuMW9uFPxnFg.jpg
+Length: 1 words
+Text: nan
+============================================================
+
+LONGEST DESCRIPTION
+============================================================
+Image: Images/London/London_0007804_2016_06_099_51.52381480019552_-0.1650436125932019_WH7Tg1Kpbnt0-ceAankgvA.jpg
+Length: 236 words
+Text: Residential street scene with a row of terraced houses, each featuring a white painted ground floor facade and a light brown brick upper floor facade, with black iron ground-level railings and first-floor balconies; from left to right: a partially visible house section showing a dark front door, white ground floor facade, light brown brick upper facade, and black iron ground-level railings; a terraced house with a dark front door on the left of its white ground floor facade behind black iron railings, a multi-paned sash window with a window box to its right, and a light brown brick first floor facade with two tall sash windows and a black iron balcony; an adjacent terraced house with a dark front door on the left of its white ground floor facade behind black iron railings, a multi-paned sash window to its right, and a light brown brick first floor facade with two tall sash windows and a black iron balcony; an adjacent terraced house with a multi-paned sash window on the left of its white ground floor facade, a dark front door to its right behind black iron railings, and a light brown brick first floor facade with two tall sash windows and a black iron balcony; a partially visible house section showing a multi-paned sash window, white ground floor facade, black iron ground-level railings, steps leading to a dark front door, and light brown brick upper facade.
+============================================================
+
+============================================================
+OUTPUT FILES GENERATED
+============================================================
+1. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis/analysis_log.txt - This log file
+2. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis/description_statistics.csv - Statistics summary
+3. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis/description_length_analysis.png - Visualizations
+4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis/min_description.txt - Shortest description
+5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis/max_description.txt - Longest description
+============================================================
+Analysis completed at: 2025-10-17 01:21:51

@@ -43,9 +43,10 @@ Each dataset entry should have:
 - `run_description_analysis`: Whether to run word-based description analysis (default: true)
 - `run_token_analysis`: Whether to run token-based analysis (default: true)
 - `run_image_examples`: Whether to generate image examples with descriptions (default: true)
+- `whole_dataset_analysis`: When true, creates individual dataset analyses AND a summary analysis combining results from ALL datasets into consolidated CSV files and logs (default: false)
+- `summary_only_mode`: When true, skips individual analyses and only creates summary analysis from existing individual results (default: false)
 
 ### Global Settings
-- `use_timestamps`: Create timestamped subdirectories (default: true)
 - `overwrite_existing`: Overwrite existing output directories (default: false)
 
 ## Usage Examples
@@ -100,6 +101,17 @@ For each dataset, the analysis creates:
 - `example_01.png`, `example_02.png`, `example_03.png` - Individual images with descriptions
 - `examples_details.txt` - Detailed information about the selected examples
 - `selected_examples.csv` - CSV file with the selected examples and metadata
+
+### Summary Analysis (`summary_analysis/` subdirectory):
+When `whole_dataset_analysis: true` is set, creates BOTH individual dataset analyses AND a consolidated summary:
+- Individual dataset directories (same as regular mode)
+- `summary_analysis/` directory containing:
+  - `description_summary.csv` - Combined description statistics from all datasets
+  - `token_summary.csv` - Combined token statistics from all datasets  
+  - `combined_analysis_log.txt` - Concatenated logs from all individual dataset analyses
+  - `overall_statistics.txt` - Overall statistics with weighted averages across all datasets
+  - `summary_analysis_plots.png` - 4-panel summary visualization comparing all datasets
+  - `description_distribution_comparison.png` - Violin plot comparing description length distributions
 
 ## Recommendations
 

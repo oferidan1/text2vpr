@@ -1,0 +1,34 @@
+================================================================================
+IMAGE EXAMPLES DETAILS
+================================================================================
+Generated at: 2025-10-17 01:31:50
+CSV file: /mnt/d/data/amstertime/test/amstertime_test_predictions.csv
+Image prefix: /mnt/d/data/amstertime/test
+Number of examples: 3
+Random seed: None
+================================================================================
+
+EXAMPLE 1:
+  Index: 972
+  Image path: database/@0@742000@@@@@0742@@@@@@@@.jpg
+  Full path: /mnt/d/data/amstertime/test/database/@0@742000@@@@@0742@@@@@@@@.jpg
+  Exists: Yes
+  Description: Multi-story grey classic building with arched ground floor and gabled roof, tall narrow dark brick building with stepped gable, large flat grey stone-paved urban square, grand classical revival building with central domed tower and "DE BIJENKORF" sign, tall thick silver metal pillar in foreground.
+--------------------------------------------------------------------------------
+
+EXAMPLE 2:
+  Index: 136
+  Image path: queries/@0@316000@@@@@0316@@@@@@@@.jpg
+  Full path: /mnt/d/data/amstertime/test/queries/@0@316000@@@@@0316@@@@@@@@.jpg
+  Exists: Yes
+  Description: Bare trees and green foliage, a prominent corner building with red brick and extensive white trim featuring a rounded bay window and a white balustrade balcony, a small white street sign on the corner of the building, a central building with matching red brick and white trim, steps leading to a central wooden double door entrance, a yellow and white striped awning above the entrance, two white ornate balustrade balconies on the central building, smaller yellow and white striped awnings above some windows, a dark mansard roofline with a central pediment dormer and two oval dormers, a partially visible red brick building to the right with white trim, clear blue sky above.
+--------------------------------------------------------------------------------
+
+EXAMPLE 3:
+  Index: 1740
+  Image path: database/@0@1354000@@@@@1354@@@@@@@@.jpg
+  Full path: /mnt/d/data/amstertime/test/database/@0@1354000@@@@@1354@@@@@@@@.jpg
+  Exists: Yes
+  Description: A white four-story apartment building with a red tiled gabled roof and rectangular windows on the far left, a large light-colored paved parking area with rectangular pavers, a narrow street paved with dark reddish-brown rectangular pavers, a long brown brick five-story apartment building with numerous balconies with metal railings and rectangular windows on the right side of the street, a light-colored utility pole on the far right.
+--------------------------------------------------------------------------------
+

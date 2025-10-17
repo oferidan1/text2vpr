@@ -15,15 +15,12 @@ def analyze_descriptions(csv_path, output_dir=None):
         output_dir: Base directory to save outputs. A timestamped subdirectory will be created.
                    If None, saves to './output'
     """
-    # Set up output directory with timestamp
+    # Set up output directory
     if output_dir is None:
-        base_output_dir = Path('./output')
+        output_dir = Path('./output')
     else:
-        base_output_dir = Path(output_dir)
+        output_dir = Path(output_dir)
     
-    # Create timestamped subdirectory
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    output_dir = base_output_dir / timestamp
     output_dir.mkdir(parents=True, exist_ok=True)
     
     print(f"Output directory: {output_dir.absolute()}")

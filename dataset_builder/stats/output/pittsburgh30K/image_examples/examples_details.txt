@@ -1,0 +1,34 @@
+================================================================================
+IMAGE EXAMPLES DETAILS
+================================================================================
+Generated at: 2025-10-17 01:31:02
+CSV file: /mnt/d/data/Pittsburgh30K/images/test/Pittsburgh30K_test_predictions.csv
+Image prefix: /mnt/d/data/Pittsburgh30K/images/test
+Number of examples: 3
+Random seed: None
+================================================================================
+
+EXAMPLE 1:
+  Index: 2840
+  Image path: queries/@0584414.77@4476866.89@17@T@040.43817@-080.00469@004471@10@@@@@@pitch1_yaw11@.jpg
+  Full path: /mnt/d/data/Pittsburgh30K/images/test/queries/@0584414.77@4476866.89@17@T@040.43817@-080.00469@004471@10@@@@@@pitch1_yaw11@.jpg
+  Exists: Yes
+  Description: Dark metal railing with repeating patterns, tall streetlight, multiple parallel concrete elevated roadways/bridges, body of water, steep densely tree-covered hillside with scattered buildings along its crest, another streetlight/utility pole, partially cloudy sky.
+--------------------------------------------------------------------------------
+
+EXAMPLE 2:
+  Index: 11704
+  Image path: database/@0584326.09@4476908.44@17@T@040.43855@-080.00573@004353@09@@@@@@pitch1_yaw10@.jpg
+  Full path: /mnt/d/data/Pittsburgh30K/images/test/database/@0584326.09@4476908.44@17@T@040.43855@-080.00573@004353@09@@@@@@pitch1_yaw10@.jpg
+  Exists: Yes
+  Description: Distant urban skyline with a tall slender building on a hill, forested hillside with multi-story buildings at its base, curved concrete barrier on a road surface, large green highway sign displaying "376 EAST Monroeville" with a left arrow, central dark support pole for signs, large green highway sign displaying "279 SUTH Ft Pit Bridg Airport" with a right arrow, multiple dark poles, concrete platform with white and yellow barriers surrounding a pole base.
+--------------------------------------------------------------------------------
+
+EXAMPLE 3:
+  Index: 946
+  Image path: queries/@0584409.19@4476922.00@17@T@040.43866@-080.00475@004051@25@@@@@@pitch2_yaw2@.jpg
+  Full path: /mnt/d/data/Pittsburgh30K/images/test/queries/@0584409.19@4476922.00@17@T@040.43866@-080.00475@004051@25@@@@@@pitch2_yaw2@.jpg
+  Exists: Yes
+  Description: Tall modern reflective glass skyscraper, bright blue sky, older tan brick building with rectangular windows and an arched window, prominent light brown brick wall.
+--------------------------------------------------------------------------------
+

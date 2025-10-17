@@ -1,0 +1,46 @@
+============================================================
+DATASET ANALYSIS LOG
+============================================================
+Timestamp: 2025-10-17 01:20:14
+Dataset CSV: /mnt/d/data/sf_xl/small/sf_xl_small_test_queries_descriptions.csv
+Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_test_queries/description_analysis
+Total Samples: 1000
+Columns: ['image_path', 'description', 'description_length']
+Description Column: description
+Image Column: image_path
+============================================================
+
+DESCRIPTION LENGTH STATISTICS
+============================================================
+Mean length:   68.98 words
+Median length: 65.00 words
+Min length:    23 words
+Max length:    182 words
+Std deviation: 23.53 words
+============================================================
+
+
+SHORTEST DESCRIPTION
+============================================================
+Image: test/queries_v1/@0544695.90@4178600.28@10@S@037.75361@-122.49261@13987708619@@@@@@20140513@@.jpg
+Length: 23 words
+Text: Multi-story attached residential buildings, utility poles with overhead lines, paved street, small round-canopy trees, large building with a crenellated tower, white road line.
+============================================================
+
+LONGEST DESCRIPTION
+============================================================
+Image: test/queries_v1/@0547925.13@4179818.15@10@S@037.76443@-122.45587@15977827781@@@@@@20141209@@.jpg
+Length: 182 words
+Text: Partial view of an adjacent light-colored building with a column, dark green bush, light brown utility box on the sidewalk, dark purple ground-level entry door with small light fixture above, light beige garage door with six horizontal rectangular window sections, green conical bush with small planter box at its base, short light yellow brick wall, concrete stairs leading up, dark purple main entrance door with the number '38' in gold, small tree to the right of the stairs, partial view of an adjacent reddish-brown building with a dark roofline, above the ground level: large arched window with dark frame and white decorative architrave, light yellow stucco facade with ornate white scrollwork and protrusions, rectangular indented panel with white trim, two rectangular windows with dark frames and light beige sills, large rectangular window with dark frame and white decorative elements, above the top level: three rectangular windows with dark frames on the left, three rectangular windows with dark frames and white curtains on the right, decorative white and purple cornices and trim along the roofline with small corbels, chimney pot on the roof.
+============================================================
+
+============================================================
+OUTPUT FILES GENERATED
+============================================================
+1. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_test_queries/description_analysis/analysis_log.txt - This log file
+2. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_test_queries/description_analysis/description_statistics.csv - Statistics summary
+3. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_test_queries/description_analysis/description_length_analysis.png - Visualizations
+4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_test_queries/description_analysis/min_description.txt - Shortest description
+5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/sf_xl_small_test_queries/description_analysis/max_description.txt - Longest description
+============================================================
+Analysis completed at: 2025-10-17 01:20:15
