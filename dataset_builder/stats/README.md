@@ -45,6 +45,7 @@ Each dataset entry should have:
 - `run_image_examples`: Whether to generate image examples with descriptions (default: true)
 - `whole_dataset_analysis`: When true, creates individual dataset analyses AND a summary analysis combining results from ALL datasets into consolidated CSV files and logs (default: false)
 - `summary_only_mode`: When true, skips individual analyses and only creates summary analysis from existing individual results (default: false)
+- `nan_detection_only`: When true, only detects and reports NaN descriptions in datasets, skipping all other analyses (default: false)
 
 ### Global Settings
 - `overwrite_existing`: Overwrite existing output directories (default: false)
@@ -64,6 +65,12 @@ python main.py --dataset "sf_xl_small_train"
 ### Use custom config file:
 ```bash
 python main.py --config my_config.yaml
+```
+
+### Run only NaN detection:
+```bash
+# Set nan_detection_only: true in config.yaml
+python main.py --config config.yaml
 ```
 
 ## CSV File Format
@@ -112,6 +119,11 @@ When `whole_dataset_analysis: true` is set, creates BOTH individual dataset anal
   - `overall_statistics.txt` - Overall statistics with weighted averages across all datasets
   - `summary_analysis_plots.png` - 4-panel summary visualization comparing all datasets
   - `description_distribution_comparison.png` - Violin plot comparing description length distributions
+
+### NaN Detection (`{dataset_name}_nan_detection/` subdirectory):
+When `nan_detection_only: true` is set, creates NaN detection reports for each dataset:
+- `nan_descriptions.csv` - CSV file containing all rows with NaN descriptions
+- `nan_detection_summary.txt` - Summary report with counts and percentages
 
 ## Recommendations
 

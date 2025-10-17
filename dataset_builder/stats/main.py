@@ -80,6 +80,9 @@ def validate_config(config):
     if not isinstance(analysis_opts.get('summary_only_mode', False), bool):
         print("Error: 'summary_only_mode' must be a boolean")
         sys.exit(1)
+    if not isinstance(analysis_opts.get('nan_detection_only', False), bool):
+        print("Error: 'nan_detection_only' must be a boolean")
+        sys.exit(1)
 
 
 def check_individual_analyses_exist(datasets_to_run, analysis_options):
@@ -116,6 +119,118 @@ def check_individual_analyses_exist(datasets_to_run, analysis_options):
                     missing_analyses.append(f"{name}: Missing token_length_distribution.csv")
     
     return len(missing_analyses) == 0, missing_analyses
+
+
+def detect_nan_descriptions(datasets_to_run, analysis_options, global_settings):
+    """Detect and report NaN descriptions in datasets."""
+    print(f"\n{'='*80}")
+    print("NaN DESCRIPTION DETECTION")
+    print(f"{'='*80}")
+    
+    total_nan_count = 0
+    total_samples = 0
+    
+    for dataset_config in datasets_to_run:
+        name = dataset_config['name']
+        csv_path = dataset_config['csv_path']
+        
+        print(f"\n📊 Analyzing {name}...")
+        print(f"   CSV: {csv_path}")
+        
+        # Check if CSV exists
+        if not Path(csv_path).exists():
+            print(f"   ❌ CSV file not found, skipping...")
+            continue
+        
+        try:
+            # Read CSV with better error handling
+            try:
+                df = pd.read_csv(csv_path, quoting=1, escapechar='\\')
+            except pd.errors.ParserError:
+                try:
+                    df = pd.read_csv(csv_path, quoting=3, escapechar='\\')
+                except pd.errors.ParserError:
+                    df = pd.read_csv(csv_path, on_bad_lines='skip', quoting=1, escapechar='\\')
+            
+            # Clean column names
+            df.columns = df.columns.str.strip().str.strip("'\"")
+            
+            # Find description column
+            description_col = None
+            image_col = None
+            
+            for col in df.columns:
+                if 'description' in col.lower():
+                    description_col = col
+                if 'image' in col.lower():
+                    image_col = col
+            
+            if description_col is None or image_col is None:
+                print(f"   ❌ Could not find required columns, skipping...")
+                continue
+            
+            print(f"   Found {len(df)} samples")
+            
+            # Detect NaN descriptions
+            nan_mask = df[description_col].isna()
+            nan_count = nan_mask.sum()
+            
+            print(f"   📋 NaN descriptions found: {nan_count}")
+            print(f"   📊 Percentage: {(nan_count/len(df)*100):.2f}%")
+            
+            total_nan_count += nan_count
+            total_samples += len(df)
+            
+            # Save NaN samples to CSV if any found
+            if nan_count > 0:
+                nan_samples = df[nan_mask].copy()
+                
+                # Create output directory
+                output_base_dir = Path(dataset_config['output_base_dir'])
+                nan_output_dir = output_base_dir / f"{name}_nan_detection"
+                nan_output_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Save NaN samples
+                nan_csv_path = nan_output_dir / 'nan_descriptions.csv'
+                nan_samples.to_csv(nan_csv_path, index=False)
+                print(f"   💾 Saved {nan_count} NaN samples to: {nan_csv_path}")
+                
+                # Create summary report
+                summary_path = nan_output_dir / 'nan_detection_summary.txt'
+                with open(summary_path, 'w') as f:
+                    f.write("="*60 + "\n")
+                    f.write(f"NaN DETECTION SUMMARY - {name}\n")
+                    f.write("="*60 + "\n")
+                    f.write(f"Dataset: {name}\n")
+                    f.write(f"CSV file: {csv_path}\n")
+                    f.write(f"Analysis date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"Total samples: {len(df):,}\n")
+                    f.write(f"NaN descriptions: {nan_count:,}\n")
+                    f.write(f"Percentage: {(nan_count/len(df)*100):.2f}%\n")
+                    f.write(f"Valid descriptions: {len(df) - nan_count:,}\n")
+                    f.write("="*60 + "\n")
+                    f.write(f"NaN samples saved to: {nan_csv_path}\n")
+                
+                print(f"   📄 Summary report saved to: {summary_path}")
+            else:
+                print(f"   ✅ No NaN descriptions found!")
+                
+        except Exception as e:
+            print(f"   ❌ Error analyzing {name}: {e}")
+            continue
+    
+    # Create overall summary
+    print(f"\n{'='*80}")
+    print("OVERALL NaN DETECTION SUMMARY")
+    print(f"{'='*80}")
+    print(f"Total datasets analyzed: {len(datasets_to_run)}")
+    print(f"Total samples across all datasets: {total_samples:,}")
+    print(f"Total NaN descriptions found: {total_nan_count:,}")
+    if total_samples > 0:
+        print(f"Overall NaN percentage: {(total_nan_count/total_samples*100):.2f}%")
+    print(f"{'='*80}")
+    
+    return True
 
 
 def create_summary_analysis(datasets_to_run, analysis_options, global_settings):
@@ -830,10 +945,39 @@ def main():
     print(f"Image examples: {'✅' if config['analysis_options'].get('run_image_examples', True) else '❌'}")
     print(f"Whole dataset analysis: {'✅' if config['analysis_options'].get('whole_dataset_analysis', False) else '❌'}")
     print(f"Summary-only mode: {'✅' if config['analysis_options'].get('summary_only_mode', False) else '❌'}")
+    print(f"NaN detection only: {'✅' if config['analysis_options'].get('nan_detection_only', False) else '❌'}")
     print("="*80)
     
+    # Check if we should run NaN detection only
+    if config['analysis_options'].get('nan_detection_only', False):
+        print(f"\n{'='*80}")
+        print("NaN DETECTION ONLY MODE")
+        print(f"{'='*80}")
+        
+        try:
+            success = detect_nan_descriptions(
+                datasets_to_run,
+                config['analysis_options'],
+                config.get('global_settings', {})
+            )
+            if success:
+                successful_runs = len(datasets_to_run)
+                failed_runs = 0
+                print(f"✅ NaN detection completed successfully")
+            else:
+                successful_runs = 0
+                failed_runs = len(datasets_to_run)
+                print(f"⚠️  NaN detection had some issues")
+        except KeyboardInterrupt:
+            print(f"\n⚠️  NaN detection interrupted by user")
+        except Exception as e:
+            print(f"\n❌ Unexpected error in NaN detection: {e}")
+            print(f"   Traceback: {traceback.format_exc()}")
+            successful_runs = 0
+            failed_runs = len(datasets_to_run)
+    
     # Check if we should run in summary-only mode
-    if config['analysis_options'].get('summary_only_mode', False):
+    elif config['analysis_options'].get('summary_only_mode', False):
         print(f"\n{'='*80}")
         print("SUMMARY-ONLY MODE: Checking existing individual analyses")
         print(f"{'='*80}")
