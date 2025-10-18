@@ -1,15 +1,15 @@
 ======================================================================
 TOKEN LENGTH ANALYSIS
 ======================================================================
-Timestamp: 2025-10-17 08:53:01
-Dataset: /mnt/d/data/gsv_cities/gsv_cities_predictions.csv
+Timestamp: 2025-10-18 19:50:29
+Dataset: /mnt/d/data/gsv_cities/gsv_cities_predictions_nan_fix.csv
 Total Samples: 529506
 Tokenizer: bert-base-uncased (BLIP's tokenizer)
 
 STATISTICS:
   Mean:   74.31 tokens
   Median: 71 tokens
-  Min:    3 tokens
+  Min:    6 tokens
   Max:    319 tokens
   Std:    25.16 tokens
 

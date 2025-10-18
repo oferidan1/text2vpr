@@ -1,18 +1,18 @@
 ================================================================================
 OVERALL STATISTICS ACROSS ALL DATASETS
 ================================================================================
-Generated at: 2025-10-17 08:54:18
+Generated at: 2025-10-18 20:02:30
 Total datasets: 8
 
 DESCRIPTION LENGTH STATISTICS:
 ----------------------------------------
 Total samples: 673,071
 Weighted mean length: 51.47 words
-Min length (across datasets): 1.0 words
+Min length (across datasets): 3.0 words
 Max length (across datasets): 236.0 words
 
 TOKEN LENGTH STATISTICS:
 ----------------------------------------
 Weighted mean tokens: 72.45 tokens
-Min tokens (across datasets): 3.0 tokens
+Min tokens (across datasets): 6.0 tokens
 Max tokens (across datasets): 319.0 tokens

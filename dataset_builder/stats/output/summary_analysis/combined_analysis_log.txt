@@ -1,7 +1,7 @@
 ================================================================================
 COMBINED DATASET ANALYSIS SUMMARY
 ================================================================================
-Generated at: 2025-10-17 08:54:18
+Generated at: 2025-10-18 20:02:30
 Total datasets analyzed: 8
 ================================================================================
 
@@ -210,14 +210,14 @@ Analysis completed at: 2025-10-17 08:43:03
 
 
 ============================================================
-DATASET: gsv_cities
+DATASET: gsv_cities_nan_fix
 ============================================================
 ============================================================
 DATASET ANALYSIS LOG
 ============================================================
-Timestamp: 2025-10-17 08:44:17
-Dataset CSV: /mnt/d/data/gsv_cities/gsv_cities_predictions.csv
-Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis
+Timestamp: 2025-10-18 19:44:11
+Dataset CSV: /mnt/d/data/gsv_cities/gsv_cities_predictions_nan_fix.csv
+Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities_nan_fix/description_analysis
 Total Samples: 529506
 Original CSV Columns: ['image_path', 'description']
 Description Column: description
@@ -228,7 +228,7 @@ DESCRIPTION LENGTH STATISTICS
 ============================================================
 Mean length:   52.78 words
 Median length: 50.00 words
-Min length:    1 words
+Min length:    3 words
 Max length:    236 words
 Std deviation: 19.31 words
 ============================================================
@@ -236,9 +236,9 @@ Std deviation: 19.31 words
 
 SHORTEST DESCRIPTION
 ============================================================
-Image: Images/Melbourne/Melbourne_0003999_2013_05_290_-37.81485952867477_145.0030071402997_sO6wJc11JHvuMW9uFPxnFg.jpg
-Length: 1 words
-Text: nan
+Image: Images/PRG/PRG_0001213_2011_08_073_50.06698194364386_14.40171159087263_YJK3fessMejUF_pUcZTvpA.jpg
+Length: 3 words
+Text: Dense green foliage.
 ============================================================
 
 LONGEST DESCRIPTION
@@ -251,13 +251,13 @@ Text: Residential street scene with a row of terraced houses, each featuring a w
 ============================================================
 OUTPUT FILES GENERATED
 ============================================================
-1. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis/analysis_log.txt - This log file
-2. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis/description_statistics.csv - Statistics summary
-3. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis/description_length_analysis.png - Visualizations
-4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis/min_description.txt - Shortest description
-5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities/description_analysis/max_description.txt - Longest description
+1. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities_nan_fix/description_analysis/analysis_log.txt - This log file
+2. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities_nan_fix/description_analysis/description_statistics.csv - Statistics summary
+3. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities_nan_fix/description_analysis/description_length_analysis.png - Visualizations
+4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities_nan_fix/description_analysis/min_description.txt - Shortest description
+5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/gsv_cities_nan_fix/description_analysis/max_description.txt - Longest description
 ============================================================
-Analysis completed at: 2025-10-17 08:44:17
+Analysis completed at: 2025-10-18 19:44:12
 
 
 ============================================================
