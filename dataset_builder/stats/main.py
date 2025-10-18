@@ -302,7 +302,8 @@ def create_summary_analysis(datasets_to_run, analysis_options, global_settings):
         return False
     
     # Create summary output directory
-    summary_output_dir = Path(datasets_to_run[0]['output_base_dir']) / "summary_analysis"
+    summary_dir_name = global_settings.get('summary_directory_name', 'summary_analysis')
+    summary_output_dir = Path(datasets_to_run[0]['output_base_dir']) / summary_dir_name
     summary_output_dir.mkdir(parents=True, exist_ok=True)
     
     print(f"\n{'='*80}")
@@ -593,7 +594,8 @@ def create_summary_from_existing_results(datasets_to_run, analysis_options, glob
         return False
     
     # Create summary output directory
-    summary_output_dir = Path(datasets_to_run[0]['output_base_dir']) / "summary_analysis"
+    summary_dir_name = global_settings.get('summary_directory_name', 'summary_analysis')
+    summary_output_dir = Path(datasets_to_run[0]['output_base_dir']) / summary_dir_name
     summary_output_dir.mkdir(parents=True, exist_ok=True)
     
     print(f"Summary directory: {summary_output_dir}")

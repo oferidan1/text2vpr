@@ -22,8 +22,8 @@ datasets:
     output_base_dir: "/mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output"
     image_prefix: "/mnt/d/data/sf_xl/small"
     
-  - name: "gsv_cities"
-    csv_path: "/mnt/d/data/gsv_cities/gsv_cities_predictions.csv"
+  - name: "gsv_cities_nan_fix"
+    csv_path: "/mnt/d/data/gsv_cities/gsv_cities_predictions_nan_fix.csv"
     output_base_dir: "/mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output"
     image_prefix: "/mnt/d/data/gsv_cities"
 
@@ -50,11 +50,13 @@ analysis_options:
   run_description_analysis: true
   run_token_analysis: true
   run_image_examples: true
-  whole_dataset_analysis: true
-  summary_only_mode: false
+  whole_dataset_analysis: false
+  summary_only_mode: true
   nan_detection_only: false
   
 # Global settings
 global_settings:
   # Whether to overwrite existing output directories
-  overwrite_existing: true
+  overwrite_existing: false
+  # Name of the summary directory (when running summary analysis)
+  summary_directory_name: "summary_analysis_nan_fix"

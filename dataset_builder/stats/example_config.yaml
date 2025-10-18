@@ -36,3 +36,5 @@ analysis_options:
 global_settings:
   # Whether to overwrite existing output directories
   overwrite_existing: false
+  # Name of the summary directory (when running summary analysis)
+  summary_directory_name: "summary_analysis"
