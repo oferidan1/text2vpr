@@ -42,7 +42,7 @@ class VPRModel_text(pl.LightningModule):
                 faiss_gpu=False,
                 text_encoder_name='BAAI/bge-large-en-v1.5',
                 embeds_dim=1024,
-                is_freeze_vpr=True,
+                is_freeze_vpr=False,
                 is_freeze_text=True,
                 fusion_type='mlp'
                  ):
@@ -94,7 +94,7 @@ class VPRModel_text(pl.LightningModule):
         elif self.fusion_type == 'mlp':
             input_dim = vpr_output_dim + text_encoder_dim
             self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, embeds_dim))
-            self.fusion_residual = nn.Linear(input_dim, embeds_dim)
+            #self.fusion_residual = nn.Linear(input_dim, embeds_dim)
         
         if is_freeze_vpr:
         # Freeze vpr encoder parameters
@@ -139,7 +139,7 @@ class VPRModel_text(pl.LightningModule):
             embeds = self.fusion(embeds_input)[:,0,:]
         elif self.fusion_type == 'mlp':
              embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
-             embeds = self.fusion(embeds_input) + self.fusion_residual(embeds_input)
+             embeds = self.fusion(embeds_input) #+ self.fusion_residual(embeds_input)
         
         return embeds
     

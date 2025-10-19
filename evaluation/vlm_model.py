@@ -21,7 +21,7 @@ class VLM_Model:
                 self.text_encoder_dim = 1024
                 self.text_encoder = SentenceTransformer(self.text_model_name)
             if 'mixvpr' in self.vision_model_name:           
-                self.vision_encoder_dim = args.descriptors_dimension
+                self.vision_encoder_dim = args.vision_dimension
                 self.vision_encoder = vpr_models.get_model('mixvpr', 'ResNet50', self.vision_encoder_dim)
                 self.vision_encoder = self.vision_encoder.eval().to(args.device)
             self.encoder_dim = self.text_encoder_dim + self.vision_encoder_dim
@@ -40,7 +40,7 @@ class VLM_Model:
                 agg_config={'in_channels' : 1024,
                         'in_h' : 20,
                         'in_w' : 20,
-                        'out_channels' : 1024,
+                        'out_channels' : args.vision_dimension//4,
                         'mix_depth' : 4,
                         'mlp_ratio' : 1,
                         'out_rows' : 4}, # the output dim will be (out_rows * out_channels))
@@ -48,7 +48,7 @@ class VLM_Model:
             model_state_dict = torch.load(args.model_name)['state_dict']
             self.single_encoder.load_state_dict(model_state_dict)
             self.single_encoder.eval().to(args.device)
-            self.encoder_dim = args.descriptors_dimension #self.single_encoder.embeds_dim           
+            self.encoder_dim = self.single_encoder.embeds_dim           
         
             
     def encode_dual(self, images, texts):

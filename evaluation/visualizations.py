@@ -12,7 +12,7 @@ FONTSIZE = 50
 SPACE = 50  # Space between two images
 
 
-def write_labels_to_image(labels=["text1", "text2"]):
+def write_labels_to_image(labels=["text1", "text2"], query_text=None):
     """Creates an image with text"""
     font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", FONTSIZE)
     img = Image.new("RGB", ((IMG_HW * len(labels)) + 50 * (len(labels) - 1), TEXT_H), (1, 1, 1))
@@ -20,7 +20,33 @@ def write_labels_to_image(labels=["text1", "text2"]):
     for i, text in enumerate(labels):
         _, _, w, h = d.textbbox((0, 0), text, font=font)
         d.text(((IMG_HW + SPACE) * i + IMG_HW // 2 - w // 2, 1), text, fill=(0, 0, 0), font=font)
-    return Image.fromarray(np.array(img)[:100] * 255)  # Remove some empty space
+    #add query text below labels    
+    # incase text too long, break to multiple lines
+    font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 20)
+    if query_text is not None:
+        max_width = img.width - 20  # Leave some margin
+        words = query_text.split(' ')
+        lines = []
+        current_line = ''
+        for word in words:
+            test_line = current_line + ' ' + word if current_line else word
+            _, _, w, _ = d.textbbox((0, 0), test_line, font=font)
+            if w <= max_width:
+                current_line = test_line
+            else:
+                lines.append(current_line)
+                current_line = word
+        if current_line:
+            lines.append(current_line)
+        # Now draw the lines
+        total_text_height = len(lines) * (h + 5)
+        y_text = TEXT_H - h - 10
+        for line in lines:
+            _, _, w, h = d.textbbox((0, 0), line, font=font)
+            d.text((img.width // 2 - w // 2, y_text), line, fill=(0, 0, 0), font=font)
+            y_text += h + 5
+    #return Image.fromarray(np.array(img)[:100] * 255)  # Remove some empty space
+    return Image.fromarray(np.array(img) * 255)  # Remove some empty space
 
 
 def draw_box(img, c=(0, 1, 0), thickness=20):
@@ -36,7 +62,7 @@ def draw_box(img, c=(0, 1, 0), thickness=20):
     return tfm.ToPILImage()(img)
 
 
-def build_prediction_image(images_paths, preds_correct):
+def build_prediction_image(images_paths, preds_correct, text):
     """Build a row of images, where the first is the query and the rest are predictions.
     For each image, if is_correct then draw a green/red box.
     """
@@ -67,7 +93,7 @@ def build_prediction_image(images_paths, preds_correct):
         y += IMG_HW + SPACE
 
     try:
-        labels_image = write_labels_to_image(labels)
+        labels_image = write_labels_to_image(labels, text)        
         # Transform the images to np arrays for concatenation
         final_image = Image.fromarray(np.concatenate((np.array(labels_image), np.array(concat_image)), axis=0))
     except OSError:  # Handle error in case of missing PIL ImageFont
@@ -76,7 +102,7 @@ def build_prediction_image(images_paths, preds_correct):
     return final_image
 
 
-def save_file_with_paths(query_path, preds_paths, positives_paths, output_path, use_labels=True):
+def save_file_with_paths(query_path, preds_paths, positives_paths, output_path, use_labels=True, query_text=None, pred_texts=[]):
     file_content = []
     file_content.append("Query path:")
     file_content.append(query_path + "\n")
@@ -85,11 +111,17 @@ def save_file_with_paths(query_path, preds_paths, positives_paths, output_path, 
     if use_labels:
         file_content.append("Positives paths:")
         file_content.append("\n".join(positives_paths) + "\n")
+    if query_text is not None:
+        file_content.append("Query text:")
+        file_content.append(query_text + "\n")
+    if pred_texts:
+        file_content.append("Predictions texts:")
+        file_content.append("\n".join(pred_texts) + "\n")
     with open(output_path, "w") as file:
         _ = file.write("\n".join(file_content))
 
 
-def save_preds(predictions, eval_ds, log_dir, save_only_wrong_preds=None, use_labels=True):
+def save_preds(predictions, eval_ds, log_dir, save_only_wrong_preds=None, use_labels=True, images_paths_csv=None, texts=None):
     """For each query, save an image containing the query and its predictions,
     and a file with the paths of the query, its predictions and its positives.
 
@@ -107,14 +139,22 @@ def save_preds(predictions, eval_ds, log_dir, save_only_wrong_preds=None, use_la
 
     viz_dir = log_dir / "preds"
     viz_dir.mkdir()
+    query_text = None
+    pred_texts = []
     for query_index, preds in enumerate(tqdm(predictions, desc=f"Saving preds in {viz_dir}")):
         query_path = eval_ds.queries_paths[query_index]
+        if texts is not None:
+            desc_index = images_paths_csv.index(query_path)
+            query_text = texts[desc_index]
         list_of_images_paths = [query_path]
         # List of None (query), True (correct preds) or False (wrong preds)
         preds_correct = [None]
         for pred_index, pred in enumerate(preds):
             pred_path = eval_ds.database_paths[pred]
             list_of_images_paths.append(pred_path)
+            if texts is not None:
+                desc_index = images_paths_csv.index(pred_path)
+                pred_texts.append(texts[desc_index])
             if use_labels:
                 is_correct = pred in positives_per_query[query_index]
             else:
@@ -124,7 +164,7 @@ def save_preds(predictions, eval_ds, log_dir, save_only_wrong_preds=None, use_la
         if save_only_wrong_preds and preds_correct[1]:
             continue
 
-        prediction_image = build_prediction_image(list_of_images_paths, preds_correct)
+        prediction_image = build_prediction_image(list_of_images_paths, preds_correct, query_text)
         pred_image_path = viz_dir / f"{query_index:03d}.jpg"
         prediction_image.save(pred_image_path)
 
@@ -138,4 +178,6 @@ def save_preds(predictions, eval_ds, log_dir, save_only_wrong_preds=None, use_la
             positives_paths=positives_paths,
             output_path=viz_dir / f"{query_index:03d}.txt",
             use_labels=use_labels,
+            query_text=query_text,
+            pred_texts=pred_texts,
         )
