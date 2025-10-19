@@ -1,0 +1,34 @@
+================================================================================
+IMAGE EXAMPLES DETAILS
+================================================================================
+Generated at: 2025-10-17 08:53:30
+CSV file: /mnt/d/data/Pittsburgh30K/images/test/Pittsburgh30K_test_predictions.csv
+Image prefix: /mnt/d/data/Pittsburgh30K/images/test
+Number of examples: 3
+Random seed: None
+================================================================================
+
+EXAMPLE 1:
+  Index: 2056
+  Image path: database/@0584514.85@4477093.96@17@T@040.44020@-080.00348@002717@00@@@@@@pitch1_yaw1@.jpg
+  Full path: /mnt/d/data/Pittsburgh30K/images/test/database/@0584514.85@4477093.96@17@T@040.44020@-080.00348@002717@00@@@@@@pitch1_yaw1@.jpg
+  Exists: Yes
+  Description: Modern building with dark glass facade and prominent white grid framework, wide light-colored paved street or plaza, row of large light-colored planters, Speed Limit 25 sign on a pole, tall dark reflective glass building with distinctive spired roofline, older light-colored multi-story buildings in the background.
+--------------------------------------------------------------------------------
+
+EXAMPLE 2:
+  Index: 7224
+  Image path: database/@0584624.54@4476912.58@17@T@040.43856@-080.00221@002176@06@@@@@@pitch1_yaw7@.jpg
+  Full path: /mnt/d/data/Pittsburgh30K/images/test/database/@0584624.54@4476912.58@17@T@040.43856@-080.00221@002176@06@@@@@@pitch1_yaw7@.jpg
+  Exists: Yes
+  Description: Left building with rust-colored arched base and dark angular upper structure, urban street with cracks, modern dark glass skyscraper with pointed spires, traditional multi-story building with facade and windows.
+--------------------------------------------------------------------------------
+
+EXAMPLE 3:
+  Index: 12751
+  Image path: database/@0584454.14@4477054.31@17@T@040.43985@-080.00420@003297@04@@@@@@pitch1_yaw5@.jpg
+  Full path: /mnt/d/data/Pittsburgh30K/images/test/database/@0584454.14@4477054.31@17@T@040.43985@-080.00420@003297@04@@@@@@pitch1_yaw5@.jpg
+  Exists: Yes
+  Description: Modern building entrance, multi-paneled glass facade reflecting other buildings, "PPG PLACE" sign reflected on an upper left glass panel, light-colored segmented opaque wall base, wide dark recessed entrance with faintly visible ceiling lights, set of straight light grey stairs with two metallic handrails, continued multi-paneled glass facade and light-colored segmented opaque wall base.
+--------------------------------------------------------------------------------
+

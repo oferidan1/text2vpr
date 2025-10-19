@@ -1,0 +1,34 @@
+======================================================================
+TOKEN LENGTH ANALYSIS
+======================================================================
+Timestamp: 2025-10-17 08:42:46
+Dataset: /mnt/d/data/sf_xl/small/sf_xl_small_test_queries_descriptions.csv
+Total Samples: 1000
+Tokenizer: bert-base-uncased (BLIP's tokenizer)
+
+STATISTICS:
+  Mean:   96.45 tokens
+  Median: 92 tokens
+  Min:    33 tokens
+  Max:    227 tokens
+  Std:    29.63 tokens
+
+PERCENTILES:
+  50th: 92 tokens
+  75th: 113 tokens
+  90th: 137 tokens
+  95th: 150 tokens
+  99th: 184 tokens
+  99.5th: 194 tokens
+  99.9th: 215 tokens
+
+======================================================================
+RECOMMENDATIONS:
+
+Very Aggressive (95% coverage): 151 tokens
+
+Recommended (99% coverage): 185 tokens
+
+Conservative (99.9% coverage): 216 tokens
+
+Full Coverage (100%): 227 tokens

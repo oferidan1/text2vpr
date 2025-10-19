@@ -1,0 +1,46 @@
+============================================================
+DATASET ANALYSIS LOG
+============================================================
+Timestamp: 2025-10-17 08:53:11
+Dataset CSV: /mnt/d/data/Pittsburgh30K/images/test/Pittsburgh30K_test_predictions.csv
+Output Directory: /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/pittsburgh30K/description_analysis
+Total Samples: 16810
+Original CSV Columns: ['image_path', 'description']
+Description Column: description
+Image Column: image_path
+============================================================
+
+DESCRIPTION LENGTH STATISTICS
+============================================================
+Mean length:   48.77 words
+Median length: 47.00 words
+Min length:    8 words
+Max length:    182 words
+Std deviation: 17.31 words
+============================================================
+
+
+SHORTEST DESCRIPTION
+============================================================
+Image: database/@0584372.07@4476847.45@17@T@040.43800@-080.00519@004442@29@@@@@@pitch2_yaw6@.jpg
+Length: 8 words
+Text: Silhouetted cityscape on a hill, streetlight, arched structure.
+============================================================
+
+LONGEST DESCRIPTION
+============================================================
+Image: database/@0584784.16@4476801.71@17@T@040.43754@-080.00034@001405@08@@@@@@pitch1_yaw9@.jpg
+Length: 182 words
+Text: An urban street scene features two commercial buildings and a partial view of a parking garage. On the far left, a multi-story concrete parking garage is visible, followed by a yellow fire hydrant on the sidewalk. Next is a reddish-brown brick building with several floors, characterized by large rectangular windows with dark frames. On its ground floor, there are storefronts with dark-framed windows and a dark awning, with a white rectangular sign displaying a red circular logo attached to its left side. A blue "STOP" sign and a red "P" parking sign are mounted on a pole in front of this building. To the right, a light-grey stone building stands with an ornate facade, featuring a large, deeply recessed arched entrance on the ground floor with dark-framed glass doors and windows, displaying the number "112" above the door, and intricate stone carvings above the arch. The upper floor of this stone building also has a large arched window with dark framing, mirroring the style of the entrance. An asphalt street is in the foreground, separated from the buildings by a concrete sidewalk.
+============================================================
+
+============================================================
+OUTPUT FILES GENERATED
+============================================================
+1. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/pittsburgh30K/description_analysis/analysis_log.txt - This log file
+2. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/pittsburgh30K/description_analysis/description_statistics.csv - Statistics summary
+3. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/pittsburgh30K/description_analysis/description_length_analysis.png - Visualizations
+4. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/pittsburgh30K/description_analysis/min_description.txt - Shortest description
+5. /mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output/pittsburgh30K/description_analysis/max_description.txt - Longest description
+============================================================
+Analysis completed at: 2025-10-17 08:53:11

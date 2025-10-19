@@ -1,0 +1,62 @@
+# Configuration file for dataset analysis
+# Each entry specifies a CSV file to analyze and where to save the results
+
+datasets:
+  - name: "sf_xl_night_queries"
+    csv_path: "/mnt/d/data/sf_xl/descriptions_queries_night.csv"
+    output_base_dir: "/mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output"
+    image_prefix: "/mnt/d/data/sf_xl/processed/test"
+
+  - name: "sf_xl_small_test_queries"
+    csv_path: "/mnt/d/data/sf_xl/small/sf_xl_small_test_queries_descriptions.csv"
+    output_base_dir: "/mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output"
+    image_prefix: "/mnt/d/data/sf_xl/small"
+
+  - name: "sf_xl_small_val_queries"
+    csv_path: "/mnt/d/data/sf_xl/small/sf_xl_small_val_queries_descriptions.csv"
+    output_base_dir: "/mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output"
+    image_prefix: "/mnt/d/data/sf_xl/small"
+
+  - name: "sf_xl_small_train"
+    csv_path: "/mnt/d/data/sf_xl/small/sf_xl_small_train_descriptions.csv"
+    output_base_dir: "/mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output"
+    image_prefix: "/mnt/d/data/sf_xl/small"
+    
+  - name: "gsv_cities_nan_fix"
+    csv_path: "/mnt/d/data/gsv_cities/gsv_cities_predictions_nan_fix.csv"
+    output_base_dir: "/mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output"
+    image_prefix: "/mnt/d/data/gsv_cities"
+
+  - name: "pittsburgh30K"
+    csv_path: "/mnt/d/data/Pittsburgh30K/images/test/Pittsburgh30K_test_predictions.csv"
+    output_base_dir: "/mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output"
+    image_prefix: "/mnt/d/data/Pittsburgh30K/images/test"
+
+  - name: "nordland"
+    csv_path: "/mnt/d/data/nordland/images/test/nordland_predictions.csv"
+    output_base_dir: "/mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output"
+    image_prefix: "/mnt/d/data/nordland/images/test"
+
+  - name: "amstertime"
+    csv_path: "/mnt/d/data/amstertime/test/amstertime_test_predictions.csv"
+    output_base_dir: "/mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output"
+    image_prefix: "/mnt/d/data/amstertime/test"
+
+
+
+
+# Analysis options
+analysis_options:
+  run_description_analysis: true
+  run_token_analysis: true
+  run_image_examples: true
+  whole_dataset_analysis: false
+  summary_only_mode: true
+  nan_detection_only: false
+  
+# Global settings
+global_settings:
+  # Whether to overwrite existing output directories
+  overwrite_existing: false
+  # Name of the summary directory (when running summary analysis)
+  summary_directory_name: "summary_analysis_nan_fix"

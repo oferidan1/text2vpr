@@ -1,0 +1,34 @@
+================================================================================
+IMAGE EXAMPLES DETAILS
+================================================================================
+Generated at: 2025-10-18 19:50:38
+CSV file: /mnt/d/data/gsv_cities/gsv_cities_predictions_nan_fix.csv
+Image prefix: /mnt/d/data/gsv_cities
+Number of examples: 3
+Random seed: None
+================================================================================
+
+EXAMPLE 1:
+  Index: 63801
+  Image path: Images/Boston/Boston_0007764_2016_05_082_42.38793521671278_-71.09495694717835_iNGHhxaCFyeXwcxunH1XKQ.jpg
+  Full path: /mnt/d/data/gsv_cities/Images/Boston/Boston_0007764_2016_05_082_42.38793521671278_-71.09495694717835_iNGHhxaCFyeXwcxunH1XKQ.jpg
+  Exists: Yes
+  Description: Partial tree trunk, reddish-brown brick wall, white-framed multi-pane window with "risd" text visible on the lower left pane and green foliage partially in front, thin light grey horizontal concrete band, reddish-brown brick wall, thick light grey horizontal concrete band, reddish-brown brick wall, gridded basement window, partial tree trunk.
+--------------------------------------------------------------------------------
+
+EXAMPLE 2:
+  Index: 363836
+  Image path: Images/Chicago/Chicago_0003367_2014_05_050_41.88080062933287_-87.63967513112979_v6dkyP2AMl-wT_0bu2-uSQ.jpg
+  Full path: /mnt/d/data/gsv_cities/Images/Chicago/Chicago_0003367_2014_05_050_41.88080062933287_-87.63967513112979_v6dkyP2AMl-wT_0bu2-uSQ.jpg
+  Exists: Yes
+  Description: Paved street, dark multi-story building with horizontal bands and rectangular windows, lighter-colored ground level building facade with vertical pillars and recessed entrances, concrete planter wall, shrubs and small trees, bicycle racks, utility pole, building entrance with large glass windows.
+--------------------------------------------------------------------------------
+
+EXAMPLE 3:
+  Index: 407467
+  Image path: Images/Minneapolis/Minneapolis_0004583_2013_08_208_44.98830297045198_-93.26012719488004_ws3U6bzRaDHeW6OfuYCoUQ.jpg
+  Full path: /mnt/d/data/gsv_cities/Images/Minneapolis/Minneapolis_0004583_2013_08_208_44.98830297045198_-93.26012719488004_ws3U6bzRaDHeW6OfuYCoUQ.jpg
+  Exists: Yes
+  Description: Multi-story brown brick building with balconies, stop sign, curved asphalt road with tire marks, double yellow line road marking, distinctive elongated yellow rectangular dashed road marking, multiple black curved street light poles, traffic lights, white arrow turn lane marking, concrete sidewalk, grassy verge with multiple dark utility boxes, dense green trees.
+--------------------------------------------------------------------------------
+

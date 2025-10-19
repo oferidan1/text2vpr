@@ -1,0 +1,34 @@
+================================================================================
+IMAGE EXAMPLES DETAILS
+================================================================================
+Generated at: 2025-10-17 08:42:48
+CSV file: /mnt/d/data/sf_xl/small/sf_xl_small_test_queries_descriptions.csv
+Image prefix: /mnt/d/data/sf_xl/small
+Number of examples: 3
+Random seed: None
+================================================================================
+
+EXAMPLE 1:
+  Index: 299
+  Image path: test/queries_v1/@0545605.97@4176519.03@10@S@037.73481@-122.48241@21523860520@@@@@@20150925@@.jpg
+  Full path: /mnt/d/data/sf_xl/small/test/queries_v1/@0545605.97@4176519.03@10@S@037.73481@-122.48241@21523860520@@@@@@20150925@@.jpg
+  Exists: Yes
+  Description: Dense dark green tree, light-colored outdoor staircase, house number "148" on a light wall, pink stucco house wall, large multi-pane white-framed bay window reflecting an arched structure and chimney, decorative stepped gable detail, red clay tile roof, two adjacent arched recesses on the upper level forming small balconies, left arched balcony with a dark door and white wrought iron railing, right arched balcony with a white wrought iron railing, smaller white-framed rectangular windows on the lower level, dark green trimmed hedge, adjacent light-colored building with a red tile roof on the far right.
+--------------------------------------------------------------------------------
+
+EXAMPLE 2:
+  Index: 872
+  Image path: test/queries_v1/@0552103.78@4183290.63@10@S@037.79550@-122.40818@51319986351@@@@@@20210718@@.jpg
+  Full path: /mnt/d/data/sf_xl/small/test/queries_v1/@0552103.78@4183290.63@10@S@037.79550@-122.40818@51319986351@@@@@@20210718@@.jpg
+  Exists: Yes
+  Description: A brick building with windows and a shop awning partially displaying "VELRY" above a security gate, followed by a multi-story brick building with multiple windows, balconies with iron railings, and a prominent metal fire escape zig-zagging down its right side, its ground floor featuring a lighter facade with a window, a recessed doorway, a grand central entrance with two columns, stairs leading to double doors, decorative shield-like elements flanking the stairs, and "NSGS CACA" inscribed above the entrance, and a shop sign extending from the building's right side displaying Chinese characters, "Kang Hua Trading Inc.", and "Tel: 416-985-4817", all lining a street with a sidewalk.
+--------------------------------------------------------------------------------
+
+EXAMPLE 3:
+  Index: 335
+  Image path: test/queries_v1/@0551345.89@4178034.10@10@S@037.74816@-122.41716@7754624816@@@@@@20120810@@.jpg
+  Full path: /mnt/d/data/sf_xl/small/test/queries_v1/@0551345.89@4178034.10@10@S@037.74816@-122.41716@7754624816@@@@@@20120810@@.jpg
+  Exists: Yes
+  Description: Multi-story building with grey/blue and light-colored facades, featuring a yellow "BELISO KARATE SCHOOL 550-9000" sign on its left side; a wooden utility pole; concrete construction barriers; large cylindrical concrete pipes; streetlights; and distant buildings.
+--------------------------------------------------------------------------------
+

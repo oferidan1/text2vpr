@@ -1,0 +1,40 @@
+# Example configuration file for dataset analysis
+# Copy this to config.yaml and modify the paths as needed
+
+# IMPORTANT: CSV files must have exactly 2 columns:
+# - One column with "image" in the name (case-insensitive)
+# - One column with "description" in the name (case-insensitive)
+
+datasets:
+  - name: "sf_xl_small_train"
+    csv_path: "/mnt/d/data/sf_xl/small/sf_xl_small_train_descriptions.csv"
+    output_base_dir: "/mnt/d/dan/git_projects/text2vpr/dataset_builder/stats/output"
+    image_prefix: "/mnt/d/data/sf_xl"
+    
+  # Add more datasets as needed:
+  # - name: "another_dataset"
+  #   csv_path: "/path/to/another/dataset.csv"
+  #   output_base_dir: "/path/to/output/directory"
+  #   image_prefix: "/path/to/image/directory"
+
+# Example CSV format (exactly 2 columns required):
+# Image_path,Description
+# queries_night/@0543030.55@4180984.98@10@S@37.775128@-122.51158@31760538811@@@@@@20161226@@.jpg,"Stepped concrete sidewalk, STOP painted on asphalt road, pedestrian crossing with white zebra stripes, red octagonal stop sign on a pole, multi-story buildings, multiple street light poles receding into the distance."
+# queries_night/@0543102.49@4180346.93@10@S@37.76941@-122.510462@28026809684@@@@@@20160730@@.jpg,"A large, rectangular outdoor business sign with a thick, dark wooden frame and an overhead linear light fixture; the sign's light beige face features The Beach Chalet in large, stylized"
+
+# Analysis options
+analysis_options:
+  run_description_analysis: true
+  run_token_analysis: true
+  run_image_examples: true
+  whole_dataset_analysis: false
+  summary_only_mode: false
+  nan_detection_only: false
+  random_seed: 42
+  
+# Global settings
+global_settings:
+  # Whether to overwrite existing output directories
+  overwrite_existing: false
+  # Name of the summary directory (when running summary analysis)
+  summary_directory_name: "summary_analysis"

@@ -1,0 +1,34 @@
+================================================================================
+IMAGE EXAMPLES DETAILS
+================================================================================
+Generated at: 2025-10-17 08:44:08
+CSV file: /mnt/d/data/sf_xl/small/sf_xl_small_train_descriptions.csv
+Image prefix: /mnt/d/data/sf_xl/small
+Number of examples: 3
+Random seed: None
+================================================================================
+
+EXAMPLE 1:
+  Index: 29958
+  Image path: train/37.79/@0550102.14@4183309.26@10@S@037.79578@-122.43092@kWlt7yVIa9RUDEiEdAqPLA@@0@@@@201411@@.jpg
+  Full path: /mnt/d/data/sf_xl/small/train/37.79/@0550102.14@4183309.26@10@S@037.79578@-122.43092@kWlt7yVIa9RUDEiEdAqPLA@@0@@@@201411@@.jpg
+  Exists: Yes
+  Description: Part of a beige multi-story residential building facade, a recessed pedestrian entrance area with a white pillar, a beige wall with a call box, two adjacent white doors, a sign above the doors with Chinese characters "朝逸大廈" and "2030 VALLEJO", a circular light fixture to the left of the sign, a planter box with dense green vegetation, an asphalt driveway slanting downwards into a recessed garage entrance under the building, a utility pole, and multiple upper floors with balconies featuring light-colored vertical bar railings.
+--------------------------------------------------------------------------------
+
+EXAMPLE 2:
+  Index: 36544
+  Image path: train/37.77/@0546256.14@4181000.02@10@S@037.77517@-122.47475@9B5FqzuKQx0QVVt-dfrW2w@@0@@@@201611@@.jpg
+  Full path: /mnt/d/data/sf_xl/small/train/37.77/@0546256.14@4181000.02@10@S@037.77517@-122.47475@9B5FqzuKQx0QVVt-dfrW2w@@0@@@@201611@@.jpg
+  Exists: Yes
+  Description: Urban residential street, overcast sky with scattered clouds, asphalt street sloping uphill, multiple wooden utility poles with dense overhead wires, row of multi-story residential buildings on the left partially obscured by trees, concrete sidewalk, multi-story light gray building with a garage, multi-story light blue-gray building with an arched entrance, garage, and white trim, multi-story light yellow-beige building with a garage, white trim, and a large spherical-shaped trimmed bush, multi-story dark gray building with an external staircase, red door, white trim, and another large spherical-shaped trimmed bush, partially visible adjacent multi-story gray building, white street signpost on the right sidewalk.
+--------------------------------------------------------------------------------
+
+EXAMPLE 3:
+  Index: 43641
+  Image path: train/37.78/@0543852.80@4181654.80@10@S@037.78119@-122.50200@zutQFpuT_aOkAGK3wNpezA@@0@@@@201104@@.jpg
+  Full path: /mnt/d/data/sf_xl/small/train/37.78/@0543852.80@4181654.80@10@S@037.78119@-122.50200@zutQFpuT_aOkAGK3wNpezA@@0@@@@201104@@.jpg
+  Exists: Yes
+  Description: Dense evergreen trees with visible trunks covering a steep, green and brown grassy hillside, with patches of bare earth and scrubby vegetation, leading to a paved road with a curb on the right.
+--------------------------------------------------------------------------------
+

@@ -1,0 +1,34 @@
+================================================================================
+IMAGE EXAMPLES DETAILS
+================================================================================
+Generated at: 2025-10-17 08:43:01
+CSV file: /mnt/d/data/sf_xl/small/sf_xl_small_val_queries_descriptions.csv
+Image prefix: /mnt/d/data/sf_xl/small
+Number of examples: 3
+Random seed: None
+================================================================================
+
+EXAMPLE 1:
+  Index: 7363
+  Image path: val/queries/@0552303.08@4177651.00@10@S@037.74466@-122.40633@5_CfGDZL-PjBNx2yQcWChw@@210@@@@201507@@.jpg
+  Full path: /mnt/d/data/sf_xl/small/val/queries/@0552303.08@4177651.00@10@S@037.74466@-122.40633@5_CfGDZL-PjBNx2yQcWChw@@210@@@@201507@@.jpg
+  Exists: Yes
+  Description: Dense green bush with white flowers, heavily tilted house with light blue/gray horizontal siding, light green/yellow horizontal siding, white-framed window with white blinds, white-framed window, small white circular vent, white-framed covered porch structure, double garage-style doors with glass panes, small green leafy plant.
+--------------------------------------------------------------------------------
+
+EXAMPLE 2:
+  Index: 155
+  Image path: val/queries/@0547702.19@4177658.61@10@S@037.74498@-122.45855@LufCP6ipKDkTcPOtuBx3yg@@300@@@@201401@@.jpg
+  Full path: /mnt/d/data/sf_xl/small/val/queries/@0547702.19@4177658.61@10@S@037.74498@-122.45855@LufCP6ipKDkTcPOtuBx3yg@@300@@@@201401@@.jpg
+  Exists: Yes
+  Description: Distant tree-covered hills with residential buildings, grey paved street with a green grass strip and concrete sidewalk, a house with a dark pitched roof and white siding featuring dark half-timbering details, green trees and shrubs surrounding it, a white house with a light-colored roof, a prominent octagonal bay window with multiple tall white-framed windows, a chimney, a short ornamental metal railing, red brick stairs with white retaining walls, a white garage door, and landscaped front yards.
+--------------------------------------------------------------------------------
+
+EXAMPLE 3:
+  Index: 1325
+  Image path: val/queries/@0548309.58@4184206.15@10@S@037.80396@-122.45122@E6BhPYie4cljkkBeU5JrsQ@@210@@@@201412@@.jpg
+  Full path: /mnt/d/data/sf_xl/small/val/queries/@0548309.58@4184206.15@10@S@037.80396@-122.45122@E6BhPYie4cljkkBeU5JrsQ@@210@@@@201412@@.jpg
+  Exists: Yes
+  Description: Distant tree-covered hills, large construction site with concrete foundations and rebar, concrete K-rail barriers, multi-lane paved road curving to the right, more concrete K-rail barriers.
+--------------------------------------------------------------------------------
+
