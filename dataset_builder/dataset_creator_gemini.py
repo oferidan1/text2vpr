@@ -130,7 +130,7 @@ def describe_all_images(image_folder, api_key=None):
     # find all jpg file recursively using glob
     image_paths = glob.glob(f"{image_folder}/**/*.jpg", recursive=True)
     # prompt 
-    prompt = 'describe this location for visual place recognition. Focus on: 1) Scene type and setting, 2) Distinctive landmarks and architecture, 3) Unique visual patterns/colors/textures, 4) Spatial layout, 5) Key identifying features that distinguish this place from similar locations. Be specific about permanent visual elements, avoid temporary objects like people, car ,weather and lighting conditions, provide textual descriptions of items you are certain about only. the output is one line of text listing the items from left to right, separated by commas.'
+    prompt = 'Describe this location for visual place recognition. Focus on: 1) Scene type and setting, 2) Distinctive landmarks and architecture, 3) Unique visual patterns/colors/textures, 4) Spatial layout, 5) Key identifying features that distinguish this place from similar locations. Be specific about permanent visual elements, avoid temporary objects like people, car ,weather and lighting conditions, provide textual descriptions of items you are certain about only. the output is one line of text listing the items from left to right, separated by commas.'
     # Prepare content for each image
     
     csv_path = "descriptions.csv"
@@ -150,7 +150,7 @@ def describe_all_images(image_folder, api_key=None):
         while attempts < max_attempts:
             try:            
                 response = client.models.generate_content(
-                    model='gemini-2.5-flash-lite',
+                    model='gemini-2.5-flash',
                     contents=[
                         types.Part.from_bytes(
                             data=image_bytes,
