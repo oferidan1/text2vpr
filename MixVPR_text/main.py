@@ -23,8 +23,14 @@ def parse_arguments():
     parser.add_argument("--image_root", type=str, default="/mnt/d/data/gsv_cities/", help="root directory for images")
     parser.add_argument("--text_encoder", type=str, default="BAAI/bge-large-en-v1.5", help="text encoder model name")
     parser.add_argument("--is_freeze_text", type=int, default="1", help="freeze text encoder or not")
-    parser.add_argument("--is_freeze_vpr", type=int, default="1", help="freeze vpr encoder or not")
-    
+    parser.add_argument("--is_freeze_vpr", type=int, default="1", help="freeze vpr encoder or not")    
+    parser.add_argument("--embeds_dim", type=int, default=1024, help="dimension of the embeddings")
+    parser.add_argument("--fusion_type", type=str, default='mlp', help="type of fusion to use")
+    parser.add_argument("--is_encode_image", type=int, default="0", help="encode image or not")
+    parser.add_argument("--is_encode_text", type=int, default="1", help="encode text or not")
+    parser.add_argument("--is_trainable_text_encoder", type=int, default="1", help="train text encoder or not")
+    parser.add_argument("--batch_size", type=int, default="80", help="batch size for training")
+
     args = parser.parse_args()
     
     return args            
@@ -36,7 +42,7 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
         
     datamodule = GSVCitiesDataModule(
-        batch_size=120,
+        batch_size=args.batch_size,
         img_per_place=4,
         min_img_per_place=4,
         shuffle_all=False, # shuffle all images or keep shuffling in-city only
@@ -59,19 +65,8 @@ if __name__ == '__main__':
         pretrained=True,
         layers_to_freeze=2,
         layers_to_crop=[4], # 4 crops the last resnet layer, 3 crops the 3rd, ...etc
-        
-        #---- Aggregator
-        # agg_arch='CosPlace',
-        # agg_config={'in_dim': 2048,
-        #             'out_dim': 2048},
-        # agg_arch='GeM',
-        # agg_config={'p': 3},
-        
-        # agg_arch='ConvAP',
-        # agg_config={'in_channels': 2048,
-        #             'out_channels': 2048},
-
         agg_arch='MixVPR',
+        
         agg_config={'in_channels' : 1024,
                 'in_h' : 20,
                 'in_w' : 20,
@@ -95,10 +90,18 @@ if __name__ == '__main__':
         loss_name='MultiSimilarityLoss',
         miner_name='MultiSimilarityMiner', # example: TripletMarginMiner, MultiSimilarityMiner, PairMarginMiner
         miner_margin=0.1,
-        faiss_gpu=False
+        faiss_gpu=False,
+        text_encoder_name=args.text_encoder,
+        embeds_dim=args.embeds_dim,
+        is_freeze_vpr=args.is_freeze_vpr,
+        is_freeze_text=args.is_freeze_text,
+        fusion_type=args.fusion_type,
+        is_encode_image=args.is_encode_image,
+        is_encode_text=args.is_encode_text,
+        is_trainable_text_encoder=args.is_trainable_text_encoder,
     )
     
-    if args.resume_model is not None:
+    if args.is_encode_image and  args.resume_model is not None:
         model_state_dict = torch.load(args.resume_model)
         model.vpr_encoder.load_state_dict(model_state_dict)
         
@@ -108,7 +111,7 @@ if __name__ == '__main__':
     # we save the best 3 models accoring to Recall@1 on pittsburg val
     checkpoint_cb = ModelCheckpoint(
         monitor='pitts30k_test/R1',
-        filename=f'{model.vpr_encoder.encoder_arch}' +
+        filename=f'{"resnet50"}' +
         '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_test/R1:.4f}]_R5[{pitts30k_test/R5:.4f}]',
         auto_insert_metric_name=False,
         save_weights_only=True,
@@ -119,7 +122,7 @@ if __name__ == '__main__':
     # we instanciate a trainer
     trainer = pl.Trainer(
         accelerator='gpu', devices=[0],
-        default_root_dir=f'./LOGS/{model.vpr_encoder.encoder_arch}', # Tensorflow can be used to viz 
+        default_root_dir=f'./LOGS/{"resnet50"}', # Tensorflow can be used to viz
 
         num_sanity_val_steps=0, # runs a validation step before stating training
         precision=16, # we use half precision to reduce  memory usage

@@ -5,7 +5,10 @@ import utils
 from torch import nn
 from sentence_transformers import SentenceTransformer
 from models import helper
-
+from peft import LoraConfig, get_peft_model, TaskType
+from transformers import AutoModel
+from transformers import AutoTokenizer, AutoModel
+import numpy as np
 
 class VPRModel_text(pl.LightningModule):
     """This is the main model for Visual Place Recognition
@@ -42,9 +45,12 @@ class VPRModel_text(pl.LightningModule):
                 faiss_gpu=False,
                 text_encoder_name='BAAI/bge-large-en-v1.5',
                 embeds_dim=1024,
-                is_freeze_vpr=False,
+                is_freeze_vpr=True,
                 is_freeze_text=True,
-                fusion_type='mlp'
+                fusion_type='mlp',
+                is_encode_image=False,
+                is_encode_text=True,
+                is_trainable_text_encoder=True
                  ):
         super().__init__()
         
@@ -75,37 +81,61 @@ class VPRModel_text(pl.LightningModule):
         self.batch_acc = [] # we will keep track of the % of trivial pairs/triplets at the loss level 
 
         self.faiss_gpu = faiss_gpu
+        self.is_encode_image = is_encode_image
+        self.is_encode_text = is_encode_text
+        self.is_trainable_text_encoder = is_trainable_text_encoder
+
+        if is_encode_image:
+            self.vpr_encoder = VPRModel(backbone_arch, pretrained, layers_to_freeze, layers_to_crop, agg_arch, agg_config, lr, optimizer, weight_decay, momentum, warmpup_steps, milestones, lr_mult, loss_name, miner_name, miner_margin, faiss_gpu)
+            vpr_output_dim = agg_config['out_rows'] * agg_config['out_channels']
+            if is_freeze_vpr:
+                # Freeze vpr encoder parameters
+                for param in self.vpr_encoder.parameters():
+                    param.requires_grad = False
+        if is_encode_text:
+            # self.text_encoder = SentenceTransformer(text_encoder_name)
+            self.tokenizer = AutoTokenizer.from_pretrained(text_encoder_name)  
+            self.text_encoder = AutoModel.from_pretrained(text_encoder_name)
+
+            if is_freeze_text:
+                # Freeze text encoder parameters
+                for param in self.text_encoder.parameters():
+                    param.requires_grad = False                      
+            
+            # Define LoRA configuration
+            # TaskType.FEATURE_EXTRACTION is appropriate for sentence embedding tasks
+            if is_trainable_text_encoder:
+                lora_config = LoraConfig(
+                    task_type=TaskType.FEATURE_EXTRACTION,
+                    r=8,  # LoRA rank
+                    lora_alpha=32, # LoRA scaling factor
+                    lora_dropout=0.1,
+                    target_modules=["query", "value"]
+                    #target_modules=["query", "key", "value", "base_layer", "dense"]  # specify the modules to apply LoRA
+                )
+
+                # Get the PEFT model with LoRA adapters
+                self.text_encoder = get_peft_model(self.text_encoder, lora_config)
+                # self.text_encoder.add_adapter(lora_config)
         
-        self.vpr_encoder = VPRModel(backbone_arch, pretrained, layers_to_freeze, layers_to_crop, agg_arch, agg_config, lr, optimizer, weight_decay, momentum, warmpup_steps, milestones, lr_mult, loss_name, miner_name, miner_margin, faiss_gpu)
-        self.text_encoder = SentenceTransformer(text_encoder_name)
-        vpr_output_dim = agg_config['out_rows'] * agg_config['out_channels']
         text_encoder_dim = 1024        
         self.fusion_type = fusion_type
-        self.embeds_dim = embeds_dim
+        self.embeds_dim = embeds_dim        
         
-        if self.fusion_type == 'transformer':
-            self.vpr_adapter = nn.Linear(vpr_output_dim, embeds_dim)  # mix vpr dim embedding
-            self.text_adapter = nn.Linear(text_encoder_dim, embeds_dim)  # BGE large has 1024-dim embedding                   
-            self.cls = nn.Parameter(torch.randn(1, 1, embeds_dim))
-            # Define the core Transformer Encoder stack
-            encoder_layer = nn.TransformerEncoderLayer(d_model=embeds_dim, nhead=4, dim_feedforward=4*embeds_dim, batch_first=True)  
-            # Input shape: (sequence_length, batch_size, d_model)        
-            self.fusion = nn.TransformerEncoder(encoder_layer, 4)
-        elif self.fusion_type == 'mlp':
-            input_dim = vpr_output_dim + text_encoder_dim
-            self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, embeds_dim))
-            #self.fusion_residual = nn.Linear(input_dim, embeds_dim)
+        if is_encode_image and is_encode_text:
+            if self.fusion_type == 'transformer':
+                self.vpr_adapter = nn.Linear(vpr_output_dim, embeds_dim)  # mix vpr dim embedding
+                self.text_adapter = nn.Linear(text_encoder_dim, embeds_dim)  # BGE large has 1024-dim embedding                   
+                self.cls = nn.Parameter(torch.randn(1, 1, embeds_dim))
+                # Define the core Transformer Encoder stack
+                encoder_layer = nn.TransformerEncoderLayer(d_model=embeds_dim, nhead=4, dim_feedforward=4*embeds_dim, batch_first=True)  
+                # Input shape: (sequence_length, batch_size, d_model)        
+                self.fusion = nn.TransformerEncoder(encoder_layer, 4)
+            elif self.fusion_type == 'mlp':
+                input_dim = vpr_output_dim + text_encoder_dim
+                self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, embeds_dim))
+                #self.fusion_residual = nn.Linear(input_dim, embeds_dim)
         
-        if is_freeze_vpr:
-        # Freeze vpr encoder parameters
-            for param in self.vpr_encoder.parameters():
-                param.requires_grad = False
-        
-        if is_freeze_text:
-        # Freeze text encoder parameters
-            for param in self.text_encoder.parameters():
-                param.requires_grad = False      
-                
         # Call the weight initialization function
         self.apply(self._init_weights)
                 
@@ -120,27 +150,38 @@ class VPRModel_text(pl.LightningModule):
         
     # the forward pass of the lightning model
     def forward(self, img, text):
-        img_embeds = self.vpr_encoder.backbone(img)
-        img_embeds = self.vpr_encoder.aggregator(img_embeds)                
-        text_embeds = self.text_encoder.encode(text, normalize_embeddings=True, convert_to_tensor=True)        
+        if self.is_encode_image:
+            img_embeds = self.vpr_encoder.backbone(img)
+            img_embeds = self.vpr_encoder.aggregator(img_embeds)
+        if self.is_encode_text:
+            # text_embeds = self.text_encoder.encode(text, normalize_embeddings=True, convert_to_tensor=True)        
+            text_tokens = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(img.device)
+            model_output = self.text_encoder(**text_tokens)            
+            text_embeds = model_output[0][:, 0]
+            text_embeds = torch.nn.functional.normalize(text_embeds, p=2, dim=1)
         
-        batch_size = img.shape[0]        
+        batch_size = img.shape[0]   
         
-        if self.fusion_type == 'transformer':
-            img_embeds = self.vpr_adapter(img_embeds)
-            text_embeds = self.text_adapter(text_embeds)
-            # fusion type is transformer encoder
-            # Expand the learnable [CLS] token to match the batch size
-            cls_tokens = self.cls.expand(batch_size, -1, -1)                    
-            # Prepend the [CLS] token to the input sequence
-            # The new sequence length is (original_seq_len + 1)        
-            # concat cls_token, image_embeds, text_embeds as input to fusion transformer encoder
-            embeds_input = torch.cat([cls_tokens, img_embeds.unsqueeze(dim=1), text_embeds.unsqueeze(dim=1)], dim=1)
-            embeds = self.fusion(embeds_input)[:,0,:]
-        elif self.fusion_type == 'mlp':
-             embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
-             embeds = self.fusion(embeds_input) #+ self.fusion_residual(embeds_input)
-        
+        if self.is_encode_image and self.is_encode_text:        
+            if self.fusion_type == 'transformer':
+                img_embeds = self.vpr_adapter(img_embeds)
+                text_embeds = self.text_adapter(text_embeds)
+                # fusion type is transformer encoder
+                # Expand the learnable [CLS] token to match the batch size
+                cls_tokens = self.cls.expand(batch_size, -1, -1)                    
+                # Prepend the [CLS] token to the input sequence
+                # The new sequence length is (original_seq_len + 1)        
+                # concat cls_token, image_embeds, text_embeds as input to fusion transformer encoder
+                embeds_input = torch.cat([cls_tokens, img_embeds.unsqueeze(dim=1), text_embeds.unsqueeze(dim=1)], dim=1)
+                embeds = self.fusion(embeds_input)[:,0,:]
+            elif self.fusion_type == 'mlp':
+                embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
+                embeds = self.fusion(embeds_input) #+ self.fusion_residual(embeds_input)                
+        elif self.is_encode_text:
+            embeds = text_embeds
+        elif self.is_encode_image:
+            embeds = img_embeds
+
         return embeds
     
     # configure the optimizer 

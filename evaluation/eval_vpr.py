@@ -155,9 +155,9 @@ def main(args):
     
     alpha = args.alpha_vision        
     # Get queries predictions with alpha between 0.6 to 0.9 with jumps of 0.1
-    #for alpha in [0.6, 0.7, 0.8, 0.9]:
+    for alpha in [0.6, 0.7, 0.8, 0.9]:
     #for alpha in [0.9, 0.92, 0.94, 0.96, 0.98]:
-    if 1:
+    #if 1:
         if args.is_dual_encoder and args.dual_encoder_fusion=='each':        
             # vision
             vision_queries_descriptors = vision_descriptors[test_ds.num_database :]

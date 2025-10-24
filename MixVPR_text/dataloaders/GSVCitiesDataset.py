@@ -46,7 +46,7 @@ class GSVCitiesDataset(Dataset):
         
         # get all unique place ids
         self.places_ids = pd.unique(self.dataframe.index)
-        self.total_nb_images = len(self.dataframe)
+        self.total_nb_images = len(self.dataframe)        
         
         self.image_path, self.description = GSVCitiesDataset.read_csv_file(TRAIN_CSV, BASE_PATH)
         
@@ -118,7 +118,7 @@ class GSVCitiesDataset(Dataset):
             # get the description for this image
             # find image_path index in self.image_path        
             desc_index = self.image_path.index(img_path)
-            description = self.description[desc_index]        
+            description = self.description[desc_index]              
             descriptions.append(description) 
 
         # NOTE: contrary to image classification where __getitem__ returns only one image 

@@ -178,7 +178,7 @@ class WholeDatasetFromStruct(data.Dataset):
         if self.input_transform:
             img = self.input_transform(img)
         
-        description = self.description[index]       
+        description = self.description[index]  
 
         return img, index, description
 

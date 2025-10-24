@@ -22,10 +22,14 @@ def parse_arguments():
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")
     # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
     # parser.add_argument("--image_root", type=str, default="/mnt/d/data/amstertime/test")
-    parser.add_argument("--database_folder", type=str, default="/mnt/d/data/nordland/images/test/database")    
-    parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/nordland/images/test/queries")
-    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/nordland/images/test/nordland_predictions.csv")
-    parser.add_argument("--image_root", type=str, default="/mnt/d/data/nordland/images/test")
+    # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/nordland/images/test/database")    
+    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/nordland/images/test/queries")
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/nordland/images/test/nordland_predictions.csv")
+    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/nordland/images/test")
+    parser.add_argument("--database_folder", type=str, default="/mnt/d/data/Pittsburgh30K/images/test/database")    
+    parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/Pittsburgh30K/images/test/queries")
+    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/Pittsburgh30K/images/test/Pittsburgh30K_test_predictions.csv")
+    parser.add_argument("--image_root", type=str, default="/mnt/d/data/Pittsburgh30K/images/test")    
     
     parser.add_argument("--num_workers", type=int, default=4, help="_")
     parser.add_argument(
@@ -50,7 +54,7 @@ def parse_arguments():
         "do standard image retrieval given two folders of queries and DB",
     )
     parser.add_argument(
-        "--num_preds_to_save", type=int, default=3, help="set != 0 if you want to save predictions for each query"
+        "--num_preds_to_save", type=int, default=0, help="set != 0 if you want to save predictions for each query"
     )
     parser.add_argument(
         "--save_only_wrong_preds",
