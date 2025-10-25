@@ -18,18 +18,18 @@ def parse_arguments():
     # Resume parameters
     parser.add_argument("--resume_model", type=str, default='checkpoints/resnet50_MixVPR_4096_channels(1024)_rows(4).ckpt', help="path to model to resume, e.g. logs/.../best_model.pth")
     # Other parameters    
-    parser.add_argument("--gpu", type=str, default='1', help="gpu id(s) to use")
+    parser.add_argument("--gpu", type=str, default='0', help="gpu id(s) to use")
     parser.add_argument("--train_csv", type=str, default="/mnt/d/data/gsv_cities/gsv_cities_predictions.csv")    
     parser.add_argument("--image_root", type=str, default="/mnt/d/data/gsv_cities/", help="root directory for images")
     parser.add_argument("--text_encoder", type=str, default="BAAI/bge-large-en-v1.5", help="text encoder model name")
     parser.add_argument("--is_freeze_text", type=int, default="1", help="freeze text encoder or not")
     parser.add_argument("--is_freeze_vpr", type=int, default="1", help="freeze vpr encoder or not")    
     parser.add_argument("--embeds_dim", type=int, default=1024, help="dimension of the embeddings")
-    parser.add_argument("--fusion_type", type=str, default='mlp', help="type of fusion to use")
-    parser.add_argument("--is_encode_image", type=int, default="0", help="encode image or not")
+    parser.add_argument("--fusion_type", type=str, default='dynamic_weighting', help="type of fusion to use: mlp, transformer, dynamic_weighting")
+    parser.add_argument("--is_encode_image", type=int, default="1", help="encode image or not")
     parser.add_argument("--is_encode_text", type=int, default="1", help="encode text or not")
-    parser.add_argument("--is_trainable_text_encoder", type=int, default="1", help="train text encoder or not")
-    parser.add_argument("--batch_size", type=int, default="80", help="batch size for training")
+    parser.add_argument("--is_trainable_text_encoder", type=int, default="0", help="train text encoder or not")
+    parser.add_argument("--batch_size", type=int, default="120", help="batch size for training")
 
     args = parser.parse_args()
     

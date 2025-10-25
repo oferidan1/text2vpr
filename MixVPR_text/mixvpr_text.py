@@ -50,7 +50,7 @@ class VPRModel_text(pl.LightningModule):
                 fusion_type='mlp',
                 is_encode_image=False,
                 is_encode_text=True,
-                is_trainable_text_encoder=True
+                is_trainable_text_encoder=True,
                  ):
         super().__init__()
         
@@ -135,6 +135,9 @@ class VPRModel_text(pl.LightningModule):
                 input_dim = vpr_output_dim + text_encoder_dim
                 self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, embeds_dim))
                 #self.fusion_residual = nn.Linear(input_dim, embeds_dim)
+            elif self.fusion_type == 'dynamic_weighting':
+                input_dim = vpr_output_dim + text_encoder_dim
+                self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, 2), nn.Softmax(dim=1))
         
         # Call the weight initialization function
         self.apply(self._init_weights)
@@ -150,6 +153,7 @@ class VPRModel_text(pl.LightningModule):
         
     # the forward pass of the lightning model
     def forward(self, img, text):
+        s_ij = None
         if self.is_encode_image:
             img_embeds = self.vpr_encoder.backbone(img)
             img_embeds = self.vpr_encoder.aggregator(img_embeds)
@@ -176,13 +180,33 @@ class VPRModel_text(pl.LightningModule):
                 embeds = self.fusion(embeds_input)[:,0,:]
             elif self.fusion_type == 'mlp':
                 embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
-                embeds = self.fusion(embeds_input) #+ self.fusion_residual(embeds_input)                
+                embeds = self.fusion(embeds_input) #+ self.fusion_residual(embeds_input)     
+            elif self.fusion_type == 'dynamic_weighting':
+                # calc text sim in the batch
+                text_sim = torch.matmul(text_embeds, text_embeds.T)
+                img_sim = torch.matmul(img_embeds, img_embeds.T)
+                # calc dynamic weighting
+                embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
+                w = self.fusion(embeds_input)
+                w_i = w[:,0].unsqueeze(1)
+                w_t = w[:,1].unsqueeze(1)   
+                w_i_ij = torch.zeros_like(img_sim)
+                w_t_ij = torch.zeros_like(text_sim)
+                for i in range(batch_size):
+                    for j in range(batch_size):
+                        w_i_ij[i, j] = (w_i[i] + w_i[j]) / 2.0
+                        w_t_ij[i, j] = (w_t[i] + w_t[j]) / 2.0
+
+                # calculate dynamic weights
+                s_ij = w_i_ij * img_sim + w_t_ij * text_sim
+                embeds = img_embeds
+                           
         elif self.is_encode_text:
             embeds = text_embeds
         elif self.is_encode_image:
             embeds = img_embeds
 
-        return embeds
+        return embeds, s_ij
     
     # configure the optimizer 
     def configure_optimizers(self):
@@ -216,11 +240,12 @@ class VPRModel_text(pl.LightningModule):
         optimizer.step(closure=optimizer_closure)
         
     #  The loss function call (this method will be called at each training iteration)
-    def loss_function(self, descriptors, labels):
+    def loss_function(self, descriptors, labels, s_ij):
         # we mine the pairs/triplets if there is an online mining strategy
         if self.miner is not None:
             miner_outputs = self.miner(descriptors, labels)
-            loss = self.loss_fn(descriptors, labels, miner_outputs)
+            #loss = self.loss_fn(descriptors, labels, miner_outputs)
+            loss = self.loss_fn(descriptors, labels, miner_outputs, s_ij=s_ij)
             
             # calculate the % of trivial pairs/triplets 
             # which do not contribute in the loss value
@@ -264,8 +289,8 @@ class VPRModel_text(pl.LightningModule):
                 flat_texts.append(texts[j][i])
 
         # Feed forward the batch to the model
-        descriptors = self(images, flat_texts) # Here we are calling the method forward that we defined above
-        loss = self.loss_function(descriptors, labels) # Call the loss_function we defined above
+        descriptors, s_ij = self(images, flat_texts) # Here we are calling the method forward that we defined above
+        loss = self.loss_function(descriptors, labels, s_ij) # Call the loss_function we defined above
         
         self.log('loss', loss.item(), logger=True)
         return {'loss': loss}
@@ -437,7 +462,7 @@ class VPRModel(pl.LightningModule):
         optimizer.step(closure=optimizer_closure)
         
     #  The loss function call (this method will be called at each training iteration)
-    def loss_function(self, descriptors, labels):
+    def loss_function(self, descriptors, labels, s_ij):
         # we mine the pairs/triplets if there is an online mining strategy
         if self.miner is not None:
             miner_outputs = self.miner(descriptors, labels)
