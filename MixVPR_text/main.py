@@ -19,6 +19,7 @@ def parse_arguments():
     parser.add_argument("--resume_model", type=str, default='checkpoints/resnet50_MixVPR_4096_channels(1024)_rows(4).ckpt', help="path to model to resume, e.g. logs/.../best_model.pth")
     # Other parameters    
     parser.add_argument("--gpu", type=str, default='0', help="gpu id(s) to use")
+    parser.add_argument("--vpr_dim", type=int, default=512, help="dimension of the vpr embeddings")
     parser.add_argument("--train_csv", type=str, default="/mnt/d/data/gsv_cities/gsv_cities_predictions.csv")    
     parser.add_argument("--image_root", type=str, default="/mnt/d/data/gsv_cities/", help="root directory for images")
     parser.add_argument("--text_encoder", type=str, default="BAAI/bge-large-en-v1.5", help="text encoder model name")
@@ -71,7 +72,7 @@ if __name__ == '__main__':
         agg_config={'in_channels' : 1024,
                 'in_h' : 20,
                 'in_w' : 20,
-                'out_channels' : 1024,
+                'out_channels' : args.vpr_dim // 4, # final out dim will be out_channels * out_rows
                 'mix_depth' : 4,
                 'mlp_ratio' : 1,
                 'out_rows' : 4}, # the output dim will be (out_rows * out_channels)

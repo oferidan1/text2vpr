@@ -181,15 +181,15 @@ class VPRModel_text(pl.LightningModule):
             elif self.fusion_type == 'mlp':
                 embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
                 embeds = self.fusion(embeds_input) #+ self.fusion_residual(embeds_input)     
-            elif self.fusion_type == 'dynamic_weighting':
-                # calc text sim in the batch
-                text_sim = torch.matmul(text_embeds, text_embeds.T)
-                img_sim = torch.matmul(img_embeds, img_embeds.T)
+            elif self.fusion_type == 'dynamic_weighting':                
                 # calc dynamic weighting
                 embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
                 w = self.fusion(embeds_input)
                 w_i = w[:,0].unsqueeze(1)
                 w_t = w[:,1].unsqueeze(1)   
+                # calc text sim in the batch
+                text_sim = torch.matmul(text_embeds, text_embeds.T)
+                img_sim = torch.matmul(img_embeds, img_embeds.T)
                 w_i_ij = torch.zeros_like(img_sim)
                 w_t_ij = torch.zeros_like(text_sim)
                 for i in range(batch_size):
