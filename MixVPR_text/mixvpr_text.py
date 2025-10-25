@@ -244,10 +244,12 @@ class VPRModel_text(pl.LightningModule):
         # we mine the pairs/triplets if there is an online mining strategy
         if self.miner is not None:
             miner_outputs = self.miner(descriptors, labels)
-            #loss = self.loss_fn(descriptors, labels, miner_outputs)
-            loss = self.loss_fn(descriptors, labels, miner_outputs, s_ij=s_ij)
-            
-            # calculate the % of trivial pairs/triplets 
+            if s_ij is None:
+                loss = self.loss_fn(descriptors, labels, miner_outputs)
+            else:
+                loss = self.loss_fn(descriptors, labels, miner_outputs, s_ij=s_ij)
+
+            # calculate the % of trivial pairs/triplets
             # which do not contribute in the loss value
             nb_samples = descriptors.shape[0]
             nb_mined = len(set(miner_outputs[0].detach().cpu().numpy()))

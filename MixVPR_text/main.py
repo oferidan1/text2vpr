@@ -30,6 +30,7 @@ def parse_arguments():
     parser.add_argument("--is_encode_text", type=int, default="1", help="encode text or not")
     parser.add_argument("--is_trainable_text_encoder", type=int, default="0", help="train text encoder or not")
     parser.add_argument("--batch_size", type=int, default="120", help="batch size for training")
+    parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss_Sij", help="name of the loss function to use")
 
     args = parser.parse_args()
     
@@ -87,7 +88,7 @@ if __name__ == '__main__':
         #----- Loss functions
         # example: ContrastiveLoss, TripletMarginLoss, MultiSimilarityLoss,
         # FastAPLoss, CircleLoss, SupConLoss,
-        loss_name='MultiSimilarityLoss',
+        loss_name=args.loss_name,
         miner_name='MultiSimilarityMiner', # example: TripletMarginMiner, MultiSimilarityMiner, PairMarginMiner
         miner_margin=0.1,
         faiss_gpu=False,
