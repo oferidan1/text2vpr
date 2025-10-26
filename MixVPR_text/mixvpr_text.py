@@ -153,7 +153,8 @@ class VPRModel_text(pl.LightningModule):
         
     # the forward pass of the lightning model
     def forward(self, img, text):
-        s_ij = None
+        w = None
+        text_embeds = None
         if self.is_encode_image:
             img_embeds = self.vpr_encoder.backbone(img)
             img_embeds = self.vpr_encoder.aggregator(img_embeds)
@@ -184,21 +185,7 @@ class VPRModel_text(pl.LightningModule):
             elif self.fusion_type == 'dynamic_weighting':                
                 # calc dynamic weighting
                 embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
-                w = self.fusion(embeds_input)
-                w_i = w[:,0].unsqueeze(1)
-                w_t = w[:,1].unsqueeze(1)   
-                # calc text sim in the batch
-                text_sim = torch.matmul(text_embeds, text_embeds.T)
-                img_sim = torch.matmul(img_embeds, img_embeds.T)
-                w_i_ij = torch.zeros_like(img_sim)
-                w_t_ij = torch.zeros_like(text_sim)
-                for i in range(batch_size):
-                    for j in range(batch_size):
-                        w_i_ij[i, j] = (w_i[i] + w_i[j]) / 2.0
-                        w_t_ij[i, j] = (w_t[i] + w_t[j]) / 2.0
-
-                # calculate dynamic weights
-                s_ij = w_i_ij * img_sim + w_t_ij * text_sim
+                w = self.fusion(embeds_input)                
                 embeds = img_embeds
                            
         elif self.is_encode_text:
@@ -206,7 +193,7 @@ class VPRModel_text(pl.LightningModule):
         elif self.is_encode_image:
             embeds = img_embeds
 
-        return embeds, s_ij
+        return embeds, text_embeds, w
     
     # configure the optimizer 
     def configure_optimizers(self):
@@ -240,14 +227,14 @@ class VPRModel_text(pl.LightningModule):
         optimizer.step(closure=optimizer_closure)
         
     #  The loss function call (this method will be called at each training iteration)
-    def loss_function(self, descriptors, labels, s_ij):
+    def loss_function(self, descriptors, labels, text_embeds, w):
         # we mine the pairs/triplets if there is an online mining strategy
         if self.miner is not None:
             miner_outputs = self.miner(descriptors, labels)
-            if s_ij is None:
+            if w is None:
                 loss = self.loss_fn(descriptors, labels, miner_outputs)
             else:
-                loss = self.loss_fn(descriptors, labels, miner_outputs, s_ij=s_ij)
+                loss = self.loss_fn(descriptors, labels, miner_outputs, embeds2=text_embeds, w=w)
 
             # calculate the % of trivial pairs/triplets
             # which do not contribute in the loss value
@@ -291,8 +278,8 @@ class VPRModel_text(pl.LightningModule):
                 flat_texts.append(texts[j][i])
 
         # Feed forward the batch to the model
-        descriptors, s_ij = self(images, flat_texts) # Here we are calling the method forward that we defined above
-        loss = self.loss_function(descriptors, labels, s_ij) # Call the loss_function we defined above
+        descriptors, text_embeds, w = self(images, flat_texts) # Here we are calling the method forward that we defined above
+        loss = self.loss_function(descriptors, labels, text_embeds, w) # Call the loss_function we defined above
         
         self.log('loss', loss.item(), logger=True)
         return {'loss': loss}
@@ -307,7 +294,7 @@ class VPRModel_text(pl.LightningModule):
     def validation_step(self, batch, batch_idx, dataloader_idx=None):
         places, _, texts = batch
         # calculate descriptors
-        descriptors = self(places, texts)
+        descriptors, text_embeds, w = self(places, texts)
         return descriptors.detach().cpu()
     
     def validation_epoch_end(self, val_step_outputs):

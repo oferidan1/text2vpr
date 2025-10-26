@@ -12,12 +12,27 @@ class GenericPairLoss(BaseMetricLossFunction):
             self.mat_based_loss if mat_based_loss else self.pair_based_loss
         )
 
-    def compute_loss(self, embeddings, labels, indices_tuple, ref_emb, ref_labels, s_ij):
+    def compute_loss(self, embeddings, labels, indices_tuple, ref_emb, ref_labels, embeds2, w):
         c_f.labels_or_indices_tuple_required(labels, indices_tuple)
         indices_tuple = lmu.convert_to_pairs(indices_tuple, labels, ref_labels)
         if all(len(x) <= 1 for x in indices_tuple):
             return self.zero_losses()
         mat = self.distance(embeddings, ref_emb)
+        w_i = w[:,0].unsqueeze(1)
+        w_t = w[:,1].unsqueeze(1)   
+        # calc text sim in the batch
+        text_sim = torch.matmul(embeds2, embeds2.T)
+        img_sim = torch.matmul(embeddings, embeddings.T)
+        w_i_ij = torch.zeros_like(img_sim)
+        w_t_ij = torch.zeros_like(text_sim)
+        batch_size = embeddings.shape[0]
+        for i in range(batch_size):
+            for j in range(batch_size):
+                w_i_ij[i, j] = (w_i[i] + w_i[j]) / 2.0
+                w_t_ij[i, j] = (w_t[i] + w_t[j]) / 2.0
+
+        # calculate dynamic weights
+        s_ij = w_i_ij * img_sim + w_t_ij * text_sim
         return self.loss_method(mat, indices_tuple, s_ij)
 
     def _compute_loss(self):

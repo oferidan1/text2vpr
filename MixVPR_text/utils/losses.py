@@ -6,7 +6,7 @@ def get_loss(loss_name):
     if loss_name == 'SupConLoss': return losses.SupConLoss(temperature=0.07)
     if loss_name == 'CircleLoss': return losses.CircleLoss(m=0.4, gamma=80) #these are params for image retrieval
     if loss_name == 'MultiSimilarityLoss': return losses.MultiSimilarityLoss(alpha=1.0, beta=50, base=0.0, distance=DotProductSimilarity())
-    if loss_name == 'MultiSimilarityLoss_Sij': return MultiSimilarityLoss_Sij(alpha=1.0, beta=50, base=0.5, distance=DotProductSimilarity())
+    if loss_name == 'MultiSimilarityLoss_Sij': return MultiSimilarityLoss_Sij(alpha=1.0, beta=50, base=0.0, distance=DotProductSimilarity())
     if loss_name == 'ContrastiveLoss': return losses.ContrastiveLoss(pos_margin=0, neg_margin=1)
     if loss_name == 'Lifted': return losses.GeneralizedLiftedStructureLoss(neg_margin=0, pos_margin=1, distance=DotProductSimilarity())
     if loss_name == 'FastAPLoss': return losses.FastAPLoss(num_bins=30)

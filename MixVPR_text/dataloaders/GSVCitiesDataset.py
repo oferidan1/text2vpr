@@ -121,8 +121,8 @@ class GSVCitiesDataset(Dataset):
             if img_path in self.image_path:
                 desc_index = self.image_path.index(img_path)
                 description = self.description[desc_index]                  
-                max_length = 512
-                description = description[:max_length]  # truncate to max 512 chars
+                max_length = 256
+                description = description[:max_length]  # truncate to max_length chars
             descriptions.append(description) 
 
         # NOTE: contrary to image classification where __getitem__ returns only one image 

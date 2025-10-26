@@ -1,7 +1,7 @@
 # MixVPR: Feature Mixing for Visual Place Recognition
 
 # train lora over tecxt encoder
-python main.py --is_encode_image=0 --is_trainable_text_encoder=1 --gpu=1 --loss_name=MultiSimilarityLoss --batch_size=60
+python main.py --is_encode_image=0 --is_trainable_text_encoder=1 --gpu=1 --loss_name=MultiSimilarityLoss --batch_size=80
 
 [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/mixvpr-feature-mixing-for-visual-place/visual-place-recognition-on-mapillary-test)](https://paperswithcode.com/sota/visual-place-recognition-on-mapillary-test?p=mixvpr-feature-mixing-for-visual-place)
 [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/mixvpr-feature-mixing-for-visual-place/visual-place-recognition-on-mapillary-val)](https://paperswithcode.com/sota/visual-place-recognition-on-mapillary-val?p=mixvpr-feature-mixing-for-visual-place)
