@@ -84,6 +84,7 @@ class VPRModel_text(pl.LightningModule):
         self.is_encode_image = is_encode_image
         self.is_encode_text = is_encode_text
         self.is_trainable_text_encoder = is_trainable_text_encoder
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         if is_encode_image:
             self.vpr_encoder = VPRModel(backbone_arch, pretrained, layers_to_freeze, layers_to_crop, agg_arch, agg_config, lr, optimizer, weight_decay, momentum, warmpup_steps, milestones, lr_mult, loss_name, miner_name, miner_margin, faiss_gpu)
@@ -195,6 +196,18 @@ class VPRModel_text(pl.LightningModule):
 
         return embeds, text_embeds, w
     
+    def encoder_image(self, img):
+        img_embeds = self.vpr_encoder.backbone(img)
+        img_embeds = self.vpr_encoder.aggregator(img_embeds)
+        return img_embeds
+    
+    def encode_text(self, text):
+        text_tokens = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(self.device)
+        model_output = self.text_encoder(**text_tokens)            
+        text_embeds = model_output[0][:, 0]
+        text_embeds = torch.nn.functional.normalize(text_embeds, p=2, dim=1)
+        return text_embeds
+    
     # configure the optimizer 
     def configure_optimizers(self):
         if self.optimizer.lower() == 'sgd':
@@ -295,7 +308,16 @@ class VPRModel_text(pl.LightningModule):
         places, _, texts = batch
         # calculate descriptors
         descriptors, text_embeds, w = self(places, texts)
-        return descriptors.detach().cpu()
+        #return descriptors.detach().cpu()
+        descriptors = descriptors.detach().cpu()
+        text_embeds_cpu = None
+        if text_embeds[0] is not None:
+            text_embeds_cpu = text_embeds.detach().cpu()
+        w_cpu = None
+        if w[0] is not None:
+            w_cpu = w.detach().cpu()
+        ret_dict = {'descriptors': descriptors, 'text_embeds': text_embeds_cpu, 'w': w_cpu}
+        return ret_dict
     
     def validation_epoch_end(self, val_step_outputs):
         """this return descriptors in their order
@@ -310,7 +332,29 @@ class VPRModel_text(pl.LightningModule):
             val_step_outputs = [val_step_outputs]
         
         for i, (val_set_name, val_dataset) in enumerate(zip(dm.val_set_names, dm.val_datasets)):
-            feats = torch.concat(val_step_outputs[i], dim=0)
+            # stack all descriptors
+            descriptors = []
+            text_embeds = []
+            w = []
+            for d in val_step_outputs[i]:
+                for key, value in d.items():
+                    if key == 'descriptors':
+                        descriptors.append(value)
+                    elif key == 'text_embeds' and value is not None:
+                        text_embeds.append(value)
+                    elif key == 'w' and value is not None:
+                        w.append(value)                        
+
+            # descriptors = val_step_outputs[i]['descriptors']
+            # text_embeds = val_step_outputs[i]['text_embeds']
+            # w = val_step_outputs[i]['w']    
+            feats = torch.cat(descriptors, dim=0)
+            text_feats = None
+            if text_embeds is not None:
+                text_feats = torch.cat(text_embeds, dim=0)
+            w_feats = None
+            if w is not None:
+                w_feats = torch.cat(w, dim=0)
             
             if 'pitts' in val_set_name:
                 # split to ref and queries
@@ -329,13 +373,35 @@ class VPRModel_text(pl.LightningModule):
 
             r_list = feats[ : num_references]
             q_list = feats[num_references : ]
-            pitts_dict = utils.get_validation_recalls(r_list=r_list, 
-                                                q_list=q_list,
-                                                k_values=[1, 5, 10, 15, 20, 50, 100],
-                                                gt=positives,
-                                                print_results=True,
-                                                dataset_name=val_set_name,
-                                                faiss_gpu=self.faiss_gpu
+            
+            if self.fusion_type == 'dynamic_weighting':
+                r_text_list = text_feats[ : num_references]
+                q_text_list = text_feats[num_references : ]
+                r_w_list = w_feats[ : num_references]
+                q_w_list = w_feats[num_references : ]
+                
+                pitts_dict = utils.get_validation_recalls_dynamic_fusion(r_list=r_list, 
+                                                    q_list=q_list,
+                                                    r_text_list=r_text_list,
+                                                    q_text_list=q_text_list,
+                                                    w_r=r_w_list,
+                                                    w_q=q_w_list,
+                                                    k_values=[1, 5, 10, 15, 20, 50, 100],
+                                                    gt=positives,
+                                                    print_results=True,
+                                                    dataset_name=val_set_name,
+                                                    faiss_gpu=self.faiss_gpu
+                                                )
+                
+            else:
+
+                pitts_dict = utils.get_validation_recalls(r_list=r_list, 
+                                                    q_list=q_list,
+                                                    k_values=[1, 5, 10, 15, 20, 50, 100],
+                                                    gt=positives,
+                                                    print_results=True,
+                                                    dataset_name=val_set_name,
+                                                    faiss_gpu=self.faiss_gpu
                                                 )
             del r_list, q_list, feats, num_references, positives
 

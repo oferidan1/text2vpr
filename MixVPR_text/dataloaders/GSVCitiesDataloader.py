@@ -99,6 +99,7 @@ class GSVCitiesDataModule(pl.LightningDataModule):
             'shuffle': False}
 
     def setup(self, stage):
+        #if 1:
         if stage == 'fit':
             # load train dataloader with reload routine
             self.reload()

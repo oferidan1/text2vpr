@@ -23,13 +23,15 @@ class GenericPairLoss(BaseMetricLossFunction):
         # calc text sim in the batch
         text_sim = torch.matmul(embeds2, embeds2.T)
         img_sim = torch.matmul(embeddings, embeddings.T)
-        w_i_ij = torch.zeros_like(img_sim)
-        w_t_ij = torch.zeros_like(text_sim)
-        batch_size = embeddings.shape[0]
-        for i in range(batch_size):
-            for j in range(batch_size):
-                w_i_ij[i, j] = (w_i[i] + w_i[j]) / 2.0
-                w_t_ij[i, j] = (w_t[i] + w_t[j]) / 2.0
+        # w_i_ij = torch.zeros_like(img_sim)
+        # w_t_ij = torch.zeros_like(text_sim)
+        # batch_size = embeddings.shape[0]       
+        # for i in range(batch_size):
+        #     for j in range(batch_size):
+        #         w_i_ij[i, j] = (w_i[i] + w_i[j]) / 2.0
+        #         w_t_ij[i, j] = (w_t[i] + w_t[j]) / 2.0
+        w_i_ij = ((w_i.unsqueeze(1) + w_i.unsqueeze(0)) / 2.0).squeeze(-1)
+        w_t_ij = ((w_t.unsqueeze(1) + w_t.unsqueeze(0)) / 2.0).squeeze(-1)
 
         # calculate dynamic weights
         s_ij = w_i_ij * img_sim + w_t_ij * text_sim

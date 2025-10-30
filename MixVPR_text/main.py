@@ -20,7 +20,7 @@ def parse_arguments():
     parser.add_argument("--vpr_resume_model", type=str, default='checkpoints/resnet50_MixVPR_512_channels(256)_rows(2).ckpt', help="path to model to resume, e.g. logs/.../best_model.pth")
     parser.add_argument("--vpr_rows", type=int, default=2, help="number of rows for vpr embeddings")
     # Other parameters
-    parser.add_argument("--gpu", type=str, default='0', help="gpu id(s) to use")
+    parser.add_argument("--gpu", type=str, default='1', help="gpu id(s) to use")
     parser.add_argument("--vpr_dim", type=int, default=512, help="dimension of the vpr embeddings")
     parser.add_argument("--train_csv", type=str, default="/mnt/d/data/gsv_cities/gsv_cities_predictions.csv")    
     parser.add_argument("--image_root", type=str, default="/mnt/d/data/gsv_cities/", help="root directory for images")

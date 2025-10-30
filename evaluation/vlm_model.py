@@ -16,12 +16,12 @@ class VLM_Model:
         self.vision_model_name = args.vision_model_name
         self.text_model_name = args.text_model_name
         self.device = args.device
+        self.text_encoder_dim = 1024
+        self.vision_encoder_dim = args.vision_dimension
         if args.is_dual_encoder:                        
-            if 'bge' in self.text_model_name:
-                self.text_encoder_dim = 1024
+            if 'bge' in self.text_model_name:               
                 self.text_encoder = SentenceTransformer(self.text_model_name)
-            if 'mixvpr' in self.vision_model_name:           
-                self.vision_encoder_dim = args.vision_dimension
+            if 'mixvpr' in self.vision_model_name:                           
                 self.vision_encoder = vpr_models.get_model('mixvpr', 'ResNet50', self.vision_encoder_dim)
                 self.vision_encoder = self.vision_encoder.eval().to(args.device)
             self.encoder_dim = self.text_encoder_dim + self.vision_encoder_dim
@@ -40,10 +40,11 @@ class VLM_Model:
                 agg_config={'in_channels' : 1024,
                         'in_h' : 20,
                         'in_w' : 20,
-                        'out_channels' : args.vision_dimension//4,
+                        'out_channels' : args.vision_dimension//args.vpr_rows,
                         'mix_depth' : 4,
                         'mlp_ratio' : 1,
-                        'out_rows' : 4}, # the output dim will be (out_rows * out_channels))
+                        'out_rows' : args.vpr_rows}, # the output dim will be (out_rows * out_channels))
+                fusion_type=args.fusion_type,
             )
             model_state_dict = torch.load(args.model_name)['state_dict']
             self.single_encoder.load_state_dict(model_state_dict)
@@ -59,8 +60,8 @@ class VLM_Model:
     
     def encode_single(self, images, texts):
         with torch.no_grad():
-            features = self.single_encoder(images, texts)
-        return features
+            features, text_features, w = self.single_encoder(images, texts)
+        return features, text_features, w 
     
     def encode_image(self, images):
         with torch.no_grad():

@@ -14,11 +14,12 @@ from vlm_model import VLM_Model
 import os
 from test_dataset import TestDataset
 import visualizations
+from math import sqrt
 
 def normlize_features(x):
     return x / np.linalg.norm(x, axis=1, keepdims=True)    
 
-def encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors):
+def encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors, w_alpha):
     if args.encode_mode == 'text':
         # single vector - text
         descriptors = model.encode_text(texts)
@@ -46,10 +47,16 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
             text_descriptors[indices.numpy(), :] = text_features                    
     else:
         # single vector of both image and text
-        descriptors = model.encode_single(images.to(args.device), texts)
+        descriptors, text_features, w = model.encode_single(images.to(args.device), texts)
         descriptors = descriptors.cpu().numpy()
         all_descriptors[indices.numpy(), :] = descriptors
-        
+        if args.fusion_type == 'dynamic_weighting':
+            vision_descriptors[indices.numpy(), :] = descriptors
+            text_features = text_features.cpu().numpy()
+            text_descriptors[indices.numpy(), :] = text_features  
+            w = w.cpu().numpy()
+            w_alpha[indices.numpy(), :] = w
+            
 def get_queries_predictions(encoder_dim, database_descriptors, all_descriptors, queries_descriptors, max_results):
      # Use a kNN to find predictions
     #faiss_index = faiss.IndexFlatL2(encoder_dim)
@@ -61,7 +68,7 @@ def get_queries_predictions(encoder_dim, database_descriptors, all_descriptors, 
     scores, predictions = faiss_index.search(queries_descriptors, max_results)
     return scores, predictions
 
-def rerank_predictions(vision_scores, vision_predictions, text_scores, text_predictions, alpha_vision, max_results):
+def rerank_predictions(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results):
     # sum scores according the where vision and text predictions are the same
     combined_scores = []
     combined_predictions = []
@@ -70,11 +77,12 @@ def rerank_predictions(vision_scores, vision_predictions, text_scores, text_pred
         for score, pred in zip(v_scores, v_preds):
             if pred not in score_dict:
                 score_dict[pred] = 0
-            score_dict[pred] += alpha_vision * score
+            score_dict[pred] += w_alpha[pred][0] * score
         for score, pred in zip(t_scores, t_preds):
             if pred not in score_dict:
                 score_dict[pred] = 0
-            score_dict[pred] += (1-alpha_vision) * score
+            #score = (score-0.4)/sqrt(0.4)  # convert cosine sim to z-score
+            score_dict[pred] += w_alpha[pred][1] * score
         # sort by score
         sorted_items = sorted(score_dict.items(), key=lambda x: x[1], reverse=True)
         preds_sorted = [item[0] for item in sorted_items][:max_results]
@@ -136,14 +144,15 @@ def main(args):
             dataset=database_subset_ds, num_workers=args.num_workers, batch_size=args.batch_size
         )
         
-        if args.is_dual_encoder and args.dual_encoder_fusion == 'each':
-            vision_descriptors = np.empty((len(test_ds), model.vision_encoder_dim), dtype="float32")
-            text_descriptors = np.empty((len(test_ds), model.text_encoder_dim), dtype="float32")            
-        else:            
-            all_descriptors = np.empty((len(test_ds), model.encoder_dim), dtype="float32")
+        vision_descriptors = np.empty((len(test_ds), model.vision_encoder_dim), dtype="float32")
+        text_descriptors = np.empty((len(test_ds), model.text_encoder_dim), dtype="float32")            
+        all_descriptors = np.empty((len(test_ds), model.encoder_dim), dtype="float32")
+        w_alpha = np.empty((len(test_ds), 2), dtype="float32")
+        w_alpha[:,0] = args.alpha_vision
+        w_alpha[:,1] = 1.0-args.alpha_vision
             
         for images, indices, texts in tqdm(database_dataloader):
-            encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors)
+            encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors, w_alpha)
 
         logger.debug("Extracting queries descriptors for evaluation/testing using batch size 1")
         queries_subset_ds = Subset(
@@ -151,14 +160,15 @@ def main(args):
         )
         queries_dataloader = DataLoader(dataset=queries_subset_ds, num_workers=args.num_workers, batch_size=1)
         for images, indices, texts in tqdm(queries_dataloader):
-            encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors)
-    
-    alpha = args.alpha_vision        
+            encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors, w_alpha)
+
+    alpha = args.alpha_vision
+    alpha = w_alpha
     # Get queries predictions with alpha between 0.6 to 0.9 with jumps of 0.1
-    for alpha in [0.6, 0.7, 0.8, 0.9]:
+    #for alpha in [0.6, 0.7, 0.8, 0.9]:
     #for alpha in [0.9, 0.92, 0.94, 0.96, 0.98]:
-    #if 1:
-        if args.is_dual_encoder and args.dual_encoder_fusion=='each':        
+    if 1:
+        if (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting':        
             # vision
             vision_queries_descriptors = vision_descriptors[test_ds.num_database :]
             vision_database_descriptors = vision_descriptors[: test_ds.num_database]    

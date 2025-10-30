@@ -179,6 +179,8 @@ class WholeDatasetFromStruct(data.Dataset):
             img = self.input_transform(img)
         
         description = self.description[index]  
+        max_len = 512
+        description = description[:max_len]
 
         return img, index, description
 
