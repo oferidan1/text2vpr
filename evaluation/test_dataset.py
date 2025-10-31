@@ -64,6 +64,12 @@ class TestDataset(data.Dataset):
         super().__init__()
 
         self.database_paths = read_images_paths(database_folder)
+        
+        # only for debug - small data check!!!!
+        # random select a subset for quick testing in a random indices
+        # self.database_paths = np.random.choice(self.database_paths, size=20000, replace=False)
+        
+        
         self.images_paths = list(self.database_paths)
         self.num_database = len(self.database_paths)
         self.num_queries = 0        
@@ -121,7 +127,8 @@ class TestDataset(data.Dataset):
         description = ""      
         if image_path in self.images_paths_csv:   
             desc_index = self.images_paths_csv.index(image_path)
-            description = self.descriptions[desc_index]     
+            max_length = 1024
+            description = self.descriptions[desc_index][:max_length]     
         return normalized_img, index, description
 
     def __len__(self):

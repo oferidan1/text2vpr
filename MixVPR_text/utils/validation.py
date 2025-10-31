@@ -80,7 +80,7 @@ def get_validation_recalls_dynamic_fusion(r_list, q_list, r_text_list, q_text_li
         scores_t, predictions_t = faiss_index_t.search(q_text_list, max_k)
         
         #loop over indexes and and re-rank predictions according to dynamic weights where index_i == index_t
-        rerank_predictions(scores, predictions, scores_t, predictions_t, w_r, max_results=max_k)
+        rerank_predictions(scores, predictions, scores_t, predictions_t, w_r, max_results=max(k_values))
 
         # start calculating recall_at_k
         correct_at_k = np.zeros(len(k_values))

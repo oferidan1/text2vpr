@@ -3,12 +3,98 @@ import torch
 from torch.optim import lr_scheduler, optimizer
 import utils
 from torch import nn
+from torch.nn.parameter import Parameter
+import torch.nn.functional as F
 from sentence_transformers import SentenceTransformer
 from models import helper
 from peft import LoraConfig, get_peft_model, TaskType
 from transformers import AutoModel
 from transformers import AutoTokenizer, AutoModel
 import numpy as np
+
+
+
+# class GeM(nn.Module):
+#     def __init__(self, p=3, eps=1e-6, work_with_tokens=False):
+#         super().__init__()
+#         self.p = Parameter(torch.ones(1)*p)
+#         self.eps = eps
+#         self.work_with_tokens=work_with_tokens
+#     def forward(self, x):
+#         return gem(x, p=self.p, eps=self.eps, work_with_tokens=self.work_with_tokens)
+#     def __repr__(self):
+#         return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(self.eps) + ')'
+
+# def gem(x, p=3, eps=1e-6, work_with_tokens=False):
+#     if work_with_tokens:
+#         x = x.permute(0, 2, 1)
+#         # unseqeeze to maintain compatibility with Flatten
+#         return F.avg_pool1d(x.clamp(min=eps).pow(p), (x.size(-1))).pow(1./p).unsqueeze(3)
+#     else:
+#         return F.avg_pool2d(x.clamp(min=eps).pow(p), (x.size(-2), x.size(-1))).pow(1./p)
+
+# class Flatten(nn.Module):
+#     def __init__(self): super().__init__()
+#     def forward(self, x): assert x.shape[2] == x.shape[3] == 1; return x[:,:,0,0]
+
+class GeMPooling(nn.Module):
+    """
+    Generalized Mean Pooling (GeM) layer for sequence embeddings.
+    
+    Based on the paper: 
+    "Fine-tuning CNN Image Retrieval with Noisy Labels"
+    "Enhancing Sentence Embedding with Generalized Pooling"
+    """
+    def __init__(self, p=3.0, eps=1e-6):
+        super(GeMPooling, self).__init__()
+        self.p = nn.Parameter(torch.ones(1) * p)
+        self.eps = eps
+
+    def forward(self, x, attention_mask=None):
+        # x shape: (batch_size, sequence_length, hidden_size)
+        # x = F.normalize(x, p=2, dim=-1)
+        
+        # Clamp x to ensure stability with power operation, especially important if x has negative values
+        # We use .abs() and clamp, and then restore the sign.
+        # This is a simplification; a more robust implementation might handle signs differently
+        # or use a softplus for p if it's trainable and could become negative.
+        x_clamped = x.clamp(min=self.eps)
+        
+        # Apply the power p
+        x_p = x_clamped.pow(self.p)
+        
+        # If an attention mask is provided, apply it to ignore padding tokens
+        if attention_mask is not None:
+            # Expand mask to match hidden_size dimension: (batch_size, sequence_length) -> (batch_size, sequence_length, 1)
+            attention_mask_expanded = attention_mask.unsqueeze(-1).expand_as(x_p)
+            x_p = x_p * attention_mask_expanded.float()
+            
+            # Sum over the sequence dimension
+            sum_x_p = x_p.sum(dim=1)
+            
+            # Calculate the sum of weights (number of non-padding tokens)
+            sum_mask = torch.clamp(attention_mask_expanded.sum(dim=1), min=self.eps)
+            
+            # Divide to get the generalized mean
+            pooled_output = sum_x_p / sum_mask
+        else:
+            # If no mask, just take the mean over the sequence dimension
+            pooled_output = x_p.mean(dim=1)
+
+        # Apply the final power (1/p)
+        return pooled_output.pow(1. / self.p)
+
+    def __repr__(self):
+        return self.__class__.__name__ + \
+               '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + \
+               ', ' + 'eps=' + str(self.eps) + ')'
+
+class L2Norm(nn.Module):
+    def __init__(self, dim=1):
+        super().__init__()
+        self.dim = dim
+    def forward(self, x):
+        return F.normalize(x, p=2, dim=self.dim)
 
 class VPRModel_text(pl.LightningModule):
     """This is the main model for Visual Place Recognition
@@ -84,7 +170,7 @@ class VPRModel_text(pl.LightningModule):
         self.is_encode_image = is_encode_image
         self.is_encode_text = is_encode_text
         self.is_trainable_text_encoder = is_trainable_text_encoder
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.my_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         if is_encode_image:
             self.vpr_encoder = VPRModel(backbone_arch, pretrained, layers_to_freeze, layers_to_crop, agg_arch, agg_config, lr, optimizer, weight_decay, momentum, warmpup_steps, milestones, lr_mult, loss_name, miner_name, miner_margin, faiss_gpu)
@@ -97,6 +183,7 @@ class VPRModel_text(pl.LightningModule):
             # self.text_encoder = SentenceTransformer(text_encoder_name)
             self.tokenizer = AutoTokenizer.from_pretrained(text_encoder_name)  
             self.text_encoder = AutoModel.from_pretrained(text_encoder_name)
+            #self.text_aggregation = GeMPooling()
 
             if is_freeze_text:
                 # Freeze text encoder parameters
@@ -162,9 +249,15 @@ class VPRModel_text(pl.LightningModule):
         if self.is_encode_text:
             # text_embeds = self.text_encoder.encode(text, normalize_embeddings=True, convert_to_tensor=True)        
             text_tokens = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(img.device)
-            model_output = self.text_encoder(**text_tokens)            
+            model_output = self.text_encoder(**text_tokens)                        
             text_embeds = model_output[0][:, 0]
-            text_embeds = torch.nn.functional.normalize(text_embeds, p=2, dim=1)
+            text_embeds = torch.nn.functional.normalize(text_embeds, p=2, dim=1)            
+            
+            # GEM pooling            
+            # model_output = self.text_encoder(**text_tokens, output_hidden_states=True, return_dict=True)
+            # token_feature = model_output.last_hidden_state
+            # token_feature = self.text_aggregation(token_feature, attention_mask=text_tokens['attention_mask']) 
+            # text_embeds = torch.nn.functional.normalize(token_feature, p=2, dim=-1)
         
         batch_size = img.shape[0]   
         
@@ -202,7 +295,7 @@ class VPRModel_text(pl.LightningModule):
         return img_embeds
     
     def encode_text(self, text):
-        text_tokens = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(self.device)
+        text_tokens = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(self.my_device)
         model_output = self.text_encoder(**text_tokens)            
         text_embeds = model_output[0][:, 0]
         text_embeds = torch.nn.functional.normalize(text_embeds, p=2, dim=1)

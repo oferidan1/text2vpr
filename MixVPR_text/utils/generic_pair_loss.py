@@ -23,6 +23,13 @@ class GenericPairLoss(BaseMetricLossFunction):
         # calc text sim in the batch
         text_sim = torch.matmul(embeds2, embeds2.T)
         img_sim = torch.matmul(embeddings, embeddings.T)
+        
+        mu_text  = 0.6520
+        std_text = 0.0708
+        mu_img   = 0.0113
+        std_img  = 0.0514
+        text_sim = (text_sim - mu_text) / std_text
+        img_sim  = (img_sim - mu_img) / std_img
         # w_i_ij = torch.zeros_like(img_sim)
         # w_t_ij = torch.zeros_like(text_sim)
         # batch_size = embeddings.shape[0]       

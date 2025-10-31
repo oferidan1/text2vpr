@@ -72,6 +72,12 @@ def rerank_predictions(vision_scores, vision_predictions, text_scores, text_pred
     # sum scores according the where vision and text predictions are the same
     combined_scores = []
     combined_predictions = []
+    mu_text  = 0.6520
+    std_text = 0.0708
+    mu_img   = 0.0113
+    std_img  = 0.0514
+    text_scores = (text_scores - mu_text) / std_text
+    vision_scores  = (vision_scores - mu_img) / std_img
     for v_scores, v_preds, t_scores, t_preds in zip(vision_scores, vision_predictions, text_scores, text_predictions):
         score_dict = {}
         for score, pred in zip(v_scores, v_preds):
@@ -80,8 +86,7 @@ def rerank_predictions(vision_scores, vision_predictions, text_scores, text_pred
             score_dict[pred] += w_alpha[pred][0] * score
         for score, pred in zip(t_scores, t_preds):
             if pred not in score_dict:
-                score_dict[pred] = 0
-            #score = (score-0.4)/sqrt(0.4)  # convert cosine sim to z-score
+                score_dict[pred] = 0            
             score_dict[pred] += w_alpha[pred][1] * score
         # sort by score
         sorted_items = sorted(score_dict.items(), key=lambda x: x[1], reverse=True)
@@ -163,11 +168,13 @@ def main(args):
             encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors, w_alpha)
 
     alpha = args.alpha_vision
-    alpha = w_alpha
+    #alpha = w_alpha
     # Get queries predictions with alpha between 0.6 to 0.9 with jumps of 0.1
-    #for alpha in [0.6, 0.7, 0.8, 0.9]:
+    #for alpha in [0.3, 0.4, 0.5]:
     #for alpha in [0.9, 0.92, 0.94, 0.96, 0.98]:
     if 1:
+        # w_alpha[:,0] = alpha
+        # w_alpha[:,1] = 1.0-alpha
         if (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting':        
             # vision
             vision_queries_descriptors = vision_descriptors[test_ds.num_database :]
@@ -178,7 +185,7 @@ def main(args):
             text_database_descriptors = text_descriptors[: test_ds.num_database]    
             text_scores, text_predictions = get_queries_predictions(model.text_encoder_dim, text_database_descriptors, text_descriptors, text_queries_descriptors, args.max_results_reranking)
             # join vision and text predictions        
-            scores, predictions = rerank_predictions(vision_scores, vision_predictions, text_scores, text_predictions, alpha, max_results)
+            scores, predictions = rerank_predictions(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results)
         else:
             queries_descriptors = all_descriptors[test_ds.num_database :]
             database_descriptors = all_descriptors[: test_ds.num_database]    

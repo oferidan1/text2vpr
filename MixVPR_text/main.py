@@ -139,7 +139,7 @@ if __name__ == '__main__':
     )
     
     # # Manually call validation
-    # trainer.validate(model=model, datamodule=datamodule)
+    #trainer.validate(model=model, datamodule=datamodule)
 
     # we call the trainer, we give it the model and the datamodule
     trainer.fit(model=model, datamodule=datamodule)
