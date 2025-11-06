@@ -1,5 +1,6 @@
 import argparse
 import os
+from datetime import datetime
 from typing import Dict, List
 
 import numpy as np
@@ -86,7 +87,7 @@ def main() -> None:
         "--seg-backend",
         type=str,
         default="hf_segformer_b2_ade",
-        choices=["hf_segformer_b2_ade", "torchvision_deeplabv3"],
+        choices=["hf_segformer_b2_ade", "torchvision_deeplabv3", "hf_oneformer_ade_swinl"],
         help="Segmentation backend",
     )
     parser.add_argument(
@@ -136,16 +137,65 @@ def main() -> None:
         default="",
         help="Optional torch dtype for LLM: float16 or bfloat16",
     )
+    parser.add_argument(
+        "--score-only",
+        action="store_true",
+        help="If set, prompt the LLM to output only a single 1..5 score; explanation fields will be empty.",
+    )
+    parser.add_argument(
+        "--max-rows",
+        type=int,
+        default=0,
+        help="Optional limit on number of rows to process after filtering (0 = no limit)",
+    )
+    parser.add_argument(
+        "--city",
+        type=str,
+        default="",
+        help=(
+            "If set, only process rows belonging to this city (derived as the directory after 'Images' in image_path)."
+        ),
+    )
+    parser.add_argument(
+        "--country",
+        type=str,
+        default="",
+        help=(
+            "Alias for --city; filter by the directory immediately under 'Images' (e.g., Images/London)."
+        ),
+    )
 
     args = parser.parse_args()
 
+    # Map alias: --country -> --city if provided
+    if getattr(args, "country", "") and not getattr(args, "city", ""):
+        args.city = args.country
+
     os.makedirs(args.output_dir, exist_ok=True)
+    # Global run log
+    global_log = os.path.join(args.output_dir, "run_log.txt")
+    with open(global_log, "a", encoding="utf-8") as flog:
+        flog.write(
+            f"[{datetime.now().isoformat(timespec='seconds')}] predictions_csv={args.predictions_csv} images_root={args.images_root} seg_backend={args.seg_backend} prob_threshold={args.prob_threshold} min_area_pct={args.min_area_pct} model_name={args.model_name} dtype={args.dtype or ''} city_filter={args.city or ''} score_only={bool(args.score_only)}\n"
+        )
     df = pd.read_csv(args.predictions_csv)
     if "image_path" not in df.columns or "description" not in df.columns:
         raise SystemExit("Predictions CSV must contain 'image_path' and 'description'.")
 
     seg = Segmenter(SegConfig(backend=args.seg_backend, prob_threshold=args.prob_threshold, min_area_pct=args.min_area_pct))
     judge = HFJudge(JudgeConfig(model_name=args.model_name, temperature=args.temperature, dtype=args.dtype or None))
+
+    # Derive city from image_path and optionally filter by --city
+    df["city_id"] = df["image_path"].apply(extract_city_from_path)
+    if args.city:
+        df = df[df["city_id"].astype(str) == str(args.city)]
+        if df.empty:
+            print(f"No rows found for city '{args.city}'. Nothing to do.")
+            return
+
+    # Optional limit after filtering
+    if args.max_rows and args.max_rows > 0:
+        df = df.head(int(args.max_rows))
 
     # Prepare outputs
     global_path = os.path.join(args.output_dir, "text_vs_segments_consistency_all.csv")
@@ -155,26 +205,36 @@ def main() -> None:
         "city_id",
         "image_path",
         "objects_detected",
+        "objects_detected_relevant",
         "llm_score",
         "llm_explanation",
         "omit_list",
         "suggested_description",
+        "original_description",
         "detected_in_text_ratio",
         "text_in_detected_ratio",
         "overlay_path",
+        "detected_relevant_not_in_text",
+        "text_relevant_not_detected",
     ]
 
     # Group by city for tidy outputs and progress
-    df["city_id"] = df["image_path"].apply(extract_city_from_path)
     for city, g in df.groupby("city_id"):
         city_dir = os.path.join(args.output_dir, str(city))
-        overlays_dir = args.debug_dir or os.path.join(city_dir, "debug_overlays")
+        overlays_dir = args.debug_dir or os.path.join(city_dir, "scores")
         os.makedirs(city_dir, exist_ok=True)
-        if args.debug_seg:
-            os.makedirs(overlays_dir, exist_ok=True)
+        os.makedirs(overlays_dir, exist_ok=True)
         city_results_path = os.path.join(city_dir, f"text_vs_segments_consistency_{city}.csv")
         if os.path.exists(city_results_path):
             os.remove(city_results_path)
+
+        # Per-city run log entry
+        city_log = os.path.join(city_dir, "run_log.txt")
+        with open(city_log, "a", encoding="utf-8") as flog:
+            flog.write(
+                f"[{datetime.now().isoformat(timespec='seconds')}] predictions_csv={args.predictions_csv} seg_backend={args.seg_backend} prob_threshold={args.prob_threshold} min_area_pct={args.min_area_pct} model_name={args.model_name} dtype={args.dtype or ''} overlays_dir={overlays_dir} results_csv={city_results_path} score_only={bool(args.score_only)}\n"
+            )
+        print(f"{city}: saving overlays to {overlays_dir}")
 
         for _, row in tqdm(g.iterrows(), total=g.shape[0], desc=f"{city} images", unit="img"):
             rel_path = str(row["image_path"])
@@ -182,32 +242,72 @@ def main() -> None:
             description = str(row["description"]) if not pd.isna(row["description"]) else ""
 
             overlay_path = ""
+            pre_path = ""
+            overlay_img = None
+            detected_relevant_not_in_text = []
+            text_relevant_not_detected = []
             try:
                 label_map, objects = seg.segment_image(img_path)
-                if args.debug_seg:
-                    overlay = seg.overlay_mask(img_path, label_map, seg.default_palette())
+                # Build VPR overlay and sets
+                overlay_img, matched_rel, detected_not_in_text_set, text_not_detected_set = seg.build_vpr_overlay(
+                    img_path, label_map, description
+                )
+                detected_relevant_not_in_text = sorted(list(detected_not_in_text_set))
+                text_relevant_not_detected = sorted(list(text_not_detected_set))
+                # Save a provisional overlay immediately (pre-score) so outputs appear during long runs
+                try:
                     base = os.path.splitext(os.path.basename(img_path))[0]
-                    overlay_path = os.path.join(overlays_dir, f"{base}_overlay.jpg")
-                    overlay.save(overlay_path)
+                    pre_dir = os.path.join(overlays_dir, "_pre")
+                    os.makedirs(pre_dir, exist_ok=True)
+                    pre_path = os.path.join(pre_dir, f"{base}_overlay_vpr.jpg")
+                    overlay_img.save(pre_path)
+                except Exception as save_e:
+                    print(f"Warning: failed to save provisional overlay for {img_path}: {save_e}")
             except Exception as e:
                 objects = []
 
-            prompt = build_text_vs_objects_prompt(objects, description)
+            # Filter objects to VPR-relevant for scoring
+            objects_relevant = [o for o in objects if seg.is_vpr_relevant(o)]
+            prompt = build_text_vs_objects_prompt(objects_relevant, description, score_only=bool(args.score_only))
             verdict = judge.judge(prompt, system_instructions=SYSTEM_INSTRUCTIONS_TXT_OBJ)
 
-            overlap = compute_simple_overlap_scores(objects, description)
+            overlap = compute_simple_overlap_scores(objects_relevant, description)
+
+            # Save overlay into per-score subdirectory if available
+            llm_score = int(verdict.get("score", 3))
+            if overlay_img is not None:
+                base = os.path.splitext(os.path.basename(img_path))[0]
+                score_dir = os.path.join(overlays_dir, str(llm_score))
+                os.makedirs(score_dir, exist_ok=True)
+                try:
+                    overlay_annotated = seg.annotate_overlay(
+                        overlay_img,
+                        description,
+                        blue_items=set(matched_rel),
+                        red_items=set(detected_relevant_not_in_text),
+                    )
+                    overlay_path = os.path.join(score_dir, f"{base}_overlay_vpr.jpg")
+                    overlay_annotated.save(overlay_path)
+                except Exception as save_e:
+                    print(f"Warning: failed to save scored overlay for {img_path}: {save_e}")
+                    if pre_path:
+                        overlay_path = pre_path
 
             out_row = {
                 "city_id": city,
                 "image_path": img_path,
                 "objects_detected": ", ".join(objects),
-                "llm_score": int(verdict.get("score", 3)),
-                "llm_explanation": str(verdict.get("explanation", ""))[:1000],
+                "objects_detected_relevant": ", ".join(objects_relevant),
+                "llm_score": llm_score,
+                "llm_explanation": "" if args.score_only else str(verdict.get("explanation", ""))[:1000],
                 "omit_list": ", ".join(verdict.get("omit_list", [])) if isinstance(verdict.get("omit_list", []), list) else str(verdict.get("omit_list", "")),
                 "suggested_description": str(verdict.get("suggested_description", ""))[:1000],
+                "original_description": description,
                 "detected_in_text_ratio": overlap.get("detected_in_text_ratio", 0.0),
                 "text_in_detected_ratio": overlap.get("text_in_detected_ratio", 0.0),
                 "overlay_path": overlay_path,
+                "detected_relevant_not_in_text": ", ".join(detected_relevant_not_in_text),
+                "text_relevant_not_detected": ", ".join(text_relevant_not_detected),
             }
 
             append_row_to_csv(city_results_path, out_row, header)
