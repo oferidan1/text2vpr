@@ -1,53 +1,70 @@
-## Intra-Place Textual Consistency Judge
+## Pairwise VPR Text Consistency Judge (validation_2)
 
-This module evaluates how consistent the generated descriptions are for images within the same clustered place/viewpoint.
+Evaluates pairwise textual consistency within each clustered place to surface overlap, critical/noncritical inconsistencies, and a 1–5 VPR-consistency score per pair. Aggregates median and mean scores per cluster.
 
 ### Inputs
-- Clustered assignments per city (from `parse_gsv_cities.py`): `Dataframes_clustered/{City}.csv` with columns including `panoid`, `cluster_id`, `city_id`.
-- Predictions CSV with descriptions (example: `gsv_cities_predictions_nan_fix.csv`) with columns:
-  - `image_path` — e.g., `Images/London/London_0001938_..._nZ0J9gVZM59D70Su1eG6jg.jpg`
-  - `description` — generated text
-
-The judge extracts `panoid` from `image_path` and joins with clustered assignments.
-
-### Installation
-Requires recent `transformers`, `tqdm`, and a working PyTorch install.
-
-```bash
-pip install transformers accelerate torch tqdm
-```
+- Clustered assignments per city: `Dataframes_clustered/{City}.csv` with `panoid,cluster_id,city_id`.
+- Predictions CSV: `image_path,description` with paths containing `Images/<City>/...` and a filename ending with `_PANOID.jpg`.
 
 ### CLI Usage
-
-Run the judge for all cities (shows a per-city progress bar over clusters):
-
 ```bash
-python /mnt/d/dan/git_projects/text2vpr/dataset_builder/validation/run_intra_place_judge.py \
-  --predictions-csv /mnt/d/dan/git_projects/text2vpr/gsv_cities_predictions_nan_fix.csv \
-  --clustered-dir /mnt/d/dan/git_projects/text2vpr/Dataframes_clustered \
+python /mnt/d/dan/git_projects/text2vpr/dataset_builder/validation_2/run_pairwise_place_judge.py \
+  --predictions-csv /mnt/d/data/gsv_cities/gsv_cities_predictions_nan_fix.csv \
+  --clustered-dir /mnt/d/dan/git_projects/text2vpr/Dataframes_clustered_debug \
   --output-dir /mnt/d/dan/git_projects/text2vpr/validation_outputs \
+  --city London \
   --model-name microsoft/Phi-3.5-mini-instruct \
-  --max-descriptions 20 --temperature 0.2
+  --max-pairs-per-cluster 120
 ```
 
-Single city only (matches `city_id`):
-
-```bash
-python /mnt/d/dan/git_projects/text2vpr/dataset_builder/validation/run_intra_place_judge.py \
-  --predictions-csv /mnt/d/dan/git_projects/text2vpr/gsv_cities_predictions_nan_fix.csv \
-  --clustered-dir /mnt/d/dan/git_projects/text2vpr/Dataframes_clustered \
-  --output-dir /mnt/d/dan/git_projects/text2vpr/validation_outputs \
-  --city London
-```
+Flags:
+- `--include-descriptions-in-pairs` to also store the raw descriptions per pair.
+- `--dtype {float16,bfloat16}` to accelerate on supported GPUs.
 
 ### Outputs
-- Global results: `validation_outputs/intra_place_consistency_all.csv`
-- Per-city results: `validation_outputs/{City}/intra_place_consistency_{City}.csv`
-- Per-cluster image lists: `validation_outputs/{City}/clusters/cluster_{cluster_id}.csv` (columns: `image_path`, `panoid`, `description`)
+- Global summary: `validation_outputs/pairwise_consistency_all.csv`
+- Per-city summary: `validation_outputs/{City}/pairwise_consistency_{City}.csv`
+- Per-cluster pairs: `validation_outputs/{City}/clusters/cluster_{cluster_id}_pairs.csv`
 
-Each result row contains an integer `score` in [1..5] and a short `explanation` of inconsistencies if any.
+Per-pair columns:
+- `image_i,image_j,panoid_i,panoid_j`
+- `overlap` (JSON list), `critical_inconsistencies` (JSON list), `noncritical_inconsistencies` (JSON list)
+- `score` (1–5), `rationale`
+- optional: `description_i,description_j`
 
-### Model configuration
-The default is `microsoft/Phi-3.5-mini-instruct`. Any compatible HF causal LM can be used via `--model-name`. Use `--dtype float16` (or `bfloat16`) for GPU-accelerated inference if supported.
+Per-cluster row:
+- `city_id,cluster_id,num_images,num_pairs_evaluated,cluster_score_median,cluster_score_mean,cluster_pairs_csv`
+
+## Methods
+- single: single-shot cluster judge over all (or sampled) descriptions.
+  - Outputs per-cluster outlier CSV: `cluster_{cluster_id}_single.csv` and per-city/global summaries in `cluster_consistency_*.csv`.
+- map_reduce: minibatch map step with programmatic reduce.
+  - Outputs per-cluster outlier CSV: `cluster_{cluster_id}_mapreduce.csv` and per-city/global summaries in `cluster_consistency_*.csv`.
+
+### Cluster runner usage
+```bash
+python /mnt/d/dan/git_projects/text2vpr/dataset_builder/validation_2/run_text_cluster_judge.py \
+  --predictions-csv /mnt/d/data/gsv_cities/gsv_cities_predictions_nan_fix.csv \
+  --clustered-dir /mnt/d/dan/git_projects/text2vpr/Dataframes_clustered_debug \
+  --output-dir /mnt/d/dan/git_projects/text2vpr/validation_outputs_2 \
+  --city London \
+  --method single \
+  --max-descriptions 60
+```
+
+Map-reduce:
+```bash
+python /mnt/d/dan/git_projects/text2vpr/dataset_builder/validation_2/run_text_cluster_judge.py \
+  --predictions-csv /mnt/d/data/gsv_cities/gsv_cities_predictions_nan_fix.csv \
+  --clustered-dir /mnt/d/dan/git_projects/text2vpr/Dataframes_clustered_debug \
+  --output-dir /mnt/d/dan/git_projects/text2vpr/validation_outputs_2 \
+  --city London \
+  --method map_reduce \
+  --chunk-size 16
+```
+
+Per-city/global CSV schema:
+- single: `city_id,cluster_id,num_images,num_used_descriptions,cluster_score,overlap_themes,critical_inconsistencies,noncritical_inconsistencies,outliers_csv`
+- map_reduce: `city_id,cluster_id,num_images,num_chunks,cluster_score_median,cluster_score_mean,overlap_themes,critical_inconsistencies,noncritical_inconsistencies,outliers_csv`
 
 
