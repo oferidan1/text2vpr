@@ -5,6 +5,7 @@ python text_to_image_retriever.py --input /mnt/d/dan/datasets/descriptions.csv -
 
 python dataset_creator_gemini_batch.py --job_name=train-job-6 --result=train-6.csv --start_image=50000
 
+cmd.exe /K C:\ProgramData\Anaconda3\Scripts\activate.bat C:\ProgramData\Anaconda3
 
 blip eval on queries night:  R@1: 1.7, R@5: 2.6, R@10: 4.1, R@20: 6.4
 
@@ -47,5 +48,22 @@ nordland mixvpr_bge_fusion_mlp [1024]:  	R@1: 62.1, R@5: 76.8, R@10: 82.3, R@20:
 nordland mixvpr_bge_fusion_mlp_res [1024]:  R@1: 63.5, R@5: 78.2, R@10: 83.4, R@20: 87.9
 
 
+amstertime stats:
+Text Similarity matrix mean: 0.95006442        
+Text Similarity matrix std: 0.01885697         
+Text Similarity matrix min: 0.82373363         
+Text Similarity matrix max: 0.99433124         
+Vision Similarity matrix mean: 0.06273454      
+Vision Similarity matrix std: 0.06114077       
+Vision Similarity matrix min: -0.21891302      
+Vision Similarity matrix max: 1.00000048       
 
-
+gsv cities stats:
+Text Similarity matrix mean: 0.94352311     
+Text Similarity matrix std: 0.02033227      
+Text Similarity matrix min: 0.74699450      
+Text Similarity matrix max: 0.99511456      
+Vision Similarity matrix mean: 0.01115189   
+Vision Similarity matrix std: 0.05092559    
+Vision Similarity matrix min: -0.27077895   
+Vision Similarity matrix max: 0.80923396    

@@ -10,7 +10,7 @@ from loguru import logger
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Subset
 from tqdm import tqdm
-from vlm_model import VLM_Model
+from vlm_model import VLM_Model 
 import os
 from test_dataset import TestDataset
 import visualizations
@@ -62,6 +62,10 @@ def main(args):
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     os.environ["TOKENIZERS_PARALLELISM"] = "False"
     start_time = datetime.now()
+    
+    args.is_dual_encoder = 1
+    args.encode_mode = 'both'
+    args.dual_encoder_fusion = 'each'
 
     logger.remove()  # Remove possibly previously existing loggers
     log_dir = Path("logs") / args.log_dir / start_time.strftime("%Y-%m-%d_%H-%M-%S")
@@ -107,18 +111,30 @@ def main(args):
         
         
         sim_matrix_t = np.matmul(text_descriptors, text_descriptors.T)
-        mu_t = np.mean(sim_matrix_t)
-        std_t = np.std(sim_matrix_t)
-        logger.info(f"Text Similarity matrix mean: {mu_t:.4f}")
-        logger.info(f"Text Similarity matrix std: {std_t:.4f}")
-        
+        #calc data mu and std over text sim matrix but without diagonal elements and lower triangle
+        upper_indices = np.triu_indices_from(sim_matrix_t, k=1) 
+        sim_matrix_t_upper = sim_matrix_t[upper_indices]
+        mu_t  = np.mean(sim_matrix_t_upper)
+        std_t = np.std(sim_matrix_t_upper)
+        min_t = np.min(sim_matrix_t_upper)
+        max_t = np.max(sim_matrix_t_upper)
+        logger.info(f"Text Similarity matrix mean: {mu_t:.8f}")
+        logger.info(f"Text Similarity matrix std: {std_t:.8f}")
+        logger.info(f"Text Similarity matrix min: {min_t:.8f}")
+        logger.info(f"Text Similarity matrix max: {max_t:.8f}")
+
         sim_matrix_v = np.matmul(vision_descriptors, vision_descriptors.T)
-        mu_v = np.mean(sim_matrix_v)
-        std_v = np.std(sim_matrix_v)
-
-        logger.info(f"Vision Similarity matrix mean: {mu_v:.4f}")
-        logger.info(f"Vision Similarity matrix std: {std_v:.4f}")
-
+        #calc data mu and std over vision sim matrix but without diagonal elements and lower triangle
+        upper_indices = np.triu_indices_from(sim_matrix_v, k=1) 
+        sim_matrix_v_upper = sim_matrix_v[upper_indices]
+        mu_v  = np.mean(sim_matrix_v_upper)
+        std_v = np.std(sim_matrix_v_upper)
+        min_v = np.min(sim_matrix_v_upper)
+        max_v = np.max(sim_matrix_v_upper)
+        logger.info(f"Vision Similarity matrix mean: {mu_v:.8f}")
+        logger.info(f"Vision Similarity matrix std: {std_v:.8f}")
+        logger.info(f"Vision Similarity matrix min: {min_v:.8f}")
+        logger.info(f"Vision Similarity matrix max: {max_v:.8f}")
 
 
 if __name__ == "__main__":

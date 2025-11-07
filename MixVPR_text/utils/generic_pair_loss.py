@@ -3,7 +3,7 @@ import torch
 from pytorch_metric_learning.utils import common_functions as c_f
 from pytorch_metric_learning.utils import loss_and_miner_utils as lmu
 from .base_metric_loss_function import BaseMetricLossFunction
-
+import torch.nn.functional as F
 
 class GenericPairLoss(BaseMetricLossFunction):
     def __init__(self, mat_based_loss, **kwargs):
@@ -18,30 +18,50 @@ class GenericPairLoss(BaseMetricLossFunction):
         if all(len(x) <= 1 for x in indices_tuple):
             return self.zero_losses()
         mat = self.distance(embeddings, ref_emb)
-        w_i = w[:,0].unsqueeze(1)
-        w_t = w[:,1].unsqueeze(1)   
-        # calc text sim in the batch
-        text_sim = torch.matmul(embeds2, embeds2.T)
-        img_sim = torch.matmul(embeddings, embeddings.T)
         
-        mu_text  = 0.6520
-        std_text = 0.0708
-        mu_img   = 0.0113
+        # calc text sim in the batch
+        img_sim = torch.matmul(embeddings, embeddings.T)
+        text_sim = torch.matmul(embeds2, embeds2.T)
+        # text_sim = F.cosine_similarity(embeds2, embeds2, dim=-1)
+        # img_sim = F.cosine_similarity(embeddings, embeddings, dim=-1)
+        text_sim = torch.clamp(text_sim, min=-1.0, max=1.0)
+        img_sim  = torch.clamp(img_sim, min=-1.0, max=1.0)
+                
+        # mu_text  = 0.6520
+        # std_text = 0.0708
+        mu_text  = 0.9435
+        std_text = 0.0201
+        min_text = 0.5
+        max_text = 1.0
+        mu_img   = 0.0111
         std_img  = 0.0514
+        min_img  = -0.4
+        max_img  = 1.0
         text_sim = (text_sim - mu_text) / std_text
         img_sim  = (img_sim - mu_img) / std_img
-        # w_i_ij = torch.zeros_like(img_sim)
-        # w_t_ij = torch.zeros_like(text_sim)
-        # batch_size = embeddings.shape[0]       
+        # text_sim = (text_sim - min_text) / (max_text - min_text) 
+        # img_sim  = (img_sim - min_img) / (max_img - min_img)         
+      
+        # w_i = w[:,0].unsqueeze(1)
+        # w_t = w[:,1].unsqueeze(1)
+        # w_i_ij_old = torch.zeros_like(img_sim)
+        # w_t_ij_old = torch.zeros_like(text_sim)
+        # batch_size = img_sim.shape[0]       
         # for i in range(batch_size):
         #     for j in range(batch_size):
-        #         w_i_ij[i, j] = (w_i[i] + w_i[j]) / 2.0
-        #         w_t_ij[i, j] = (w_t[i] + w_t[j]) / 2.0
+        #         w_i_ij_old[i, j] = (w_i[i] + w_i[j]) / 2.0
+        #         w_t_ij_old[i, j] = (w_t[i] + w_t[j]) / 2.0
+
+        # # calculate dynamic weights
+        w_i = w[:,0].unsqueeze(1)
+        w_t = w[:,1].unsqueeze(1)   
         w_i_ij = ((w_i.unsqueeze(1) + w_i.unsqueeze(0)) / 2.0).squeeze(-1)
         w_t_ij = ((w_t.unsqueeze(1) + w_t.unsqueeze(0)) / 2.0).squeeze(-1)
-
-        # calculate dynamic weights
         s_ij = w_i_ij * img_sim + w_t_ij * text_sim
+
+        # calculate fixed weights
+        # s_ij = w*img_sim + (1-w)*text_sim
+
         return self.loss_method(mat, indices_tuple, s_ij)
 
     def _compute_loss(self):

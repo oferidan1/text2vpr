@@ -48,7 +48,7 @@ class VLM_Model:
             )
             model_state_dict = torch.load(args.model_name)['state_dict']
             self.single_encoder.load_state_dict(model_state_dict)
-            self.single_encoder.eval().to(args.device)
+            self.single_encoder = self.single_encoder.eval().to(args.device)
             self.encoder_dim = self.single_encoder.embeds_dim           
         
             

@@ -16,6 +16,8 @@ default_transform = T.Compose([
 # NOTE: Hard coded path to dataset folder 
 BASE_PATH = '/mnt/d/data/gsv_cities/'
 TRAIN_CSV = '/mnt/d/data/gsv_cities/gsv_cities_predictions.csv'
+# BASE_PATH = 'd:/data/gsv_cities/'
+# TRAIN_CSV = 'd:/data/gsv_cities/gsv_cities_predictions.csv'
 
 if not Path(BASE_PATH).exists():
     raise FileNotFoundError(

@@ -28,7 +28,7 @@ def parse_arguments():
     parser.add_argument("--is_freeze_text", type=int, default="1", help="freeze text encoder or not")
     parser.add_argument("--is_freeze_vpr", type=int, default="1", help="freeze vpr encoder or not")    
     parser.add_argument("--embeds_dim", type=int, default=1024, help="dimension of the embeddings")
-    parser.add_argument("--fusion_type", type=str, default='dynamic_weighting', help="type of fusion to use: mlp, transformer, dynamic_weighting")
+    parser.add_argument("--fusion_type", type=str, default='dynamic_weighting', help="type of fusion to use: mlp, transformer, dynamic_weighting, fixed_weighting")
     parser.add_argument("--is_encode_image", type=int, default="1", help="encode image or not")
     parser.add_argument("--is_encode_text", type=int, default="1", help="encode text or not")
     parser.add_argument("--is_trainable_text_encoder", type=int, default="0", help="train text encoder or not")
@@ -55,7 +55,8 @@ if __name__ == '__main__':
         num_workers=4,#28,
         show_data_stats=True,
         #val_set_names=['pitts30k_val', 'pitts30k_test', 'msls_val'], # pitts30k_val, pitts30k_test, msls_val
-        val_set_names=['pitts30k_test'],
+        #val_set_names=['pitts30k_test'],
+        val_set_names=[],
     )
     
     # examples of backbones
@@ -113,13 +114,21 @@ if __name__ == '__main__':
     
     # model params saving using Pytorch Lightning
     # we save the best 3 models accoring to Recall@1 on pittsburg val
-    checkpoint_cb = ModelCheckpoint(
-        monitor='pitts30k_test/R1',
+    # checkpoint_cb = ModelCheckpoint(
+    #     monitor='pitts30k_test/R1',
+    #     filename=f'{"resnet50"}' +
+    #     '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_test/R1:.4f}]_R5[{pitts30k_test/R5:.4f}]',
+    #     auto_insert_metric_name=False,
+    #     save_weights_only=True,
+    #     save_top_k=3,
+    #     mode='max',)
+    checkpoint_cb = ModelCheckpoint(        
         filename=f'{"resnet50"}' +
-        '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_test/R1:.4f}]_R5[{pitts30k_test/R5:.4f}]',
+        '_epoch({epoch:02d})_step({step:04d})',
         auto_insert_metric_name=False,
         save_weights_only=True,
-        save_top_k=3,
+        save_top_k=-1,
+        every_n_epochs=1,
         mode='max',)
 
     #------------------

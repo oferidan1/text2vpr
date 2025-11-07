@@ -16,6 +16,56 @@ from test_dataset import TestDataset
 import visualizations
 from math import sqrt
 
+def rerank_predictions(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results):
+    # sum scores according the where vision and text predictions are the same
+    combined_scores = []
+    combined_predictions = []
+    # pre-computed mu and std for normalization over GSV
+    mu_text  = 0.9435
+    std_text = 0.0201    
+    mu_img   = 0.0111
+    std_img  = 0.0514
+    # pre-computed mu and std for normalization over amstertime 
+    # mu_text  = 0.9501
+    # std_text = 0.0189
+    # mu_img   = 0.0627
+    # std_img  = 0.0612
+    # pre-computed mu and std for normalization over nordland 
+    # mu_text  = 0.7508
+    # std_text = 0.0618
+    # mu_img   = 0.2785
+    # std_img  = 0.105
+    #clip to avoid negative scores
+    text_scores = np.clip(text_scores, a_min=-1.0, a_max=1.0)
+    vision_scores = np.clip(vision_scores, a_min=-1.0, a_max=1.0)
+    # normalize scores
+    #text_scores = (text_scores - 0.5) * 2
+
+    print("mean w_alpha vision:", w_alpha[:,0].mean(), w_alpha[:,0].std())
+    print("mean w_alpha text:", w_alpha[:,1].mean(), w_alpha[:,1].std())
+    text_scores = (text_scores - mu_text) / std_text
+    vision_scores  = (vision_scores - mu_img) / std_img
+    for v_scores, v_preds, t_scores, t_preds in zip(vision_scores, vision_predictions, text_scores, text_predictions):
+        score_dict = {}
+        for score, pred in zip(v_scores, v_preds):
+            if pred not in score_dict:
+                score_dict[pred] = 0
+            score_dict[pred] += w_alpha[pred][0] * score
+        for score, pred in zip(t_scores, t_preds):
+            if pred not in score_dict:
+                score_dict[pred] = 0            
+            score_dict[pred] += w_alpha[pred][1] * score
+        # sort by score
+        sorted_items = sorted(score_dict.items(), key=lambda x: x[1], reverse=True)
+        preds_sorted = [item[0] for item in sorted_items][:max_results]
+        scores_sorted = [item[1] for item in sorted_items][:max_results]
+        combined_predictions.append(preds_sorted)
+        combined_scores.append(scores_sorted)
+        
+    combined_predictions = np.array(combined_predictions)
+    combined_scores = np.array(combined_scores)
+    return combined_scores, combined_predictions
+
 def normlize_features(x):
     return x / np.linalg.norm(x, axis=1, keepdims=True)    
 
@@ -50,17 +100,26 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
         descriptors, text_features, w = model.encode_single(images.to(args.device), texts)
         descriptors = descriptors.cpu().numpy()
         all_descriptors[indices.numpy(), :] = descriptors
-        if args.fusion_type == 'dynamic_weighting':
+        if args.fusion_type == 'dynamic_weighting' or args.fusion_type == 'fixed_weighting':
             vision_descriptors[indices.numpy(), :] = descriptors
             text_features = text_features.cpu().numpy()
             text_descriptors[indices.numpy(), :] = text_features  
             w = w.cpu().numpy()
-            w_alpha[indices.numpy(), :] = w
+            if args.fusion_type == 'fixed_weighting':
+                #make w a 2D vector of [w, 1-w]. w in numpy
+                w = np.repeat(w, indices.shape[0], axis=0)
+                #make w a 2D vector of [w, 1-w]
+                w_alpha[indices.numpy(), :] = np.stack([w, 1-w], axis=1)                
+            else:
+                w_alpha[indices.numpy(), :] = w
             
 def get_queries_predictions(encoder_dim, database_descriptors, all_descriptors, queries_descriptors, max_results):
      # Use a kNN to find predictions
     #faiss_index = faiss.IndexFlatL2(encoder_dim)
     faiss_index = faiss.IndexFlatIP(encoder_dim)
+    #normilize descriptors for cosine similarity
+    database_descriptors = normlize_features(database_descriptors)      
+    queries_descriptors = normlize_features(queries_descriptors)
     faiss_index.add(database_descriptors)
     del database_descriptors, all_descriptors
 
@@ -68,36 +127,6 @@ def get_queries_predictions(encoder_dim, database_descriptors, all_descriptors, 
     scores, predictions = faiss_index.search(queries_descriptors, max_results)
     return scores, predictions
 
-def rerank_predictions(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results):
-    # sum scores according the where vision and text predictions are the same
-    combined_scores = []
-    combined_predictions = []
-    mu_text  = 0.6520
-    std_text = 0.0708
-    mu_img   = 0.0113
-    std_img  = 0.0514
-    text_scores = (text_scores - mu_text) / std_text
-    vision_scores  = (vision_scores - mu_img) / std_img
-    for v_scores, v_preds, t_scores, t_preds in zip(vision_scores, vision_predictions, text_scores, text_predictions):
-        score_dict = {}
-        for score, pred in zip(v_scores, v_preds):
-            if pred not in score_dict:
-                score_dict[pred] = 0
-            score_dict[pred] += w_alpha[pred][0] * score
-        for score, pred in zip(t_scores, t_preds):
-            if pred not in score_dict:
-                score_dict[pred] = 0            
-            score_dict[pred] += w_alpha[pred][1] * score
-        # sort by score
-        sorted_items = sorted(score_dict.items(), key=lambda x: x[1], reverse=True)
-        preds_sorted = [item[0] for item in sorted_items][:max_results]
-        scores_sorted = [item[1] for item in sorted_items][:max_results]
-        combined_predictions.append(preds_sorted)
-        combined_scores.append(scores_sorted)
-        
-    combined_predictions = np.array(combined_predictions)
-    combined_scores = np.array(combined_scores)
-    return combined_scores, combined_predictions
 
 def main(args):
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
@@ -175,7 +204,7 @@ def main(args):
     if 1:
         # w_alpha[:,0] = alpha
         # w_alpha[:,1] = 1.0-alpha
-        if (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting':        
+        if (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting': 
             # vision
             vision_queries_descriptors = vision_descriptors[test_ds.num_database :]
             vision_database_descriptors = vision_descriptors[: test_ds.num_database]    
