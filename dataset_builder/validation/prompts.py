@@ -2,7 +2,7 @@ from typing import List
 
 
 SYSTEM_INSTRUCTIONS = (
-    "You are a strict evaluator for visual place recognition (VPR). "
+    "You are an evaluator for visual place recognition (VPR). "
     "Given two short textual descriptions of images from the same cluster, "
     "identify stable shared cues (overlap), and inconsistencies. "
     "Treat permanent structures, spatial layout, building facades, entrances, signage text, "

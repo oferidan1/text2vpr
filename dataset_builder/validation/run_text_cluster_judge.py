@@ -19,11 +19,12 @@ try:  # relative imports when invoked as module
     from ..validation.parsing import load_all_assignments, load_predictions_csv
 except Exception:  # fallback when executed directly
     import sys
+    # We need the project root (one level ABOVE `dataset_builder`) on sys.path
     REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     if REPO_ROOT not in sys.path:
         sys.path.insert(0, REPO_ROOT)
-    from dataset_builder.validation_2.judge_models import HFJudge, JudgeConfig
-    from dataset_builder.validation_2.prompts import (
+    from dataset_builder.validation.judge_models import HFJudge, JudgeConfig
+    from dataset_builder.validation.prompts import (
         SYSTEM_INSTRUCTIONS,
         build_cluster_prompt,
         build_chunk_map_prompt,
@@ -109,6 +110,7 @@ def evaluate_single_shot(
             outlier_global = set(sel[i] for i in outlier_indices if 0 <= i < len(sel))
             df_out = pd.DataFrame(
                 {
+                    "description": descriptions,
                     "image_path": image_paths,
                     "panoid": panoids,
                     "is_outlier": [1 if k in outlier_global else 0 for k in range(len(image_paths))],
