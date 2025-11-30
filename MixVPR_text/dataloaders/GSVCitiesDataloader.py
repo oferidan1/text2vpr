@@ -77,7 +77,7 @@ class GSVCitiesDataModule(pl.LightningDataModule):
             T.RandAugment(num_ops=3, interpolation=T.InterpolationMode.BILINEAR),
             T.ToTensor(),
             T.Normalize(mean=self.mean_dataset, std=self.std_dataset),
-            #T.RandomErasing(p=1.0, scale=(0.1, 0.33), ratio=(0.3, 3.3), value=0)
+            #T.RandomErasing(p=0.5, scale=(0.1, 0.33), ratio=(0.3, 3.3), value=0)
         ])
 
         self.valid_transform = T.Compose([

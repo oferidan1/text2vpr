@@ -12,6 +12,7 @@ class GenericPairLoss(BaseMetricLossFunction):
             self.mat_based_loss if mat_based_loss else self.pair_based_loss
         )
 
+
     def compute_loss(self, embeddings, labels, indices_tuple, ref_emb, ref_labels, embeds2, w):
         c_f.labels_or_indices_tuple_required(labels, indices_tuple)
         indices_tuple = lmu.convert_to_pairs(indices_tuple, labels, ref_labels)
@@ -19,61 +20,63 @@ class GenericPairLoss(BaseMetricLossFunction):
             return self.zero_losses()
         mat = self.distance(embeddings, ref_emb)
         
+        mu_text  = 0.65
+        std_text = 0.07
+        min_text = -6.07
+        max_text = 4.92
+       # #mixvpr 512
+        mu_img   = 0.0111
+        std_img  = 0.05
+        min_img  = -5.24
+        max_img  = 15.26
+        #mixvpr 4096
+        # mu_img   = 0.0048
+        # std_img  = 0.027
+        # min_img  = -5.55
+        # max_img  = 30.67
+            
         # calc text sim in the batch
         img_sim = torch.matmul(embeddings, embeddings.T)
-        text_sim = torch.matmul(embeds2, embeds2.T)
-        # text_sim = F.cosine_similarity(embeds2, embeds2, dim=-1)
-        # img_sim = F.cosine_similarity(embeddings, embeddings, dim=-1)
-        text_sim = torch.clamp(text_sim, min=-1.0, max=1.0)
         img_sim  = torch.clamp(img_sim, min=-1.0, max=1.0)
-                
-        # mu_text  = 0.6520
-        # std_text = 0.0708
-        mu_text  = 0.9435
-        std_text = 0.0201
-        min_text = 0.5
-        max_text = 1.0
-        mu_img   = 0.0111
-        std_img  = 0.0514
-        min_img  = -0.4
-        max_img  = 1.0
-        text_sim = (text_sim - mu_text) / std_text
-        img_sim  = (img_sim - mu_img) / std_img
-        # text_sim = (text_sim - min_text) / (max_text - min_text) 
-        # img_sim  = (img_sim - min_img) / (max_img - min_img)         
-      
-        # w_i = w[:,0].unsqueeze(1)
-        # w_t = w[:,1].unsqueeze(1)
-        # w_i_ij_old = torch.zeros_like(img_sim)
-        # w_t_ij_old = torch.zeros_like(text_sim)
-        # batch_size = img_sim.shape[0]       
-        # for i in range(batch_size):
-        #     for j in range(batch_size):
-        #         w_i_ij_old[i, j] = (w_i[i] + w_i[j]) / 2.0
-        #         w_t_ij_old[i, j] = (w_t[i] + w_t[j]) / 2.0
+        img_sim  = (img_sim - mu_img) / std_img        
+        img_sim  = ((img_sim - min_img) / (max_img - min_img)) *2-1      
+        #TBD: is_trainable_text_encoder
+        # img_sim  = (img_sim - mu_text) / std_text
+        # img_sim  = ((img_sim - min_text) / (max_text - min_text)) *2-1      
+        
+        s_ij = img_sim
+        
+        if embeds2 is not None:
+            text_sim = torch.matmul(embeds2, embeds2.T)
+            text_sim = torch.clamp(text_sim, min=-1.0, max=1.0)        
+            text_sim = (text_sim - mu_text) / std_text
+            text_sim = ((text_sim - min_text) / (max_text - min_text)) *2-1          
+            
+            s_ij = text_sim      
 
-        # # calculate dynamic weights
-        w_i = w[:,0].unsqueeze(1)
-        w_t = w[:,1].unsqueeze(1)   
-        w_i_ij = ((w_i.unsqueeze(1) + w_i.unsqueeze(0)) / 2.0).squeeze(-1)
-        w_t_ij = ((w_t.unsqueeze(1) + w_t.unsqueeze(0)) / 2.0).squeeze(-1)
-        s_ij = w_i_ij * img_sim + w_t_ij * text_sim
+            # calculate dynamic weights
+            if len(w.shape) > 1:
+                w_i = w[:,0].unsqueeze(1)
+                w_t = w[:,1].unsqueeze(1)   
+                w_i_ij = ((w_i.unsqueeze(1) + w_i.unsqueeze(0)) / 2.0).squeeze(-1)
+                w_t_ij = ((w_t.unsqueeze(1) + w_t.unsqueeze(0)) / 2.0).squeeze(-1)
+                s_ij = w_i_ij * img_sim + w_t_ij * text_sim
+            else:
+                # calculate fixed weights
+                s_ij = w*img_sim + (1-w)*text_sim
 
-        # calculate fixed weights
-        # s_ij = w*img_sim + (1-w)*text_sim
-
-        return self.loss_method(mat, indices_tuple, s_ij)
+        return self.loss_method(s_ij, indices_tuple)
 
     def _compute_loss(self):
         raise NotImplementedError
 
-    def mat_based_loss(self, mat, indices_tuple, s_ij):
+    def mat_based_loss(self, mat, indices_tuple):
         a1, p, a2, n = indices_tuple
         pos_mask, neg_mask = torch.zeros_like(mat), torch.zeros_like(mat)
         pos_mask[a1, p] = 1
         neg_mask[a2, n] = 1
         self._assert_either_pos_or_neg(pos_mask, neg_mask)
-        return self._compute_loss(mat, pos_mask, neg_mask, s_ij)
+        return self._compute_loss(mat, pos_mask, neg_mask)
 
     def pair_based_loss(self, mat, indices_tuple):
         a1, p, a2, n = indices_tuple

@@ -74,7 +74,7 @@ def main(args):
     logger.add(log_dir / "debug.log", level="DEBUG")
     logger.info(" ".join(sys.argv))
     logger.info(f"Arguments: {args}")
-    logger.info(f"Testing with {args.method}")
+    logger.info(f"Testing with {args.vision_model_name}")
     logger.info(f"The outputs are being saved in {log_dir}")
 
     model = VLM_Model(args)
@@ -112,7 +112,7 @@ def main(args):
         
         sim_matrix_t = np.matmul(text_descriptors, text_descriptors.T)
         #calc data mu and std over text sim matrix but without diagonal elements and lower triangle
-        upper_indices = np.triu_indices_from(sim_matrix_t, k=1) 
+        upper_indices = np.triu_indices_from(sim_matrix_t, k=0) 
         sim_matrix_t_upper = sim_matrix_t[upper_indices]
         mu_t  = np.mean(sim_matrix_t_upper)
         std_t = np.std(sim_matrix_t_upper)
@@ -122,6 +122,24 @@ def main(args):
         logger.info(f"Text Similarity matrix std: {std_t:.8f}")
         logger.info(f"Text Similarity matrix min: {min_t:.8f}")
         logger.info(f"Text Similarity matrix max: {max_t:.8f}")
+        
+        sim_t = (sim_matrix_t_upper-mu_t)/std_t
+        
+        logger.info(f"Text Similarity after mu matrix mean: {np.mean(sim_t):.8f}")
+        logger.info(f"Text Similarity after mu matrix std: {np.std(sim_t):.8f}")
+        logger.info(f"Text Similarity after mu matrix min: {np.min(sim_t):.8f}")
+        logger.info(f"Text Similarity after mu matrix max: {np.max(sim_t):.8f}")
+        
+        min_t = np.min(sim_t)
+        max_t = np.max(sim_t)
+        sim_t_new = ((sim_t-min_t)/(max_t-min_t))
+        #sim_t_new = ((sim_t-min_t)/(max_t-min_t))*2-1        
+        
+        logger.info(f"Text Similarity after min-max matrix mean: {np.mean(sim_t_new):.8f}")
+        logger.info(f"Text Similarity after min-max matrix std: {np.std(sim_t_new):.8f}")
+        logger.info(f"Text Similarity after min-max matrix min: {np.min(sim_t_new):.8f}")
+        logger.info(f"Text Similarity after min-max matrix max: {np.max(sim_t_new):.8f}")
+        
 
         sim_matrix_v = np.matmul(vision_descriptors, vision_descriptors.T)
         #calc data mu and std over vision sim matrix but without diagonal elements and lower triangle
@@ -135,6 +153,23 @@ def main(args):
         logger.info(f"Vision Similarity matrix std: {std_v:.8f}")
         logger.info(f"Vision Similarity matrix min: {min_v:.8f}")
         logger.info(f"Vision Similarity matrix max: {max_v:.8f}")
+        
+        sim_v = (sim_matrix_v_upper-mu_v)/std_v
+        
+        logger.info(f"Vision Similarity after mu matrix mean: {np.mean(sim_v):.8f}")
+        logger.info(f"Vision Similarity after mu matrix std: {np.std(sim_v):.8f}")
+        logger.info(f"Vision Similarity after mu matrix min: {np.min(sim_v):.8f}")
+        logger.info(f"Vision Similarity after mu matrix max: {np.max(sim_v):.8f}")
+        
+        min_v = np.min(sim_v)
+        max_v = np.max(sim_v)
+        sim_v_new = ((sim_v-min_v)/(max_v-min_v))
+        #sim_v_new = ((sim_v-min_v)/(max_v-min_v))*2-1
+        
+        logger.info(f"Vision Similarity after min-max matrix mean: {np.mean(sim_v_new):.8f}")
+        logger.info(f"Vision Similarity after min-max matrix std: {np.std(sim_v_new):.8f}")
+        logger.info(f"Vision Similarity after min-max matrix min: {np.min(sim_v_new):.8f}")
+        logger.info(f"Vision Similarity after min-max matrix max: {np.max(sim_v_new):.8f}")
 
 
 if __name__ == "__main__":

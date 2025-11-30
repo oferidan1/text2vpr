@@ -22,9 +22,9 @@ class MultiSimilarityLoss_Sij(GenericPairLoss):
             list_of_names=["alpha", "beta", "base"], is_stat=False
         )
 
-    def _compute_loss(self, mat, pos_mask, neg_mask, s_ij):
-        pos_exp = self.distance.margin(s_ij, self.base)
-        neg_exp = self.distance.margin(self.base, s_ij)
+    def _compute_loss(self, mat, pos_mask, neg_mask):
+        pos_exp = self.distance.margin(mat, self.base)
+        neg_exp = self.distance.margin(self.base, mat)
         pos_loss = (1.0 / self.alpha) * lmu.logsumexp(
             self.alpha * pos_exp, keep_mask=pos_mask.bool(), add_one=True
         )

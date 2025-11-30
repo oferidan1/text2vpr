@@ -100,16 +100,16 @@ def prediction_to_csv(BUCKET_NAME, GCS_DESTINATION, pred_json):
 # --- Example usage ---
 if __name__ == "__main__":
     BUCKET_NAME = "ofer-idan-bucket-1"
-    LOCAL_FOLDER = "/mnt/d/data/Pittsburgh30K/images/test/"
-    GCS_DESTINATION = "Pittsburgh30K/images/test/"        
+    LOCAL_FOLDER = "/mnt/d/data/msls_test/msls_challenge"
+    GCS_DESTINATION = "msls_challenge"        
     
-    # upload_folder_many_filenames(BUCKET_NAME, LOCAL_FOLDER, GCS_DESTINATION)
+    upload_folder_many_filenames(BUCKET_NAME, LOCAL_FOLDER, GCS_DESTINATION)
     
-    # gcs_file = "input_gcs.jsonl"
-    # create_gcs_json(LOCAL_FOLDER, BUCKET_NAME, GCS_DESTINATION, gcs_file)
+    gcs_file = "input_gcs.jsonl"
+    create_gcs_json(LOCAL_FOLDER, BUCKET_NAME, GCS_DESTINATION, gcs_file)
     
     pred_json = '/mnt/d/ofer/localization/text2vpr/dataset_builder/predictions/Pittsburgh30K_predictions.jsonl'
-    prediction_to_csv(BUCKET_NAME, GCS_DESTINATION, pred_json)
+    #prediction_to_csv(BUCKET_NAME, GCS_DESTINATION, pred_json)
 
     
 

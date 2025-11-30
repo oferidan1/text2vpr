@@ -15,55 +15,146 @@ import os
 from test_dataset import TestDataset
 import visualizations
 from math import sqrt
+from sklearn.decomposition import PCA
 
-def rerank_predictions(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results):
+def rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index):
     # sum scores according the where vision and text predictions are the same
     combined_scores = []
     combined_predictions = []
     # pre-computed mu and std for normalization over GSV
-    mu_text  = 0.9435
-    std_text = 0.0201    
-    mu_img   = 0.0111
-    std_img  = 0.0514
-    # pre-computed mu and std for normalization over amstertime 
-    # mu_text  = 0.9501
-    # std_text = 0.0189
-    # mu_img   = 0.0627
-    # std_img  = 0.0612
+    # mu_text  = 0.65
+    # std_text = 0.07    
+    # min_text = -6.07
+    # max_text = 4.92           
+    # # #mixvpr 512
+    # mu_img   = 0.0111
+    # std_img  = 0.05
+    # min_img  = -5.24
+    # max_img  = 15.26
+    #mixvpr 4096 GSV
+    # mu_img   = 0.0048
+    # std_img  = 0.027
+    # min_img  = -5.55
+    # max_img  = 30.67
+    
+    # pre-computed mu and std for normalization over amstertime
+    # mu_text  = 0.66
+    # std_text = 0.066
+    # min_text = -4.81
+    # max_text = 4.43
+    # mu_img   = 0.06
+    # std_img  = 0.06
+    # min_img  = -4.57
+    # max_img  = 15.32
+    
     # pre-computed mu and std for normalization over nordland 
-    # mu_text  = 0.7508
-    # std_text = 0.0618
-    # mu_img   = 0.2785
+    # mu_text  = 0.75
+    # std_text = 0.0619
+    # min_text = -6.236
+    # max_text = 4.02
+    # mu_img   = 0.278
     # std_img  = 0.105
+    # min_img  = -4.57
+    # max_img  = 6.238  
+    # mu_text  = 0.75
+    # std_text = 0.0619
+    # min_text = -6.236
+    # max_text = 4.02
+    #mixvpr 4096 norland
+    # mu_img   = 0.216
+    # std_img  = 0.088
+    # min_img  = -3.43
+    # max_img  = 7.9
+    
+    # pre-computed mu and std for normalization over pitts
+    # mu_text  = 0.641
+    # std_text = 0.071
+    # min_text = -5.31
+    # max_text = 5.03
+    # mu_img   = 0.053
+    # std_img  = 0.066
+    # min_img  = -4.24
+    # max_img  = 13.5
     #clip to avoid negative scores
     text_scores = np.clip(text_scores, a_min=-1.0, a_max=1.0)
     vision_scores = np.clip(vision_scores, a_min=-1.0, a_max=1.0)
-    # normalize scores
-    #text_scores = (text_scores - 0.5) * 2
+    # # normalize scores
+    # text_scores = (text_scores - mu_text) / std_text
+    # vision_scores  = (vision_scores - mu_img) / std_img
+    # text_scores = ((text_scores - min_text) / (max_text - min_text))*2-1
+    # vision_scores  = ((vision_scores - min_img) / (max_img - min_img))*2-1        
 
     print("mean w_alpha vision:", w_alpha[:,0].mean(), w_alpha[:,0].std())
     print("mean w_alpha text:", w_alpha[:,1].mean(), w_alpha[:,1].std())
-    text_scores = (text_scores - mu_text) / std_text
-    vision_scores  = (vision_scores - mu_img) / std_img
-    for v_scores, v_preds, t_scores, t_preds in zip(vision_scores, vision_predictions, text_scores, text_predictions):
-        score_dict = {}
-        for score, pred in zip(v_scores, v_preds):
-            if pred not in score_dict:
-                score_dict[pred] = 0
-            score_dict[pred] += w_alpha[pred][0] * score
-        for score, pred in zip(t_scores, t_preds):
-            if pred not in score_dict:
-                score_dict[pred] = 0            
-            score_dict[pred] += w_alpha[pred][1] * score
-        # sort by score
-        sorted_items = sorted(score_dict.items(), key=lambda x: x[1], reverse=True)
-        preds_sorted = [item[0] for item in sorted_items][:max_results]
-        scores_sorted = [item[1] for item in sorted_items][:max_results]
-        combined_predictions.append(preds_sorted)
-        combined_scores.append(scores_sorted)
+   
+    try:    
+        for v_scores, v_preds, t_scores, t_preds in zip(vision_scores, vision_predictions, text_scores, text_predictions):
+            score_dict = {}      
+            w_query_v = w_alpha[query_index][0]
+            for score, pred in zip(v_scores, v_preds):
+                if pred not in score_dict:
+                    score_dict[pred] = 0
+                #score_dict[pred] += w_alpha[pred][0] * score 
+                score_dict[pred] += (w_alpha[pred][0]+w_query_v)/2 * score 
+            w_query_t = w_alpha[query_index][1]
+            for score, pred in zip(t_scores, t_preds):
+                if pred not in score_dict:
+                    score_dict[pred] = 0            
+                #score_dict[pred] += w_alpha[pred][1] * score 
+                score_dict[pred] += (w_alpha[pred][1]+w_query_t)/2 * score 
+            # sort by score
+            sorted_items = sorted(score_dict.items(), key=lambda x: x[1], reverse=True)
+            preds_sorted = [item[0] for item in sorted_items][:max_results]
+            scores_sorted = [item[1] for item in sorted_items][:max_results]
+            combined_predictions.append(preds_sorted)
+            combined_scores.append(scores_sorted)
+            query_index += 1
         
-    combined_predictions = np.array(combined_predictions)
-    combined_scores = np.array(combined_scores)
+        combined_predictions = np.array(combined_predictions)
+        combined_scores = np.array(combined_scores)
+    except Exception as e:
+        print(f'Error: {e}')
+        
+    return combined_scores, combined_predictions
+
+def rerank_predictions_by_rank(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index):
+    # sum scores according the where vision and text predictions are the same
+    combined_scores = []
+    combined_predictions = []
+
+    print("mean w_alpha vision:", w_alpha[:,0].mean(), w_alpha[:,0].std())
+    print("mean w_alpha text:", w_alpha[:,1].mean(), w_alpha[:,1].std())
+   
+    try:    
+        for v_scores, v_preds, t_scores, t_preds in zip(vision_scores, vision_predictions, text_scores, text_predictions):
+            score_dict = {}      
+            w_query_v = w_alpha[query_index][0]
+            i = 1
+            for score, pred in zip(v_scores, v_preds):
+                if pred not in score_dict:
+                    score_dict[pred] = 0
+                score_dict[pred] += (w_alpha[pred][0]+w_query_v)/2 * i
+                i+=1
+            w_query_t = w_alpha[query_index][1]
+            i = 1
+            for score, pred in zip(t_scores, t_preds):
+                if pred not in score_dict:
+                    score_dict[pred] = 0            
+                score_dict[pred] += (w_alpha[pred][1]+w_query_t)/2 * i
+                i+=1
+            # sort by score
+            sorted_items = sorted(score_dict.items(), key=lambda x: x[1], reverse=False)
+            preds_sorted = [item[0] for item in sorted_items][:max_results]
+            scores_sorted = [item[1] for item in sorted_items][:max_results]
+            combined_predictions.append(preds_sorted)
+            combined_scores.append(scores_sorted)
+            query_index += 1
+        
+        combined_predictions = np.array(combined_predictions)
+        combined_scores = np.array(combined_scores)
+    except Exception as e:
+        print(f'Error: {e}')
+        
     return combined_scores, combined_predictions
 
 def normlize_features(x):
@@ -100,7 +191,7 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
         descriptors, text_features, w = model.encode_single(images.to(args.device), texts)
         descriptors = descriptors.cpu().numpy()
         all_descriptors[indices.numpy(), :] = descriptors
-        if args.fusion_type == 'dynamic_weighting' or args.fusion_type == 'fixed_weighting':
+        if args.fusion_type == 'dynamic_weighting' or args.fusion_type == 'fixed_weighting' or args.fusion_type == 'text_adapter':
             vision_descriptors[indices.numpy(), :] = descriptors
             text_features = text_features.cpu().numpy()
             text_descriptors[indices.numpy(), :] = text_features  
@@ -140,20 +231,10 @@ def main(args):
     logger.add(log_dir / "debug.log", level="DEBUG")
     logger.info(" ".join(sys.argv))
     logger.info(f"Arguments: {args}")
-    logger.info(f"Testing with {args.method}")
+    logger.info(f"Testing with {args.vision_model_name}")
     logger.info(f"The outputs are being saved in {log_dir}")
 
     model = VLM_Model(args)
-    
-    #if databaase descriptors already exist, skip their computation
-    database_descriptors_path = os.path.join(args.descriptor_dir, "database_descriptors.npy")
-    is_database_descriptors_exist = False
-    positives_per_query = None
-    if os.path.exists(database_descriptors_path):        
-        database_descriptors = np.load(database_descriptors_path)
-        queries_descriptors = np.load(os.path.join(args.descriptor_dir, "queries_descriptors.npy"))            
-        positives_per_query = np.load(os.path.join(args.descriptor_dir, "positives_per_query.npy"), allow_pickle=True)
-        is_database_descriptors_exist = True
 
     test_ds = TestDataset(
         args.database_folder,   
@@ -170,6 +251,7 @@ def main(args):
     text_descriptors = None
     
     max_results = max(args.recall_values)
+    query_index = 0
 
     with torch.inference_mode():
         logger.debug("Extracting database descriptors for evaluation/testing")
@@ -188,23 +270,35 @@ def main(args):
         for images, indices, texts in tqdm(database_dataloader):
             encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors, w_alpha)
 
+        query_index = test_ds.num_database
         logger.debug("Extracting queries descriptors for evaluation/testing using batch size 1")
         queries_subset_ds = Subset(
             test_ds, list(range(test_ds.num_database, test_ds.num_database + test_ds.num_queries))
         )
-        queries_dataloader = DataLoader(dataset=queries_subset_ds, num_workers=args.num_workers, batch_size=1)
+        queries_dataloader = DataLoader(dataset=queries_subset_ds, num_workers=args.num_workers, batch_size=args.batch_size)#1)
         for images, indices, texts in tqdm(queries_dataloader):
             encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors, w_alpha)
+            
+        if args.is_pca:
+            logger.debug("Fitting PCA on all descriptors")
+            pca = PCA(n_components=args.pca_dim)
+            pca.fit(all_descriptors)
+            logger.debug("Transforming all descriptors using PCA")
+            all_descriptors = pca.transform(all_descriptors)
+            if (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting' or args.fusion_type=='text_adapter': 
+                logger.debug("Transforming vision descriptors using PCA")
+                vision_descriptors = pca.transform(vision_descriptors)
+              
 
     alpha = args.alpha_vision
     #alpha = w_alpha
     # Get queries predictions with alpha between 0.6 to 0.9 with jumps of 0.1
-    #for alpha in [0.3, 0.4, 0.5]:
-    #for alpha in [0.9, 0.92, 0.94, 0.96, 0.98]:
-    if 1:
-        # w_alpha[:,0] = alpha
-        # w_alpha[:,1] = 1.0-alpha
-        if (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting': 
+    #for alpha in [0.6, 0.7, 0.8, 0.9, 0.95]:
+    for alpha in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
+    # if 1:
+        w_alpha[:,0] = alpha
+        w_alpha[:,1] = 1.0-alpha
+        if (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting' or args.fusion_type=='text_adapter': 
             # vision
             vision_queries_descriptors = vision_descriptors[test_ds.num_database :]
             vision_database_descriptors = vision_descriptors[: test_ds.num_database]    
@@ -214,7 +308,11 @@ def main(args):
             text_database_descriptors = text_descriptors[: test_ds.num_database]    
             text_scores, text_predictions = get_queries_predictions(model.text_encoder_dim, text_database_descriptors, text_descriptors, text_queries_descriptors, args.max_results_reranking)
             # join vision and text predictions        
-            scores, predictions = rerank_predictions(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results)
+            if args.rerank_by_scores:
+                scores, predictions = rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index)
+            else:
+                scores, predictions = rerank_predictions_by_rank(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index)
+                
         else:
             queries_descriptors = all_descriptors[test_ds.num_database :]
             database_descriptors = all_descriptors[: test_ds.num_database]    
@@ -235,16 +333,6 @@ def main(args):
             recalls = recalls / test_ds.num_queries * 100
             recalls_str = ", ".join([f"R@{val}: {rec:.1f}" for val, rec in zip(args.recall_values, recalls)])
             logger.info(recalls_str)
-
-
-    if args.save_descriptors and not is_database_descriptors_exist:
-        logger.info(f"Saving the descriptors in {args.descriptor_dir}")
-        if not Path(args.descriptor_dir).exists():
-            Path(args.descriptor_dir).mkdir(parents=True, exist_ok=True)
-        np.save(os.path.join(args.descriptor_dir, "queries_descriptors.npy"), queries_descriptors)
-        np.save(os.path.join(args.descriptor_dir, "database_descriptors.npy"), database_descriptors)
-        positives_per_query = test_ds.get_positives()
-        np.save(os.path.join(args.descriptor_dir, "positives_per_query.npy"), positives_per_query)
 
     # Save visualizations of predictions
     if args.num_preds_to_save != 0:

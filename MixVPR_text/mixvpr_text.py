@@ -8,11 +8,69 @@ import torch.nn.functional as F
 from sentence_transformers import SentenceTransformer
 from models import helper
 from peft import LoraConfig, get_peft_model, TaskType
-from transformers import AutoModel
 from transformers import AutoTokenizer, AutoModel
 import numpy as np
 import torchvision.transforms as transforms
+from torch.nn.utils import clip_grad_norm_  
+import os
 
+
+class CLSReweightingPooler(nn.Module):
+    """
+    Combines the CLS token with attention-pooled tokens.
+    Output: a single pooled vector per sequence.
+    """
+
+    def __init__(self, hidden_size):
+        super().__init__()
+
+        # Attention for token-level importance
+        self.attention = nn.Linear(hidden_size, 1)
+        
+        self.dropout = nn.Dropout(0.1)
+
+        # Learnable mixing of CLS and attention-pooled vector
+        self.mix = nn.Linear(hidden_size * 2, hidden_size)
+
+        # Optional nonlinearity
+        self.activation = nn.Tanh()
+
+    def forward(self, hidden_states, mask=None, return_scores=False):
+        """
+        hidden_states: [B, T, H]
+        mask (optional): [B, T] (1 = keep token, 0 = ignore)
+        """
+
+        # ---- 1. CLS embedding ----
+        cls = hidden_states[:, 0]  # [B, H]
+
+        # ---- 2. Attention scores for each token ----
+        scores = self.attention(hidden_states).squeeze(-1)  # [B, T]
+        
+        # Mask out CLS token
+        scores[:, 0] = -1e4
+
+        if mask is not None:
+            scores = scores.masked_fill(~mask.bool(), -1e4)
+
+        weights = torch.softmax(scores, dim=-1)  # [B, T]
+
+        # ---- 3. Attention-based pooled vector ----
+        pooled = torch.sum(hidden_states * weights.unsqueeze(-1), dim=1)  # [B, H]
+
+        # # ---- 4. Concatenate CLS + attention-pooled ----
+        combined = torch.cat([cls, pooled], dim=-1)  # [B, 2H]        
+        combined = self.dropout(combined) 
+
+        # ---- 5. Learnable mixing ----
+        pooled = self.activation(self.mix(combined))  # [B, H]
+        
+        #pooled = cls + attn_pooled  # [B, H]
+
+        if return_scores:
+            return pooled, weights  # return per-token weights
+        return pooled   
+    
 
 class GeMPooling(nn.Module):
     """
@@ -67,6 +125,32 @@ class GeMPooling(nn.Module):
                ', ' + 'eps=' + str(self.eps) + ')'
 
 
+class Adapter(nn.Module):
+    """Conventional Adapter layer, in which the weights of up and down sampler modules
+    are parameters and are optimized."""
+
+    def __init__(self, hidden_size):
+        super().__init__()
+        self.input_dim = hidden_size
+        reduction_factor = 4
+        self.down_sample_size = self.input_dim // reduction_factor
+        self.activation = nn.GELU()
+        self.down_sampler = nn.Linear(self.input_dim, self.down_sample_size)
+        self.up_sampler = nn.Linear(self.down_sample_size, self.input_dim)
+
+        # self.track_z = config.track_z
+
+    def forward(self, x):
+        z = self.down_sampler(x)
+        z = self.activation(z)
+        # if self.track_z:
+        #     self.z = z
+        output = self.up_sampler(z)
+        # Residual connection.
+        output = output + x
+        return output
+    
+
 class VPRModel_text(pl.LightningModule):
     """This is the main model for Visual Place Recognition
     we use Pytorch Lightning for modularity purposes.
@@ -108,6 +192,7 @@ class VPRModel_text(pl.LightningModule):
                 is_encode_image=True,
                 is_encode_text=True,
                 is_trainable_text_encoder=False,
+                limit_train_batches=1.0,
                  ):
         super().__init__()
         
@@ -150,11 +235,12 @@ class VPRModel_text(pl.LightningModule):
                 # Freeze vpr encoder parameters
                 for param in self.vpr_encoder.parameters():
                     param.requires_grad = False
+        text_encoder_dim = 1024        
         if is_encode_text:
-            self.text_encoder = SentenceTransformer(text_encoder_name)
-            # self.tokenizer = AutoTokenizer.from_pretrained(text_encoder_name)  
-            # self.text_encoder = AutoModel.from_pretrained(text_encoder_name)
-        
+            #self.text_encoder = SentenceTransformer(text_encoder_name)            
+            self.tokenizer = AutoTokenizer.from_pretrained(text_encoder_name)  
+            self.text_encoder = AutoModel.from_pretrained(text_encoder_name, attn_implementation="sdpa")
+                    
             #self.text_aggregation = GeMPooling()
 
             if is_freeze_text:
@@ -166,31 +252,39 @@ class VPRModel_text(pl.LightningModule):
             # TaskType.FEATURE_EXTRACTION is appropriate for sentence embedding tasks
             if is_trainable_text_encoder:
                 lora_config = LoraConfig(
-                    task_type=TaskType.FEATURE_EXTRACTION,
-                    r=8,  # LoRA rank
-                    lora_alpha=32, # LoRA scaling factor
+                    r=8,
+                    lora_alpha=16,
                     lora_dropout=0.1,
-                    target_modules=["query", "value"]
+                    target_modules=["query", "value"],
+                    bias="none",
                     #target_modules=["query", "key", "value", "base_layer", "dense"]  # specify the modules to apply LoRA
                 )
-
                 # Get the PEFT model with LoRA adapters
                 self.text_encoder = get_peft_model(self.text_encoder, lora_config)
+                # self.text_adapter = nn.Linear(1024, 256)
+                # text_encoder_dim = 256
                 # self.text_encoder.add_adapter(lora_config)
+            else:
+                self.text_encoder.eval()
         
-        text_encoder_dim = 1024        
+        
         self.fusion_type = fusion_type
         self.embeds_dim = embeds_dim        
         
         if is_encode_image and is_encode_text:
             if self.fusion_type == 'transformer':
-                self.vpr_adapter = nn.Linear(vpr_output_dim, embeds_dim)  # mix vpr dim embedding
-                self.text_adapter = nn.Linear(text_encoder_dim, embeds_dim)  # BGE large has 1024-dim embedding                   
-                self.cls = nn.Parameter(torch.randn(1, 1, embeds_dim))
-                # Define the core Transformer Encoder stack
-                encoder_layer = nn.TransformerEncoderLayer(d_model=embeds_dim, nhead=4, dim_feedforward=4*embeds_dim, batch_first=True)  
-                # Input shape: (sequence_length, batch_size, d_model)        
-                self.fusion = nn.TransformerEncoder(encoder_layer, 4)
+                #self.vpr_adapter = nn.Linear(vpr_output_dim, embeds_dim)  # mix vpr dim embedding
+                #self.text_adapter = nn.Linear(text_encoder_dim, embeds_dim)  # BGE large has 1024-dim embedding     
+                text_embedder_dim = text_encoder_dim
+                # self.cls = nn.Parameter(torch.randn(1, 1, text_embedder_dim))
+                # # Define the core Transformer Encoder stack
+                # encoder_layer = nn.TransformerEncoderLayer(d_model=text_embedder_dim, nhead=4, batch_first=True)  
+                # # Input shape: (sequence_length, batch_size, d_model)        
+                # self.text_embedder = nn.TransformerEncoder(encoder_layer, 1)
+                # dynamic_weighting
+                self.text_adapter = nn.Linear(text_encoder_dim, text_embedder_dim)  # BGE large has 1024-dim embedding     
+                input_dim = vpr_output_dim + text_embedder_dim
+                self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, 2), nn.Softmax(dim=1))
             elif self.fusion_type == 'mlp':
                 input_dim = vpr_output_dim + text_encoder_dim
                 self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, embeds_dim))
@@ -202,6 +296,10 @@ class VPRModel_text(pl.LightningModule):
                 input_dim = vpr_output_dim + text_encoder_dim
                 #learn fixed parameter for weighting image and text
                 self.w_alpha = Parameter(torch.tensor([0.5]), requires_grad=True)                
+            elif self.fusion_type == 'text_adapter':
+                self.text_adapter = CLSReweightingPooler(text_encoder_dim)
+                input_dim = vpr_output_dim + text_encoder_dim
+                self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, 2), nn.Softmax(dim=1))
         
         # Call the weight initialization function
         self.apply(self._init_weights)
@@ -214,7 +312,17 @@ class VPRModel_text(pl.LightningModule):
             if module.bias is not None:
                 nn.init.constant_(module.bias, 0)
         
-        
+    
+    def mean_pooling(self, token_embeddings, attention_mask):
+        # First element of model_output contains all token embeddings
+        #token_embeddings = model_output[0] 
+        input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+        sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
+        # Sum of the attention mask
+        sum_mask = torch.clamp(attention_mask.sum(1), min=1e-9).unsqueeze(1)
+        # Mean Pooling
+        return sum_embeddings / sum_mask
+
     # the forward pass of the lightning model
     def forward(self, img, text):
         w = None
@@ -222,19 +330,33 @@ class VPRModel_text(pl.LightningModule):
         #img = transforms.Resize([320, 320], antialias=True)(img)
 
         if self.is_encode_image:
-            #with torch.no_grad():      
-            img_embeds = self.vpr_encoder.backbone(img)
-            img_embeds = self.vpr_encoder.aggregator(img_embeds)
+            with torch.no_grad():      
+                img_embeds = self.vpr_encoder.backbone(img)
+                #img_embeds, img_embeds_not_normilized = self.vpr_encoder.aggregator(img_embeds)
+                img_embeds = self.vpr_encoder.aggregator(img_embeds)
+                embeds = img_embeds
         if self.is_encode_text:        
-            text_embeds = self.text_encoder.encode(text, normalize_embeddings=True, convert_to_tensor=True)        
-            # text_tokens = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(img.device)
-            # model_output = self.text_encoder(**text_tokens)                        
-            # text_embeds = model_output[0][:, 0]
-            # text_embeds = torch.nn.functional.normalize(text_embeds, p=2, dim=1)            
+            # text_embeds = self.text_encoder.encode(text, normalize_embeddings=True, convert_to_tensor=True)        
+            
+            # text_embeds_not_normilized = self.text_encoder.encode(text, normalize_embeddings=False, convert_to_tensor=True)        
+            # text_embeds = F.normalize(text_embeds_not_normilized, p=2, dim=-1)
+            
+            text_tokens = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(img.device)
+            if self.is_trainable_text_encoder:
+                model_output = self.text_encoder(**text_tokens, output_hidden_states=True, return_dict=True)                                     
+                text_embeds_not_normilized = model_output[0][:, 0]
+                #text_embeds_not_normilized = self.text_adapter(text_embeds_not_normilized)
+                text_embeds = torch.nn.functional.normalize(text_embeds_not_normilized, p=2, dim=1)
+            else:
+                with torch.no_grad():      
+                    #model_output = self.text_encoder(**text_tokens)   
+                    model_output = self.text_encoder(**text_tokens, output_hidden_states=True, return_dict=True)                                     
+                    text_embeds_not_normilized = model_output[0][:, 0]                    
+                    text_embeds = torch.nn.functional.normalize(text_embeds_not_normilized, p=2, dim=1)                        
         
             # GEM pooling            
             # model_output = self.text_encoder(**text_tokens, output_hidden_states=True, return_dict=True)
-            # token_feature = model_output.last_hidden_state
+            # token_feature = model_output[0]
             # token_feature = self.text_aggregation(token_feature, attention_mask=text_tokens['attention_mask']) 
             # text_embeds = torch.nn.functional.normalize(token_feature, p=2, dim=-1)
         
@@ -242,27 +364,40 @@ class VPRModel_text(pl.LightningModule):
         
         if self.is_encode_image and self.is_encode_text:        
             if self.fusion_type == 'transformer':
-                img_embeds = self.vpr_adapter(img_embeds)
-                text_embeds = self.text_adapter(text_embeds)
+                text_last_hidden_state = model_output.last_hidden_state
+                #img_embeds = self.vpr_adapter(img_embeds)
+                #text_features = self.text_adapter(text_last_hidden_state)
                 # fusion type is transformer encoder
                 # Expand the learnable [CLS] token to match the batch size
                 cls_tokens = self.cls.expand(batch_size, -1, -1)                    
                 # Prepend the [CLS] token to the input sequence
                 # The new sequence length is (original_seq_len + 1)        
-                # concat cls_token, image_embeds, text_embeds as input to fusion transformer encoder
-                embeds_input = torch.cat([cls_tokens, img_embeds.unsqueeze(dim=1), text_embeds.unsqueeze(dim=1)], dim=1)
-                embeds = self.fusion(embeds_input)[:,0,:]
+                # concat cls_token, text_features as input to fusion transformer encoder
+                embeds_input = torch.cat([cls_tokens, text_last_hidden_state], dim=1)
+                text_embeds = self.text_embedder(embeds_input)[:,0,:]
+                embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
+                w = self.fusion(embeds_input)                
+                embeds = img_embeds
             elif self.fusion_type == 'mlp':
                 embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
                 embeds = self.fusion(embeds_input) #+ self.fusion_residual(embeds_input)     
             elif self.fusion_type == 'dynamic_weighting':                
                 # calc dynamic weighting
+                #embeds_input = torch.cat([img_embeds_not_normilized, text_embeds_not_normilized], dim=1)
                 embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
                 w = self.fusion(embeds_input)                
                 embeds = img_embeds
             elif self.fusion_type == 'fixed_weighting':
                 # use fixed weighting
                 w = self.w_alpha
+                embeds = img_embeds
+            elif self.fusion_type == 'text_adapter':
+                text_last_hidden_state = model_output.last_hidden_state
+                text_features = self.text_adapter(text_last_hidden_state, mask=text_tokens['attention_mask'])
+                text_embeds = torch.nn.functional.normalize(text_features, p=2, dim=1)
+                 # calc dynamic weighting
+                embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
+                w = self.fusion(embeds_input)                
                 embeds = img_embeds
                            
         elif self.is_encode_text:
@@ -313,17 +448,80 @@ class VPRModel_text(pl.LightningModule):
             lr_scale = min(1., float(self.trainer.global_step + 1) / self.warmpup_steps)
             for pg in optimizer.param_groups:
                 pg['lr'] = lr_scale * self.lr
+
+        # max grad norm clipping
+        # max_grad_norm = 5.0                
+        # clip_grad_norm_(self.parameters(), max_norm=max_grad_norm)
+
         optimizer.step(closure=optimizer_closure)
-        
-    #  The loss function call (this method will be called at each training iteration)
+
+
+ #  The loss function call (this method will be called at each training iteration)
     def loss_function(self, descriptors, labels, text_embeds, w):
         # we mine the pairs/triplets if there is an online mining strategy
         if self.miner is not None:
-            miner_outputs = self.miner(descriptors, labels)
-            if w is None:
-                loss = self.loss_fn(descriptors, labels, miner_outputs)
-            else:
-                loss = self.loss_fn(descriptors, labels, miner_outputs, embeds2=text_embeds, w=w)
+            miner_outputs = self.miner(descriptors, labels)     
+            loss_v = self.loss_fn(descriptors, labels, miner_outputs)
+            loss_t = self.loss_fn(text_embeds, labels, miner_outputs)
+            #create new labels by softmax loss_v and loss_t
+            #concat loss_v and loss_t
+            
+            loss_cat = torch.cat((loss_v.unsqueeze(0), loss_t.unsqueeze(0)), dim=0)
+            labels_ce = F.softmax(loss_cat, dim=0)
+            w_vec = torch.cat((w, 1-w, ), dim=0).to(self.my_device)
+            loss = F.cross_entropy(w_vec, labels_ce)
+
+            # mining hard negatives by text embeddings
+            # miner_outputs_text = self.miner(text_embeds, labels)
+            
+            if w is not None:
+                if len(w.shape) > 1:
+                    w_i = w[:,0].mean()
+                else:
+                    w_i = w.mean()
+                self.log('w_i', w_i.item(), logger=True)
+
+            # calculate the % of trivial pairs/triplets
+            # which do not contribute in the loss value
+            nb_samples = descriptors.shape[0]
+            nb_mined = len(set(miner_outputs[0].detach().cpu().numpy()))
+            batch_acc = 1.0 - (nb_mined/nb_samples)
+
+        else: # no online mining
+            loss = self.loss_fn(descriptors, labels)
+            batch_acc = 0.0
+            if type(loss) == tuple: 
+                # somes losses do the online mining inside (they don't need a miner objet), 
+                # so they return the loss and the batch accuracy
+                # for example, if you are developping a new loss function, you might be better
+                # doing the online mining strategy inside the forward function of the loss class, 
+                # and return a tuple containing the loss value and the batch_accuracy (the % of valid pairs or triplets)
+                loss, batch_acc = loss
+
+        # keep accuracy of every batch and later reset it at epoch start
+        self.batch_acc.append(batch_acc)
+        # log it
+        self.log('b_acc', sum(self.batch_acc) /
+                len(self.batch_acc), prog_bar=True, logger=True)
+        return loss
+            
+    #  The loss function call (this method will be called at each training iteration)
+    def loss_function_(self, descriptors, labels, text_embeds, w):
+        # we mine the pairs/triplets if there is an online mining strategy
+        if self.miner is not None:
+            miner_outputs = self.miner(descriptors, labels)     
+            loss = self.loss_fn(descriptors, labels, miner_outputs, embeds2=text_embeds, w=w)
+            
+            # mining hard negatives by text embeddings
+            miner_outputs_text = self.miner(text_embeds, labels)
+            # loss += 0.3*self.loss_fn(descriptors, labels, miner_outputs_text, embeds2=text_embeds, w=w)
+            
+            if w is not None:
+                if len(w.shape) > 1:
+                    w_i = w[:,0].mean()
+                else:
+                    w_i = w.mean()
+                self.log('w_i', w_i.item(), logger=True)
 
             # calculate the % of trivial pairs/triplets
             # which do not contribute in the loss value
@@ -371,6 +569,10 @@ class VPRModel_text(pl.LightningModule):
         loss = self.loss_function(descriptors, labels, text_embeds, w) # Call the loss_function we defined above
         
         self.log('loss', loss.item(), logger=True)
+        
+        # if batch_idx == 1:   # 0, 1 → two batches
+        #     self.trainer.should_stop = True
+        
         return {'loss': loss}
     
     # This is called at the end of eatch training epoch
@@ -485,7 +687,22 @@ class VPRModel_text(pl.LightningModule):
             self.log(f'{val_set_name}/R5', pitts_dict[5], prog_bar=False, logger=True)
             self.log(f'{val_set_name}/R10', pitts_dict[10], prog_bar=False, logger=True)
         print('\n\n')
+        
+    def on_save_checkpoint(self, checkpoint):
+        if self.is_trainable_text_encoder:
+            # Lightning gives you where THIS checkpoint is being written            
+            ckpt_cb = next(
+                (cb for cb in self.trainer.checkpoint_callbacks 
+                if isinstance(cb, pl.callbacks.ModelCheckpoint)),
+                None
+            )                      
 
+            # Directory containing the checkpoint file
+            ckpt_dir = os.path.dirname(ckpt_cb.dirpath)
+
+            self.text_encoder.save_pretrained(ckpt_dir)
+            print("Saved PEFT adapter to:", ckpt_dir)
+    
 
 class VPRModel(nn.Module):
     """This is the main model for Visual Place Recognition

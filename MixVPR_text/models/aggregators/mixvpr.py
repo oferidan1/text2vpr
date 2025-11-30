@@ -62,8 +62,9 @@ class MixVPR(nn.Module):
         x = self.channel_proj(x)
         x = x.permute(0, 2, 1)
         x = self.row_proj(x)
-        x = F.normalize(x.flatten(1), p=2, dim=-1)
-        return x
+        x = x.flatten(1)
+        x_normilized = F.normalize(x, p=2, dim=-1)
+        return x_normilized #, x
 
 
 # -------------------------------------------------------------------------------
