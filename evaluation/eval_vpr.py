@@ -1,4 +1,6 @@
+import argparse
 import parser
+from argparse import Namespace
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -16,26 +18,80 @@ from test_dataset import TestDataset
 import visualizations
 from math import sqrt
 from sklearn.decomposition import PCA
+from scipy.stats import norm
+from typing import Tuple, List
+from scipy.interpolate import interp1d
+from scipy.stats import ecdf
 
-def rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index):
-    # sum scores according the where vision and text predictions are the same
-    combined_scores = []
-    combined_predictions = []
-    # pre-computed mu and std for normalization over GSV
-    # mu_text  = 0.65
-    # std_text = 0.07    
-    # min_text = -6.07
-    # max_text = 4.92           
-    # # #mixvpr 512
+def compute_ecdf(x):
+    """Return sorted samples and empirical CDF values."""
+    xs = np.sort(x)
+    n = len(xs)
+    ps = (np.arange(n) + 0.5) / n   # midpoint ECDF in (0,1)
+    return xs, ps
+
+
+def wasserstein_transform_batch(X, target):
+    """
+    Apply row-wise 1D Wasserstein transform:
+    For each i:  X[i] is mapped to target[i].
+
+    X:      array (N, K)
+    target: array (N, K)
+
+    Returns:
+        transformed: array (N, K)
+    """
+    N, K = X.shape
+    Nt, Kt = target.shape
+    assert N == Nt and K == Kt, "X and target must have identical shapes"
+
+    X_out = np.zeros_like(X)
+
+    for i in range(N):
+
+        row = X[i]
+        tgt = target[i]
+
+        # --- ECDF of source row ---
+        xs, ps = compute_ecdf(row)
+        order = np.argsort(row)
+        inv_order = np.argsort(order)
+        p_row = ps[inv_order]       # ECDF values in original order
+
+        # --- ICDF of target row ---
+        xt_sorted, pt = compute_ecdf(tgt)
+        icdf = interp1d(
+            pt, xt_sorted,
+            bounds_error=False,
+            fill_value="extrapolate"
+        )
+
+        # clamp probabilities to target ECDF domain
+        pmin, pmax = pt[0], pt[-1]
+        p_clamped = np.clip(p_row, pmin, pmax)
+
+        # --- Wasserstein map ---
+        X_out[i] = icdf(p_clamped)
+
+    return X_out
+
+def standarize_scores(text_scores, vision_scores):
+     # pre-computed mu and std for normalization over GSV
+    mu_text  = 0.65
+    std_text = 0.07    
+    min_text = -6.07
+    max_text = 4.92           
+    # #mixvpr 512
     # mu_img   = 0.0111
     # std_img  = 0.05
     # min_img  = -5.24
     # max_img  = 15.26
     #mixvpr 4096 GSV
-    # mu_img   = 0.0048
-    # std_img  = 0.027
-    # min_img  = -5.55
-    # max_img  = 30.67
+    mu_img   = 0.0048
+    std_img  = 0.027
+    min_img  = -5.55
+    max_img  = 30.67
     
     # pre-computed mu and std for normalization over amstertime
     # mu_text  = 0.66
@@ -75,14 +131,29 @@ def rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores,
     # std_img  = 0.066
     # min_img  = -4.24
     # max_img  = 13.5
-    #clip to avoid negative scores
+     
+    # # normalize scores
+    text_scores = (text_scores - mu_text) / std_text
+    vision_scores  = (vision_scores - mu_img) / std_img
+    text_scores = ((text_scores - min_text) / (max_text - min_text))*2-1
+    vision_scores  = ((vision_scores - min_img) / (max_img - min_img))*2-1        
+   
+    return text_scores, vision_scores
+
+
+def rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, vision_scores_ref=None):
+    # sum scores according the where vision and text predictions are the same
+    combined_scores = []
+    combined_predictions = []
+    
+    # clip scores to avoid negative nan in standarization
     text_scores = np.clip(text_scores, a_min=-1.0, a_max=1.0)
     vision_scores = np.clip(vision_scores, a_min=-1.0, a_max=1.0)
-    # # normalize scores
-    # text_scores = (text_scores - mu_text) / std_text
-    # vision_scores  = (vision_scores - mu_img) / std_img
-    # text_scores = ((text_scores - min_text) / (max_text - min_text))*2-1
-    # vision_scores  = ((vision_scores - min_img) / (max_img - min_img))*2-1        
+    
+    # standarize scores
+    text_scores, vision_scores = standarize_scores(text_scores, vision_scores)
+    if vision_scores_ref is not None:
+        vision_scores = wasserstein_transform_batch(vision_scores, vision_scores_ref)    
 
     print("mean w_alpha vision:", w_alpha[:,0].mean(), w_alpha[:,0].std())
     print("mean w_alpha text:", w_alpha[:,1].mean(), w_alpha[:,1].std())
@@ -235,6 +306,16 @@ def main(args):
     logger.info(f"The outputs are being saved in {log_dir}")
 
     model = VLM_Model(args)
+    
+    ref_vision_scores = None
+    if args.is_ref_model:
+        # shallow copy args to ref_args
+        ref_args = argparse.Namespace(**vars(args)) 
+        ref_args.is_dual_encoder = True
+        ref_args.encode_mode = 'image'
+        ref_args.vision_dimension = 512
+        ref_args.vpr_rows = 2
+        ref_model = VLM_Model(ref_args)
 
     test_ds = TestDataset(
         args.database_folder,   
@@ -261,6 +342,8 @@ def main(args):
         )
         
         vision_descriptors = np.empty((len(test_ds), model.vision_encoder_dim), dtype="float32")
+        if args.is_ref_model:
+            ref_vision_descriptors = np.empty((len(test_ds), ref_model.vision_encoder_dim), dtype="float32")
         text_descriptors = np.empty((len(test_ds), model.text_encoder_dim), dtype="float32")            
         all_descriptors = np.empty((len(test_ds), model.encoder_dim), dtype="float32")
         w_alpha = np.empty((len(test_ds), 2), dtype="float32")
@@ -269,6 +352,10 @@ def main(args):
             
         for images, indices, texts in tqdm(database_dataloader):
             encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors, w_alpha)
+            if args.is_ref_model:
+                descriptors = ref_model.encode_image(images.to(args.device))
+                descriptors = descriptors.cpu().numpy()
+                ref_vision_descriptors[indices.numpy(), :] = descriptors                    
 
         query_index = test_ds.num_database
         logger.debug("Extracting queries descriptors for evaluation/testing using batch size 1")
@@ -278,26 +365,34 @@ def main(args):
         queries_dataloader = DataLoader(dataset=queries_subset_ds, num_workers=args.num_workers, batch_size=args.batch_size)#1)
         for images, indices, texts in tqdm(queries_dataloader):
             encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors, w_alpha)
+            if args.is_ref_model:
+                descriptors = ref_model.encode_image(images.to(args.device))
+                descriptors = descriptors.cpu().numpy()
+                ref_vision_descriptors[indices.numpy(), :] = descriptors                    
             
         if args.is_pca:
             logger.debug("Fitting PCA on all descriptors")
             pca = PCA(n_components=args.pca_dim)
             pca.fit(all_descriptors)
-            logger.debug("Transforming all descriptors using PCA")
+            logger.debug("Transforming all descriptors using PCA")                        
             all_descriptors = pca.transform(all_descriptors)
+            model.encoder_dim = args.pca_dim
             if (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting' or args.fusion_type=='text_adapter': 
+                pca = PCA(n_components=args.pca_dim)
+                pca.fit(vision_descriptors)
                 logger.debug("Transforming vision descriptors using PCA")
                 vision_descriptors = pca.transform(vision_descriptors)
-              
-
+                model.vision_encoder_dim = args.pca_dim
+                
+   
     alpha = args.alpha_vision
     #alpha = w_alpha
     # Get queries predictions with alpha between 0.6 to 0.9 with jumps of 0.1
-    #for alpha in [0.6, 0.7, 0.8, 0.9, 0.95]:
-    for alpha in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
-    # if 1:
-        w_alpha[:,0] = alpha
-        w_alpha[:,1] = 1.0-alpha
+    #for alpha in [0.6, 0.7, 0.8, 0.9]:
+    #for alpha in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
+    if 1:
+        # w_alpha[:,0] = alpha
+        # w_alpha[:,1] = 1.0-alpha
         if (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting' or args.fusion_type=='text_adapter': 
             # vision
             vision_queries_descriptors = vision_descriptors[test_ds.num_database :]
@@ -309,7 +404,18 @@ def main(args):
             text_scores, text_predictions = get_queries_predictions(model.text_encoder_dim, text_database_descriptors, text_descriptors, text_queries_descriptors, args.max_results_reranking)
             # join vision and text predictions        
             if args.rerank_by_scores:
-                scores, predictions = rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index)
+                if args.is_ref_model:
+                    ref_vision_queries_descriptors = ref_vision_descriptors[test_ds.num_database :]
+                    ref_vision_database_descriptors = ref_vision_descriptors[: test_ds.num_database]    
+                    ref_vision_scores, ref_vision_predictions = get_queries_predictions(ref_model.vision_encoder_dim, ref_vision_database_descriptors, ref_vision_descriptors, ref_vision_queries_descriptors, args.max_results_reranking)
+                    mu_img   = 0.0111
+                    std_img  = 0.05
+                    min_img  = -5.24
+                    max_img  = 15.26
+                    ref_vision_scores = np.clip(ref_vision_scores, a_min=-1.0, a_max=1.0)
+                    ref_vision_scores  = (ref_vision_scores - mu_img) / std_img
+                    ref_vision_scores  = ((ref_vision_scores - min_img) / (max_img - min_img))*2-1     
+                scores, predictions = rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, ref_vision_scores)
             else:
                 scores, predictions = rerank_predictions_by_rank(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index)
                 

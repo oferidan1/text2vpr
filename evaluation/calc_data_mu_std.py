@@ -132,8 +132,8 @@ def main(args):
         
         min_t = np.min(sim_t)
         max_t = np.max(sim_t)
-        sim_t_new = ((sim_t-min_t)/(max_t-min_t))
-        #sim_t_new = ((sim_t-min_t)/(max_t-min_t))*2-1        
+        #sim_t_new = ((sim_t-min_t)/(max_t-min_t))
+        sim_t_new = ((sim_t-min_t)/(max_t-min_t))*2-1        
         
         logger.info(f"Text Similarity after min-max matrix mean: {np.mean(sim_t_new):.8f}")
         logger.info(f"Text Similarity after min-max matrix std: {np.std(sim_t_new):.8f}")
@@ -163,8 +163,8 @@ def main(args):
         
         min_v = np.min(sim_v)
         max_v = np.max(sim_v)
-        sim_v_new = ((sim_v-min_v)/(max_v-min_v))
-        #sim_v_new = ((sim_v-min_v)/(max_v-min_v))*2-1
+        #sim_v_new = ((sim_v-min_v)/(max_v-min_v))
+        sim_v_new = ((sim_v-min_v)/(max_v-min_v))*2-1
         
         logger.info(f"Vision Similarity after min-max matrix mean: {np.mean(sim_v_new):.8f}")
         logger.info(f"Vision Similarity after min-max matrix std: {np.std(sim_v_new):.8f}")

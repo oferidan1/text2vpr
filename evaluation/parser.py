@@ -31,6 +31,11 @@ def parse_arguments():
     # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/Pittsburgh30K/images/test/Pittsburgh30K_test_predictions.csv")
     # parser.add_argument("--image_root", type=str, default="/mnt/d/data/Pittsburgh30K/images/test")    
     
+    # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/msls/val/database")    
+    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/msls/val/query")
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_predictions.csv")
+    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/msls/val")    
+    
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/gsv_cities/Images")    
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/gsv_cities/Images")
     # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/gsv_cities/gsv_cities_predictions.csv")
@@ -80,7 +85,7 @@ def parse_arguments():
         help="set to True if you want to save the descriptors extracted by the model",
     )
     parser.add_argument("--gpu", type=str, default="0", help="which gpu to use")
-    parser.add_argument("--model_name", type=str, default='/mnt/d/ofer/localization/text2vpr/MixVPR_text/LOGS/resnet50/lightning_logs/version_44/checkpoints/resnet50_epoch(03)_step(2084).ckpt')
+    parser.add_argument("--model_name", type=str, default='/mnt/d/ofer/localization/text2vpr/MixVPR_text/LOGS/resnet50/lightning_logs/version_38_mixvpr4096_fixed_weighting/checkpoints/resnet50_epoch(09)_step(5210).ckpt')
     parser.add_argument("--vision_model_name", type=str, default="mixvpr")
     parser.add_argument("--vision_model_backbone", type=str, default="ResNet50")
     parser.add_argument("--text_model_name", type=str, default="BAAI/bge-large-en-v1.5")
@@ -97,8 +102,9 @@ def parse_arguments():
     parser.add_argument("--is_encode_image", type=int, default="1", help="encode image or not")
     parser.add_argument("--is_encode_text", type=int, default="1", help="encode text or not")
     parser.add_argument("--rerank_by_scores", type=int, default="1", help="rerank_by_scores or rerank_by_rank")
-    parser.add_argument("--is_pca", type=int, default="1", help="do pca on descriptors or not")
+    parser.add_argument("--is_pca", type=int, default="0", help="do pca on descriptors or not")
     parser.add_argument("--pca_dim", type=int, default="512", help="pca dimension")
+    parser.add_argument("--is_ref_model", type=int, default="0", help="is ref model")
 
     args = parser.parse_args()
     

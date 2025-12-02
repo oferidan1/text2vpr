@@ -67,8 +67,7 @@ class TestDataset(data.Dataset):
         
         # only for debug - small data check!!!!
         # random select a subset for quick testing in a random indices
-        # self.database_paths = np.random.choice(self.database_paths, size=20000, replace=False)
-        
+        # self.database_paths = np.random.choice(self.database_paths, size=20000, replace=False)        
         
         self.images_paths = list(self.database_paths)
         self.num_database = len(self.database_paths)
