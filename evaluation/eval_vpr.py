@@ -83,15 +83,15 @@ def standarize_scores(text_scores, vision_scores):
     min_text = -6.07
     max_text = 4.92           
     # #mixvpr 512
-    # mu_img   = 0.0111
-    # std_img  = 0.05
-    # min_img  = -5.24
-    # max_img  = 15.26
+    mu_img   = 0.0111
+    std_img  = 0.05
+    min_img  = -5.24
+    max_img  = 15.26
     #mixvpr 4096 GSV
-    mu_img   = 0.0048
-    std_img  = 0.027
-    min_img  = -5.55
-    max_img  = 30.67
+    # mu_img   = 0.0048
+    # std_img  = 0.027
+    # min_img  = -5.55
+    # max_img  = 30.67
     
     # pre-computed mu and std for normalization over amstertime
     # mu_text  = 0.66
@@ -262,7 +262,7 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
         descriptors, text_features, w = model.encode_single(images.to(args.device), texts)
         descriptors = descriptors.cpu().numpy()
         all_descriptors[indices.numpy(), :] = descriptors
-        if args.fusion_type == 'dynamic_weighting' or args.fusion_type == 'fixed_weighting' or args.fusion_type == 'text_adapter':
+        if args.fusion_type == 'dynamic_weighting' or args.fusion_type == 'fixed_weighting' or args.fusion_type == 'text_adapter' or args.fusion_type == 'transformer':
             vision_descriptors[indices.numpy(), :] = descriptors
             text_features = text_features.cpu().numpy()
             text_descriptors[indices.numpy(), :] = text_features  
@@ -393,7 +393,7 @@ def main(args):
     if 1:
         # w_alpha[:,0] = alpha
         # w_alpha[:,1] = 1.0-alpha
-        if (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting' or args.fusion_type=='text_adapter': 
+        if (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting' or args.fusion_type=='text_adapter' or args.fusion_type == 'transformer': 
             # vision
             vision_queries_descriptors = vision_descriptors[test_ds.num_database :]
             vision_database_descriptors = vision_descriptors[: test_ds.num_database]    

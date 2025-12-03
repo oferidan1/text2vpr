@@ -273,18 +273,18 @@ class VPRModel_text(pl.LightningModule):
         
         if is_encode_image and is_encode_text:
             if self.fusion_type == 'transformer':
-                #self.vpr_adapter = nn.Linear(vpr_output_dim, embeds_dim)  # mix vpr dim embedding
-                #self.text_adapter = nn.Linear(text_encoder_dim, embeds_dim)  # BGE large has 1024-dim embedding     
+                self.vpr_adapter = nn.Linear(256, embeds_dim)  # mix vpr dim embedding
+                self.text_adapter = nn.Linear(text_encoder_dim, embeds_dim)  # BGE large has 1024-dim embedding     
                 text_embedder_dim = text_encoder_dim
-                # self.cls = nn.Parameter(torch.randn(1, 1, text_embedder_dim))
+                self.cls = nn.Parameter(torch.randn(1, 1, embeds_dim))  # Learnable [CLS] token
                 # # Define the core Transformer Encoder stack
-                # encoder_layer = nn.TransformerEncoderLayer(d_model=text_embedder_dim, nhead=4, batch_first=True)  
+                encoder_layer = nn.TransformerEncoderLayer(d_model=embeds_dim, nhead=4, batch_first=True)  
                 # # Input shape: (sequence_length, batch_size, d_model)        
-                # self.text_embedder = nn.TransformerEncoder(encoder_layer, 1)
+                self.fusion = nn.TransformerEncoder(encoder_layer, 1)
                 # dynamic_weighting
-                self.text_adapter = nn.Linear(text_encoder_dim, text_embedder_dim)  # BGE large has 1024-dim embedding     
-                input_dim = vpr_output_dim + text_embedder_dim
-                self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, 2), nn.Softmax(dim=1))
+                # input_dim = vpr_output_dim + text_embedder_dim
+                # self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, 2), nn.Softmax(dim=1))
+                self.w_proj = nn.Sequential(nn.Linear(embeds_dim, 2), nn.Softmax(dim=1))
             elif self.fusion_type == 'mlp':
                 input_dim = vpr_output_dim + text_encoder_dim
                 self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, embeds_dim))
@@ -332,8 +332,8 @@ class VPRModel_text(pl.LightningModule):
         if self.is_encode_image:
             with torch.no_grad():      
                 img_embeds = self.vpr_encoder.backbone(img)
-                #img_embeds, img_embeds_not_normilized = self.vpr_encoder.aggregator(img_embeds)
-                img_embeds = self.vpr_encoder.aggregator(img_embeds)
+                img_embeds, img_embeds_proj = self.vpr_encoder.aggregator(img_embeds)
+                #img_embeds = self.vpr_encoder.aggregator(img_embeds)
                 embeds = img_embeds
         if self.is_encode_text:        
             # text_embeds = self.text_encoder.encode(text, normalize_embeddings=True, convert_to_tensor=True)        
@@ -365,18 +365,18 @@ class VPRModel_text(pl.LightningModule):
         if self.is_encode_image and self.is_encode_text:        
             if self.fusion_type == 'transformer':
                 text_last_hidden_state = model_output.last_hidden_state
-                #img_embeds = self.vpr_adapter(img_embeds)
-                #text_features = self.text_adapter(text_last_hidden_state)
+                img_embeds_proj = self.vpr_adapter(img_embeds_proj)
+                text_features = self.text_adapter(text_last_hidden_state)
                 # fusion type is transformer encoder
                 # Expand the learnable [CLS] token to match the batch size
                 cls_tokens = self.cls.expand(batch_size, -1, -1)                    
                 # Prepend the [CLS] token to the input sequence
                 # The new sequence length is (original_seq_len + 1)        
                 # concat cls_token, text_features as input to fusion transformer encoder
-                embeds_input = torch.cat([cls_tokens, text_last_hidden_state], dim=1)
-                text_embeds = self.text_embedder(embeds_input)[:,0,:]
-                embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
-                w = self.fusion(embeds_input)                
+                embeds_input = torch.cat([cls_tokens, text_features, img_embeds_proj], dim=1)
+                embeds_cls = self.fusion(embeds_input)[:,0,:]
+                # embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
+                w = self.w_proj(embeds_cls)                                
                 embeds = img_embeds
             elif self.fusion_type == 'mlp':
                 embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
@@ -457,19 +457,18 @@ class VPRModel_text(pl.LightningModule):
 
 
  #  The loss function call (this method will be called at each training iteration)
-    def loss_function(self, descriptors, labels, text_embeds, w):
+    def loss_function_ce(self, descriptors, labels, text_embeds, w):
         # we mine the pairs/triplets if there is an online mining strategy
         if self.miner is not None:
             miner_outputs = self.miner(descriptors, labels)     
-            loss_v = self.loss_fn(descriptors, labels, miner_outputs)
-            loss_t = self.loss_fn(text_embeds, labels, miner_outputs)
-            #create new labels by softmax loss_v and loss_t
-            #concat loss_v and loss_t
-            
-            loss_cat = torch.cat((loss_v.unsqueeze(0), loss_t.unsqueeze(0)), dim=0)
-            labels_ce = F.softmax(loss_cat, dim=0)
-            w_vec = torch.cat((w, 1-w, ), dim=0).to(self.my_device)
-            loss = F.cross_entropy(w_vec, labels_ce)
+            loss = self.loss_fn(descriptors, labels, miner_outputs)
+            # loss_t = self.loss_fn(text_embeds, labels, miner_outputs)
+            ## create new labels by softmax loss_v and loss_t
+            ## concat loss_v and loss_t            
+            # loss_cat = torch.cat((loss_v.unsqueeze(0), loss_t.unsqueeze(0)), dim=0)
+            # labels_ce = F.softmax(loss_cat, dim=0)
+            # w_vec = torch.cat((w, 1-w, ), dim=0).to(self.my_device)
+            # loss = F.cross_entropy(w_vec, labels_ce)
 
             # mining hard negatives by text embeddings
             # miner_outputs_text = self.miner(text_embeds, labels)
@@ -506,14 +505,14 @@ class VPRModel_text(pl.LightningModule):
         return loss
             
     #  The loss function call (this method will be called at each training iteration)
-    def loss_function_(self, descriptors, labels, text_embeds, w):
+    def loss_function(self, descriptors, labels, text_embeds, w):
         # we mine the pairs/triplets if there is an online mining strategy
         if self.miner is not None:
             miner_outputs = self.miner(descriptors, labels)     
             loss = self.loss_fn(descriptors, labels, miner_outputs, embeds2=text_embeds, w=w)
             
             # mining hard negatives by text embeddings
-            miner_outputs_text = self.miner(text_embeds, labels)
+            # miner_outputs_text = self.miner(text_embeds, labels)
             # loss += 0.3*self.loss_fn(descriptors, labels, miner_outputs_text, embeds2=text_embeds, w=w)
             
             if w is not None:

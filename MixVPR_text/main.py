@@ -16,12 +16,12 @@ from mixvpr_text import VPRModel_text
 def parse_arguments():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # Resume parameters
-    parser.add_argument("--vpr_resume_model", type=str, default='checkpoints/resnet50_MixVPR_4096_channels(1024)_rows(4).ckpt', help="path to model to resume, e.g. logs/.../best_model.pth")    
-    parser.add_argument("--vpr_rows", type=int, default=4, help="number of rows for vpr embeddings")
-    parser.add_argument("--vpr_dim", type=int, default=4096, help="dimension of the vpr embeddings")
-    # parser.add_argument("--vpr_resume_model", type=str, default='checkpoints/resnet50_MixVPR_512_channels(256)_rows(2).ckpt', help="path to model to resume, e.g. logs/.../best_model.pth")
-    # parser.add_argument("--vpr_rows", type=int, default=2, help="number of rows for vpr embeddings")
-    # parser.add_argument("--vpr_dim", type=int, default=512, help="dimension of the vpr embeddings")
+    # parser.add_argument("--vpr_resume_model", type=str, default='checkpoints/resnet50_MixVPR_4096_channels(1024)_rows(4).ckpt', help="path to model to resume, e.g. logs/.../best_model.pth")    
+    # parser.add_argument("--vpr_rows", type=int, default=4, help="number of rows for vpr embeddings")
+    # parser.add_argument("--vpr_dim", type=int, default=4096, help="dimension of the vpr embeddings")
+    parser.add_argument("--vpr_resume_model", type=str, default='checkpoints/resnet50_MixVPR_512_channels(256)_rows(2).ckpt', help="path to model to resume, e.g. logs/.../best_model.pth")
+    parser.add_argument("--vpr_rows", type=int, default=2, help="number of rows for vpr embeddings")
+    parser.add_argument("--vpr_dim", type=int, default=512, help="dimension of the vpr embeddings")
     # Other parameters
     parser.add_argument("--gpu", type=str, default='1', help="gpu id(s) to use")    
     parser.add_argument("--train_csv", type=str, default="/mnt/d/data/gsv_cities/gsv_cities_predictions.csv")    
@@ -30,13 +30,13 @@ def parse_arguments():
     parser.add_argument("--is_freeze_text", type=int, default="1", help="freeze text encoder or not")
     parser.add_argument("--is_freeze_vpr", type=int, default="1", help="freeze vpr encoder or not")    
     parser.add_argument("--embeds_dim", type=int, default=512, help="dimension of the embeddings")
-    parser.add_argument("--fusion_type", type=str, default='fixed_weighting', help="type of fusion to use: mlp, transformer, dynamic_weighting, fixed_weighting, text_adapter")
+    parser.add_argument("--fusion_type", type=str, default='transformer', help="type of fusion to use: mlp, transformer, dynamic_weighting, fixed_weighting, text_adapter")
     parser.add_argument("--is_encode_image", type=int, default="1", help="encode image or not")
     parser.add_argument("--is_encode_text", type=int, default="1", help="encode text or not")
     parser.add_argument("--is_trainable_text_encoder", type=int, default="0", help="train text encoder or not")
     parser.add_argument("--batch_size", type=int, default="120", help="batch size for training")
-    #parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss_Sij", help="name of the loss function to use")
-    parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss", help="name of the loss function to use")
+    parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss_Sij", help="name of the loss function to use")
+    #parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss", help="name of the loss function to use")
 
     args = parser.parse_args()
     

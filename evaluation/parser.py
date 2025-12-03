@@ -6,10 +6,10 @@ def parse_arguments():
 
     parser.add_argument("--positive_dist_threshold", type=int, default=25, help="distance (in meters) for a prediction to be considered a positive")
     
-    # parser.add_argument("--vision_dimension", type=int, default=512, help="_")
-    # parser.add_argument("--vpr_rows", type=int, default=2, help="number of rows for vpr embeddings")
-    parser.add_argument("--vision_dimension", type=int, default=4096, help="_")
-    parser.add_argument("--vpr_rows", type=int, default=4, help="number of rows for vpr embeddings")
+    parser.add_argument("--vision_dimension", type=int, default=512, help="_")
+    parser.add_argument("--vpr_rows", type=int, default=2, help="number of rows for vpr embeddings")
+    # parser.add_argument("--vision_dimension", type=int, default=4096, help="_")
+    # parser.add_argument("--vpr_rows", type=int, default=4, help="number of rows for vpr embeddings")
     
     parser.add_argument("--database_folder", type=str, default="/mnt/d/data/amstertime/test/database")    
     parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")    
