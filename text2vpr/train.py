@@ -10,18 +10,15 @@ from models import helper
 from sentence_transformers import SentenceTransformer
 import os
 import argparse
-from mixvpr_text import VPRModel_text
+from vpr_text import VPR_Text_Model
 
 
 def parse_arguments():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # Resume parameters
-    # parser.add_argument("--vpr_resume_model", type=str, default='checkpoints/resnet50_MixVPR_4096_channels(1024)_rows(4).ckpt', help="path to model to resume, e.g. logs/.../best_model.pth")    
-    # parser.add_argument("--vpr_rows", type=int, default=4, help="number of rows for vpr embeddings")
-    # parser.add_argument("--vpr_dim", type=int, default=4096, help="dimension of the vpr embeddings")
-    parser.add_argument("--vpr_resume_model", type=str, default='checkpoints/resnet50_MixVPR_512_channels(256)_rows(2).ckpt', help="path to model to resume, e.g. logs/.../best_model.pth")
-    parser.add_argument("--vpr_rows", type=int, default=2, help="number of rows for vpr embeddings")
     parser.add_argument("--vpr_dim", type=int, default=512, help="dimension of the vpr embeddings")
+    parser.add_argument("--vpr_model_name", type=str, default="mixvpr")
+    parser.add_argument("--vpr_model_backbone", type=str, default="ResNet50")
     # Other parameters
     parser.add_argument("--gpu", type=str, default='1', help="gpu id(s) to use")    
     parser.add_argument("--train_csv", type=str, default="/mnt/d/data/gsv_cities/gsv_cities_predictions.csv")    
@@ -67,21 +64,11 @@ if __name__ == '__main__':
     # resnext50_32x4d, resnext50_32x4d_swsl , resnext101_32x4d_swsl, resnext101_32x8d_swsl
     # efficientnet_b0, efficientnet_b1, efficientnet_b2
     # swinv2_base_window12to16_192to256_22kft1k
-    model = VPRModel_text(
+    model = VPR_Text_Model(
         #---- Encoder
-        backbone_arch='resnet50',
-        pretrained=True,
-        layers_to_freeze=2,
-        layers_to_crop=[4], # 4 crops the last resnet layer, 3 crops the 3rd, ...etc
-        agg_arch='MixVPR',
-        
-        agg_config={'in_channels' : 1024,
-                'in_h' : 20,
-                'in_w' : 20,
-                'out_channels' : args.vpr_dim // args.vpr_rows, # final out dim will be out_channels * out_rows
-                'mix_depth' : 4,
-                'mlp_ratio' : 1,
-                'out_rows' : args.vpr_rows}, # the output dim will be (out_rows * out_channels)
+        vpr_model_name=args.vpr_model_name,
+        vpr_model_backbone=args.vpr_model_backbone.lower(),
+        vpr_encoder_dim=args.vpr_dim,
         
         #---- Train hyperparameters
         lr=0.05, # 0.0002 for adam, 0.05 or sgd (needs to change according to batch size)
@@ -109,9 +96,9 @@ if __name__ == '__main__':
         is_trainable_text_encoder=args.is_trainable_text_encoder,
     )
     
-    if args.is_encode_image and  args.vpr_resume_model is not None:
-        model_state_dict = torch.load(args.vpr_resume_model)
-        model.vpr_encoder.load_state_dict(model_state_dict)
+    # if args.is_encode_image and  args.vpr_resume_model is not None:
+    #     model_state_dict = torch.load(args.vpr_resume_model)
+    #     model.vpr_encoder.load_state_dict(model_state_dict)
         
     model = model.to('cuda')
     
