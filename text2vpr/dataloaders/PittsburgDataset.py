@@ -13,12 +13,12 @@ from glob import glob
 from PIL import Image
 from sklearn.neighbors import NearestNeighbors
 
-root_dir = '/mnt/d/data/Pittsburgh30K/orig'
-images_root = '/mnt/d/data/Pittsburgh30K/Images/test/'
-csv_path = '/mnt/d/data/Pittsburgh30K/Images/test/Pittsburgh30K_test_predictions.csv'
-# root_dir = 'd:/data/Pittsburgh30K/orig'
-# images_root = 'd:/data/Pittsburgh30K/Images/test/'
-# csv_path = 'd:/data/Pittsburgh30K/Images/test/Pittsburgh30K_test_predictions.csv'
+# root_dir = '/mnt/d/data/Pittsburgh30K/orig'
+# images_root = '/mnt/d/data/Pittsburgh30K/Images/test/'
+# csv_path = '/mnt/d/data/Pittsburgh30K/Images/test/Pittsburgh30K_test_predictions.csv'
+root_dir = '/mnt/d/data/amstertime/test'
+images_root = '/mnt/d/data/amstertime/test'
+csv_path = '/mnt/d/data/amstertime/test/amstertime_test_predictions.csv'
 
 if not exists(root_dir):
     raise FileNotFoundError(
@@ -151,14 +151,14 @@ class WholeDatasetFromStruct(data.Dataset):
 
         self.input_transform = input_transform
 
-        self.dbStruct = parse_dbStruct(structFile)
+        #self.dbStruct = parse_dbStruct(structFile)
         # self.images = [join(root_dir, dbIm) for dbIm in self.dbStruct.dbImage]
         # if not onlyDB:
         #     self.images += [join(queries_dir, qIm)
         #                     for qIm in self.dbStruct.qImage]
 
-        self.whichSet = self.dbStruct.whichSet
-        self.dataset = self.dbStruct.dataset
+        # self.whichSet = self.dbStruct.whichSet
+        # self.dataset = self.dbStruct.dataset
         
         #db = [join(root_dir, dbIm) for dbIm in self.dbStruct.dbImage]
         #q = [join(queries_dir, qIm) for qIm in self.dbStruct.qImage]
@@ -176,7 +176,7 @@ class WholeDatasetFromStruct(data.Dataset):
     def __getitem__(self, index):
         # img_path = self.images[index]
         img_path = self.image_path[index]
-        img = Image.open(img_path)
+        img = Image.open(img_path).convert('RGB')
 
         if self.input_transform:
             img = self.input_transform(img)
@@ -220,8 +220,9 @@ class WholeDatasetFromStruct(data.Dataset):
             # Find positives_per_query, which are within positive_dist_threshold (default 25 meters)
             knn = NearestNeighbors(n_jobs=-1)
             knn.fit(self.database_utms)
+            posDistThr = 25 #self.dbStruct.posDistThr
             self.distances, self.positives = knn.radius_neighbors(
-                self.queries_utms, radius=self.dbStruct.posDistThr)
+                self.queries_utms, radius=posDistThr)
       
         return self.positives
     

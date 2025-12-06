@@ -631,7 +631,7 @@ class VPR_Text_Model(pl.LightningModule):
             r_list = feats[ : num_references]
             q_list = feats[num_references : ]
             
-            if self.fusion_type == 'dynamic_weighting':
+            if self.fusion_type == 'dynamic_weighting' or self.fusion_type == 'fixed_weighting' or self.fusion_type == 'text_adapter' or self.fusion_type == 'transformer':
                 r_text_list = text_feats[ : num_references]
                 q_text_list = text_feats[num_references : ]
                 r_w_list = w_feats[ : num_references]

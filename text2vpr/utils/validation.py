@@ -75,12 +75,12 @@ def get_validation_recalls_dynamic_fusion(r_list, q_list, r_text_list, q_text_li
         faiss_index_t.add(r_text_list)
 
         # search for queries in the index
-        max_k = 10000
+        max_k = min(10000, len(r_list))
         scores, predictions = faiss_index_i.search(q_list, max_k)
         scores_t, predictions_t = faiss_index_t.search(q_text_list, max_k)
         
         #loop over indexes and and re-rank predictions according to dynamic weights where index_i == index_t
-        rerank_predictions(scores, predictions, scores_t, predictions_t, w_r, max_results=max(k_values))
+        rerank_predictions(scores, predictions, scores_t, predictions_t, w_r, w_q, max_results=max(k_values))
 
         # start calculating recall_at_k
         correct_at_k = np.zeros(len(k_values))
@@ -104,26 +104,34 @@ def get_validation_recalls_dynamic_fusion(r_list, q_list, r_text_list, q_text_li
         return d
 
 @staticmethod
-def rerank_predictions(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results):
+def rerank_predictions(vision_scores, vision_predictions, text_scores, text_predictions, w_r, w_q, max_results):
     # sum scores according the where vision and text predictions are the same
     combined_scores = []
     combined_predictions = []
+    print("mean w_alpha vision:", w_r[:,0].mean(), w_r[:,0].std())
+    print("mean w_alpha text:", w_r[:,1].mean(), w_r[:,1].std())
+    query_index = 0
     for v_scores, v_preds, t_scores, t_preds in zip(vision_scores, vision_predictions, text_scores, text_predictions):
         score_dict = {}
+        w_query_v = w_q[query_index][0]
         for score, pred in zip(v_scores, v_preds):
             if pred not in score_dict:
                 score_dict[pred] = 0
-            score_dict[pred] += w_alpha[pred][0] * score
+            #score_dict[pred] += w_alpha[pred][0] * score 
+            score_dict[pred] += (w_r[pred][0]+w_query_v)/2 * score 
+        w_query_t = w_q[query_index][1]
         for score, pred in zip(t_scores, t_preds):
             if pred not in score_dict:
                 score_dict[pred] = 0
-            score_dict[pred] += w_alpha[pred][1] * score
+            #score_dict[pred] += w_r[pred][1] * score 
+            score_dict[pred] += (w_r[pred][1]+w_query_t)/2 * score 
         # sort by score
         sorted_items = sorted(score_dict.items(), key=lambda x: x[1], reverse=True)
         preds_sorted = [item[0] for item in sorted_items][:max_results]
         scores_sorted = [item[1] for item in sorted_items][:max_results]
         combined_predictions.append(preds_sorted)
         combined_scores.append(scores_sorted)
+        query_index += 1
         
     combined_predictions = np.array(combined_predictions)
     combined_scores = np.array(combined_scores)

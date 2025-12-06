@@ -151,7 +151,7 @@ def rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores,
     vision_scores = np.clip(vision_scores, a_min=-1.0, a_max=1.0)
     
     # standarize scores
-    text_scores, vision_scores = standarize_scores(text_scores, vision_scores)
+    #text_scores, vision_scores = standarize_scores(text_scores, vision_scores)
     if vision_scores_ref is not None:
         vision_scores = wasserstein_transform_batch(vision_scores, vision_scores_ref)    
 
@@ -293,6 +293,8 @@ def get_queries_predictions(encoder_dim, database_descriptors, all_descriptors, 
 def main(args):
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     os.environ["TOKENIZERS_PARALLELISM"] = "False"
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
     start_time = datetime.now()
 
     logger.remove()  # Remove possibly previously existing loggers
@@ -386,6 +388,7 @@ def main(args):
                 
    
     alpha = args.alpha_vision
+    max_results_reranking = min(args.max_results_reranking, test_ds.num_database)
     #alpha = w_alpha
     # Get queries predictions with alpha between 0.6 to 0.9 with jumps of 0.1
     #for alpha in [0.6, 0.7, 0.8, 0.9]:
@@ -397,17 +400,17 @@ def main(args):
             # vision
             vision_queries_descriptors = vision_descriptors[test_ds.num_database :]
             vision_database_descriptors = vision_descriptors[: test_ds.num_database]    
-            vision_scores, vision_predictions = get_queries_predictions(model.vpr_encoder_dim, vision_database_descriptors, vision_descriptors, vision_queries_descriptors, args.max_results_reranking)
+            vision_scores, vision_predictions = get_queries_predictions(model.vpr_encoder_dim, vision_database_descriptors, vision_descriptors, vision_queries_descriptors, max_results_reranking)
             # text
             text_queries_descriptors = text_descriptors[test_ds.num_database :]
             text_database_descriptors = text_descriptors[: test_ds.num_database]    
-            text_scores, text_predictions = get_queries_predictions(model.text_encoder_dim, text_database_descriptors, text_descriptors, text_queries_descriptors, args.max_results_reranking)
+            text_scores, text_predictions = get_queries_predictions(model.text_encoder_dim, text_database_descriptors, text_descriptors, text_queries_descriptors, max_results_reranking)
             # join vision and text predictions        
             if args.rerank_by_scores:
                 if args.is_ref_model:
                     ref_vision_queries_descriptors = ref_vision_descriptors[test_ds.num_database :]
                     ref_vision_database_descriptors = ref_vision_descriptors[: test_ds.num_database]    
-                    ref_vision_scores, ref_vision_predictions = get_queries_predictions(ref_model.vpr_encoder_dim, ref_vision_database_descriptors, ref_vision_descriptors, ref_vision_queries_descriptors, args.max_results_reranking)
+                    ref_vision_scores, ref_vision_predictions = get_queries_predictions(ref_model.vpr_encoder_dim, ref_vision_database_descriptors, ref_vision_descriptors, ref_vision_queries_descriptors, max_results_reranking)
                     mu_img   = 0.0111
                     std_img  = 0.05
                     min_img  = -5.24

@@ -55,8 +55,8 @@ if __name__ == '__main__':
         num_workers=4,#28,
         show_data_stats=True,
         #val_set_names=['pitts30k_val', 'pitts30k_test', 'msls_val'], # pitts30k_val, pitts30k_test, msls_val
-        #val_set_names=['pitts30k_test'],
-        val_set_names=[],
+        val_set_names=['pitts30k_test'],
+        #val_set_names=[],
     )
     
     # examples of backbones
@@ -76,6 +76,7 @@ if __name__ == '__main__':
         weight_decay=0.001, # 0.001 for sgd and 0 for adam,
         momentum=0.9,
         warmpup_steps=650,
+        #milestones=[2],
         milestones=[2,4,6,8],
         lr_mult=0.3,
 
@@ -104,22 +105,22 @@ if __name__ == '__main__':
     
     # model params saving using Pytorch Lightning
     # we save the best 3 models accoring to Recall@1 on pittsburg val
-    # checkpoint_cb = ModelCheckpoint(
-    #     monitor='pitts30k_test/R1',
-    #     filename=f'{"resnet50"}' +
-    #     '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_test/R1:.4f}]_R5[{pitts30k_test/R5:.4f}]',
-    #     auto_insert_metric_name=False,
-    #     save_weights_only=True,
-    #     save_top_k=3,
-    #     mode='max',)
-    checkpoint_cb = ModelCheckpoint(        
+    checkpoint_cb = ModelCheckpoint(
+        monitor='pitts30k_test/R1',
         filename=f'{"resnet50"}' +
-        '_epoch({epoch:02d})_step({step:04d})',
+        '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_test/R1:.4f}]_R5[{pitts30k_test/R5:.4f}]',
         auto_insert_metric_name=False,
         save_weights_only=True,
-        save_top_k=-1,
-        every_n_epochs=1,
+        save_top_k=3,
         mode='max',)
+    # checkpoint_cb = ModelCheckpoint(        
+    #     filename=f'{"resnet50"}' +
+    #     '_epoch({epoch:02d})_step({step:04d})',
+    #     auto_insert_metric_name=False,
+    #     save_weights_only=True,
+    #     save_top_k=-1,
+    #     every_n_epochs=1,
+    #     mode='max',)
 
     #------------------
     # we instanciate a trainer
