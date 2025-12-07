@@ -25,21 +25,24 @@ class GenericPairLoss(BaseMetricLossFunction):
         min_text = -6.07
         max_text = 4.92
        # #mixvpr 512
-        mu_img   = 0.0111
-        std_img  = 0.05
-        min_img  = -5.24
-        max_img  = 15.26
-        #mixvpr 4096
-        # mu_img   = 0.0048
-        # std_img  = 0.027
-        # min_img  = -5.55
-        # max_img  = 30.67
+        if embeddings.shape[1] == 512:
+            mu_img   = 0.0111
+            std_img  = 0.05
+            min_img  = -5.24
+            max_img  = 15.26
+        else: #mixvpr 4096
+            mu_img   = 0.0048
+            std_img  = 0.027
+            min_img  = -5.55
+            max_img  = 30.67
             
         # calc text sim in the batch
         img_sim = torch.matmul(embeddings, embeddings.T)
-        # img_sim  = torch.clamp(img_sim, min=-1.0, max=1.0)
-        # img_sim  = (img_sim - mu_img) / std_img        
-        # img_sim  = ((img_sim - min_img) / (max_img - min_img)) *2-1     
+        
+        # normalize features
+        img_sim  = torch.clamp(img_sim, min=-1.0, max=1.0)
+        img_sim  = (img_sim - mu_img) / std_img        
+        img_sim  = ((img_sim - min_img) / (max_img - min_img)) *2-1     
          
         #TBD: is_trainable_text_encoder
         # img_sim  = (img_sim - mu_text) / std_text
@@ -49,9 +52,11 @@ class GenericPairLoss(BaseMetricLossFunction):
         
         if embeds2 is not None:
             text_sim = torch.matmul(embeds2, embeds2.T)
-            # text_sim = torch.clamp(text_sim, min=-1.0, max=1.0)        
-            # text_sim = (text_sim - mu_text) / std_text
-            # text_sim = ((text_sim - min_text) / (max_text - min_text)) *2-1          
+            
+            # normalize features
+            text_sim = torch.clamp(text_sim, min=-1.0, max=1.0)        
+            text_sim = (text_sim - mu_text) / std_text
+            text_sim = ((text_sim - min_text) / (max_text - min_text)) *2-1          
             
             s_ij = text_sim      
 

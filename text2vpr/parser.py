@@ -92,7 +92,7 @@ def parse_arguments():
     parser.add_argument("--dual_encoder_fusion", type=str, default="each", help="cat/each")    
     parser.add_argument("--encode_mode", type=str, default="both", help="both/image/text")   
     parser.add_argument("--fusion_type", type=str, default='fixed_weighting', help="type of fusion to use: mlp, transformer, dynamic_weighting, fixed_weighting, text_adapter")
-    parser.add_argument("--is_normalize", type=int, default="0", help="is normalize features")    
+    parser.add_argument("--is_normalize", type=int, default="1", help="is normalize features")    
     parser.add_argument("--max_results_reranking", type=int, default="25000", help="max results for reranking")    
     parser.add_argument("--alpha_vision", type=float, default=0.9, help="weight for vision scores in reranking")    
     parser.add_argument("--alpha_loop", type=int, default=0, help="try multiple alpha values in loop of reranking")    
