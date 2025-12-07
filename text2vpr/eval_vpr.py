@@ -131,6 +131,10 @@ def standarize_scores(text_scores, vision_scores):
     # std_img  = 0.066
     # min_img  = -4.24
     # max_img  = 13.5
+    
+    # clip scores to avoid negative nan in standarization
+    text_scores = np.clip(text_scores, a_min=-1.0, a_max=1.0)
+    vision_scores = np.clip(vision_scores, a_min=-1.0, a_max=1.0)
      
     # # normalize scores
     text_scores = (text_scores - mu_text) / std_text
@@ -141,19 +145,16 @@ def standarize_scores(text_scores, vision_scores):
     return text_scores, vision_scores
 
 
-def rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, vision_scores_ref=None):
+def rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, is_normalize, vision_scores_ref=None):
     # sum scores according the where vision and text predictions are the same
     combined_scores = []
     combined_predictions = []
     
-    # clip scores to avoid negative nan in standarization
-    text_scores = np.clip(text_scores, a_min=-1.0, a_max=1.0)
-    vision_scores = np.clip(vision_scores, a_min=-1.0, a_max=1.0)
-    
     # standarize scores
-    #text_scores, vision_scores = standarize_scores(text_scores, vision_scores)
-    if vision_scores_ref is not None:
-        vision_scores = wasserstein_transform_batch(vision_scores, vision_scores_ref)    
+    if is_normalize:
+        text_scores, vision_scores = standarize_scores(text_scores, vision_scores)
+        if vision_scores_ref is not None:
+            vision_scores = wasserstein_transform_batch(vision_scores, vision_scores_ref)    
 
     print("mean w_alpha vision:", w_alpha[:,0].mean(), w_alpha[:,0].std())
     print("mean w_alpha text:", w_alpha[:,1].mean(), w_alpha[:,1].std())
@@ -248,8 +249,6 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
         if args.dual_encoder_fusion == 'cat':
             descriptors = torch.cat((image_features, text_features), dim=1)
             descriptors = descriptors.cpu().numpy()
-            if args.is_normalize_features:
-                descriptors = normlize_features(descriptors)
             all_descriptors[indices.numpy(), :] = descriptors
         else:
             # each fusion: save each modality
@@ -388,7 +387,7 @@ def main(args):
                 
    
     alpha = args.alpha_vision
-    max_results_reranking = min(args.max_results_reranking, test_ds.num_database)
+    max_results_reranking = test_ds.num_database
     #alpha = w_alpha
     # Get queries predictions with alpha between 0.6 to 0.9 with jumps of 0.1
     #for alpha in [0.6, 0.7, 0.8, 0.9]:
@@ -418,7 +417,7 @@ def main(args):
                     ref_vision_scores = np.clip(ref_vision_scores, a_min=-1.0, a_max=1.0)
                     ref_vision_scores  = (ref_vision_scores - mu_img) / std_img
                     ref_vision_scores  = ((ref_vision_scores - min_img) / (max_img - min_img))*2-1     
-                scores, predictions = rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, ref_vision_scores)
+                scores, predictions = rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, args.is_normalize, ref_vision_scores)
             else:
                 scores, predictions = rerank_predictions_by_rank(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index)
                 
