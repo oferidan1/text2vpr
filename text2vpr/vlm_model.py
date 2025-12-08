@@ -76,7 +76,7 @@ class VLM_Model:
             
     def encode_dual(self, images, texts):
         with torch.no_grad():
-            image_features = self.vision_encoder(images)
+            image_features = self.vpr_encoder(images)
             text_features = self.encode_text(texts)       
         return image_features, text_features
     
@@ -87,7 +87,7 @@ class VLM_Model:
     
     def encode_image(self, images):
         with torch.no_grad():
-            image_features = self.vision_encoder(images)            
+            image_features = self.vpr_encoder(images)            
         return image_features
     
     def encode_text(self, texts):

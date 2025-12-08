@@ -238,7 +238,9 @@ class VPR_Text_Model(pl.LightningModule):
             elif self.fusion_type == 'mlp':
                 input_dim = vpr_encoder_dim + text_encoder_dim
                 self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, embeds_dim))                
-                #self.fusion_residual = nn.Linear(input_dim, embeds_dim)
+            elif self.fusion_type == 'add':
+                self.vpr_proj = nn.Linear(vpr_encoder_dim, embeds_dim)
+                self.text_proj = nn.Linear(text_encoder_dim, embeds_dim)
             elif self.fusion_type == 'dynamic_weighting':
                 input_dim = vpr_encoder_dim + text_encoder_dim
                 self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, 2), nn.Softmax(dim=1))                
@@ -360,7 +362,11 @@ class VPR_Text_Model(pl.LightningModule):
                 embeds = img_embeds
             elif self.fusion_type == 'mlp':
                 embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
-                embeds = self.fusion(embeds_input) #+ self.fusion_residual(embeds_input)     
+                embeds = self.fusion(embeds_input) 
+                embeds = torch.nn.functional.normalize(embeds, p=2, dim=1)
+            elif self.fusion_type == 'add':
+                embeds = self.vpr_proj(img_embeds) + self.text_proj(text_embeds)
+                embeds = torch.nn.functional.normalize(embeds, p=2, dim=1)
             elif self.fusion_type == 'dynamic_weighting':                
                 # calc dynamic weighting
                 #embeds_input = torch.cat([img_embeds_not_normilized, text_embeds_not_normilized], dim=1)

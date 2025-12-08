@@ -63,7 +63,12 @@ class TestDataset(data.Dataset):
         """
         super().__init__()
 
-        self.database_paths = read_images_paths(database_folder)
+        self.images_paths_csv, self.descriptions = read_csv_file(csv_path, image_root)
+
+        #loop over images_paths_csv. if path contains database_folder, add to database_paths
+        self.database_paths = [path for path in self.images_paths_csv if database_folder in path]       
+
+        #self.database_paths = read_images_paths(database_folder)
         
         # only for debug - small data check!!!!
         # random select a subset for quick testing in a random indices
@@ -74,7 +79,9 @@ class TestDataset(data.Dataset):
         self.num_queries = 0        
         
         if queries_folder is not None:
-            self.queries_paths = read_images_paths(queries_folder)
+            #self.queries_paths = read_images_paths(queries_folder)
+             #loop over images_paths_csv. if path contains queries_folder, add to queries_paths
+            self.queries_paths = [path for path in self.images_paths_csv if queries_folder in path]
             self.images_paths += list(self.queries_paths)
             self.num_queries = len(self.queries_paths)
 
@@ -114,8 +121,6 @@ class TestDataset(data.Dataset):
             image_size=(image_size,image_size)
             transformations.append(transforms.Resize(size=image_size, antialias=True))
         self.transform = transforms.Compose(transformations)
-        
-        self.images_paths_csv, self.descriptions = read_csv_file(csv_path, image_root)
 
 
     def __getitem__(self, index):

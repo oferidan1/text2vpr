@@ -27,7 +27,7 @@ def parse_arguments():
     parser.add_argument("--is_freeze_text", type=int, default="1", help="freeze text encoder or not")
     parser.add_argument("--is_freeze_vpr", type=int, default="1", help="freeze vpr encoder or not")    
     parser.add_argument("--embeds_dim", type=int, default=512, help="dimension of the embeddings")
-    parser.add_argument("--fusion_type", type=str, default='text_adapter', help="type of fusion to use: mlp, transformer, dynamic_weighting, fixed_weighting, text_adapter")
+    parser.add_argument("--fusion_type", type=str, default='text_adapter', help="type of fusion to use: mlp, add, transformer, dynamic_weighting, fixed_weighting, text_adapter")
     parser.add_argument("--is_encode_image", type=int, default="1", help="encode image or not")
     parser.add_argument("--is_encode_text", type=int, default="1", help="encode text or not")
     parser.add_argument("--is_trainable_text_encoder", type=int, default="0", help="train text encoder or not")

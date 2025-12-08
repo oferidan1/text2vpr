@@ -76,22 +76,23 @@ def wasserstein_transform_batch(X, target):
 
     return X_out
 
-def standarize_scores(text_scores, vision_scores):
+def standarize_scores(text_scores, vision_scores, vpr_dim):
      # pre-computed mu and std for normalization over GSV
     mu_text  = 0.65
     std_text = 0.07    
     min_text = -6.07
     max_text = 4.92           
     # #mixvpr 512
-    mu_img   = 0.0111
-    std_img  = 0.05
-    min_img  = -5.24
-    max_img  = 15.26
-    #mixvpr 4096 GSV
-    # mu_img   = 0.0048
-    # std_img  = 0.027
-    # min_img  = -5.55
-    # max_img  = 30.67
+    if vpr_dim == 512:
+        mu_img   = 0.0111
+        std_img  = 0.05
+        min_img  = -5.24
+        max_img  = 15.26       
+    else: #mixvpr 4096 GSV
+        mu_img   = 0.0048
+        std_img  = 0.027
+        min_img  = -5.55
+        max_img  = 30.67
     
     # pre-computed mu and std for normalization over amstertime
     # mu_text  = 0.66
@@ -152,7 +153,7 @@ def rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores,
     
     # standarize scores
     if is_normalize:
-        text_scores, vision_scores = standarize_scores(text_scores, vision_scores)
+        text_scores, vision_scores = standarize_scores(text_scores, vision_scores, args.vpr_dim)
         if vision_scores_ref is not None:
             vision_scores = wasserstein_transform_batch(vision_scores, vision_scores_ref)    
 
