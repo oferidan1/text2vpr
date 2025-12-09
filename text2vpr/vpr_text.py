@@ -495,7 +495,10 @@ class VPR_Text_Model(pl.LightningModule):
         # we mine the pairs/triplets if there is an online mining strategy
         if self.miner is not None:
             miner_outputs = self.miner(descriptors, labels)     
-            loss = self.loss_fn(descriptors, labels, miner_outputs, embeds2=text_embeds, w=w)
+            if w is None:
+                loss = self.loss_fn(descriptors, labels, miner_outputs)
+            else:
+                loss = self.loss_fn(descriptors, labels, miner_outputs, embeds2=text_embeds, w=w)
             
             # mining hard negatives by text embeddings
             # miner_outputs_text = self.miner(text_embeds, labels)
@@ -577,7 +580,7 @@ class VPR_Text_Model(pl.LightningModule):
         if text_embeds[0] is not None:
             text_embeds_cpu = text_embeds.detach().cpu()
         w_cpu = None
-        if w[0] is not None:
+        if w is not None and w[0] is not None:
             w_cpu = w.detach().cpu()
         ret_dict = {'descriptors': descriptors, 'text_embeds': text_embeds_cpu, 'w': w_cpu}
         return ret_dict
@@ -613,10 +616,10 @@ class VPR_Text_Model(pl.LightningModule):
             # w = val_step_outputs[i]['w']    
             feats = torch.cat(descriptors, dim=0)
             text_feats = None
-            if text_embeds is not None:
+            if text_embeds != []:
                 text_feats = torch.cat(text_embeds, dim=0)
             w_feats = None
-            if w is not None:
+            if w != []:
                 w_feats = torch.cat(w, dim=0)
             
             if 'pitts' in val_set_name:
