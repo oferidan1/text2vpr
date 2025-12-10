@@ -66,6 +66,10 @@ def main(args):
     args.is_dual_encoder = 1
     args.encode_mode = 'both'
     args.dual_encoder_fusion = 'each'
+    args.database_folder = "/mnt/d/data/gsv_cities/Images"
+    args.queries_folder = "/mnt/d/data/gsv_cities/Images"
+    args.queries_csv = "/mnt/d/data/gsv_cities/gsv_cities_predictions.csv"
+    args.image_root = "/mnt/d/data/gsv_cities"
 
     logger.remove()  # Remove possibly previously existing loggers
     log_dir = Path("logs") / args.log_dir / start_time.strftime("%Y-%m-%d_%H-%M-%S")
@@ -87,6 +91,7 @@ def main(args):
         positive_dist_threshold=args.positive_dist_threshold,
         image_size=args.image_size,
         use_labels=False,
+        is_sample=True,
     )
     logger.info(f"Testing on {test_ds}")
     all_descriptors = None
@@ -101,7 +106,7 @@ def main(args):
             dataset=database_subset_ds, num_workers=args.num_workers, batch_size=args.batch_size
         )
         
-        vision_descriptors = np.empty((len(test_ds), model.vision_encoder_dim), dtype="float32")
+        vision_descriptors = np.empty((len(test_ds), model.vpr_encoder_dim), dtype="float32")
         text_descriptors = np.empty((len(test_ds), model.text_encoder_dim), dtype="float32")            
         all_descriptors = np.empty((len(test_ds), model.encoder_dim), dtype="float32")
         w_alpha = np.empty((len(test_ds), 2), dtype="float32")

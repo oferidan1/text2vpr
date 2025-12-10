@@ -50,7 +50,7 @@ def read_images_paths(dataset_folder):
 
 
 class TestDataset(data.Dataset):
-    def __init__(self, database_folder, queries_folder, csv_path, image_root, positive_dist_threshold=25, image_size=None, use_labels=True):
+    def __init__(self, database_folder, queries_folder, csv_path, image_root, positive_dist_threshold=25, image_size=None, use_labels=True, is_sample=False):
         """Dataset with images from database and queries, used for validation and test.
         Parameters
         ----------
@@ -72,7 +72,8 @@ class TestDataset(data.Dataset):
         
         # only for debug - small data check!!!!
         # random select a subset for quick testing in a random indices
-        # self.database_paths = np.random.choice(self.database_paths, size=20000, replace=False)        
+        if is_sample:
+            self.database_paths = np.random.choice(self.database_paths, size=20000, replace=False)        
         
         self.images_paths = list(self.database_paths)
         self.num_database = len(self.database_paths)

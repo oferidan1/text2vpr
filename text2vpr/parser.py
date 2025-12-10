@@ -9,10 +9,10 @@ def parse_arguments():
     parser.add_argument("--vpr_dim", type=int, default=512, help="_")
     # parser.add_argument("--vpr_dim", type=int, default=4096, help="_")
     
-    # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/amstertime/test/database")    
-    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")    
-    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
-    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/amstertime/test")
+    parser.add_argument("--database_folder", type=str, default="/mnt/d/data/amstertime/test/database")    
+    parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")    
+    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
+    parser.add_argument("--image_root", type=str, default="/mnt/d/data/amstertime/test")
     ## parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_w_text.csv")    
     
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/nordland/images/test/database")    
@@ -20,10 +20,10 @@ def parse_arguments():
     # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/nordland/images/test/nordland_predictions.csv")
     # parser.add_argument("--image_root", type=str, default="/mnt/d/data/nordland/images/test")
     
-    parser.add_argument("--database_folder", type=str, default="/mnt/d/data/Pittsburgh30K/images/test/database")    
-    parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/Pittsburgh30K/images/test/queries")
-    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/Pittsburgh30K/images/test/Pittsburgh30K_test_predictions.csv")
-    parser.add_argument("--image_root", type=str, default="/mnt/d/data/Pittsburgh30K/images/test")    
+    # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/Pittsburgh30K/images/test/database")    
+    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/Pittsburgh30K/images/test/queries")
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/Pittsburgh30K/images/test/Pittsburgh30K_test_predictions.csv")
+    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/Pittsburgh30K/images/test")    
     
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/msls/val/database")    
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/msls/val/query")
