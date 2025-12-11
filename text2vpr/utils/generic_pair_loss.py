@@ -24,12 +24,19 @@ class GenericPairLoss(BaseMetricLossFunction):
         std_text = 0.07
         min_text = -6.07
         max_text = 4.92
-       # #mixvpr 512
+       
         if embeddings.shape[1] == 512:
+            #mixvpr 512
             mu_img   = 0.0111
             std_img  = 0.05
             min_img  = -5.24
             max_img  = 15.26
+            
+            #eigenplaces 512
+            mu_img   = 0.043
+            std_img  = 0.0596
+            min_img  = -5.24
+            max_img  = 15.08
         else: #mixvpr 4096
             mu_img   = 0.0048
             std_img  = 0.027

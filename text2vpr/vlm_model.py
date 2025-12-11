@@ -36,7 +36,7 @@ class VLM_Model:
             self.single_encoder = VPR_Text_Model(   
                 #---- Encoder
                 vpr_model_name=args.vpr_model_name,
-                vpr_model_backbone=args.vpr_model_backbone.lower(),
+                vpr_model_backbone=args.vpr_model_backbone,
                 vpr_encoder_dim=args.vpr_dim,                
                
                 fusion_type=args.fusion_type,

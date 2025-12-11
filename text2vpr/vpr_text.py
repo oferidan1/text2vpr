@@ -162,7 +162,7 @@ class VPR_Text_Model(pl.LightningModule):
     def __init__(self,
                 #---- Backbone
                 vpr_model_name='mixvpr',
-                vpr_model_backbone='resnet50',
+                vpr_model_backbone='ResNet50',
                 vpr_encoder_dim=512,            
                 
                 #---- Train hyperparameters
