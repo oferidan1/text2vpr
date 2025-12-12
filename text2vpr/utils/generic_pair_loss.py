@@ -48,6 +48,7 @@ class GenericPairLoss(BaseMetricLossFunction):
             min_img  = -5.67
             max_img  = 28.56
 
+        img_sim = torch.matmul(embeddings, embeddings.T)
         img_sim  = torch.clamp(img_sim, min=-1.0, max=1.0)
         img_sim  = (img_sim - mu_img) / std_img        
         img_sim  = ((img_sim - min_img) / (max_img - min_img)) *2-1     
