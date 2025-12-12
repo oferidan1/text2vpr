@@ -108,8 +108,14 @@ def rerank_predictions(vision_scores, vision_predictions, text_scores, text_pred
     # sum scores according the where vision and text predictions are the same
     combined_scores = []
     combined_predictions = []
-    print("mean w_alpha vision:", w_r[:,0].mean(), w_r[:,0].std())
-    print("mean w_alpha text:", w_r[:,1].mean(), w_r[:,1].std())
+    if len(w_r.shape) > 1:
+        print("mean w_alpha vision:", w_r[:,0].mean(), w_r[:,0].std())
+    else:
+        print("mean w_alpha vision:", w_r.mean(), w_r.std())
+        w_r = np.repeat(w_r, text_predictions.shape[0], axis=0)
+        w_r = np.stack([w_r, 1-w_r], axis=1)     
+        w_q = np.repeat(w_q, text_predictions.shape[0], axis=0)
+        w_q = np.stack([w_q, 1-w_q], axis=1)     
     query_index = 0
     for v_scores, v_preds, t_scores, t_preds in zip(vision_scores, vision_predictions, text_scores, text_predictions):
         score_dict = {}

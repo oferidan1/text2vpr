@@ -99,16 +99,11 @@ def standarize_scores(text_scores, vision_scores, vpr_dim, vpr_model):
         std_img  = 0.0596
         min_img  = -5.24
         max_img  = 15.08
-    
-    # pre-computed mu and std for normalization over amstertime
-    # mu_text  = 0.66
-    # std_text = 0.066
-    # min_text = -4.81
-    # max_text = 4.43
-    # mu_img   = 0.06
-    # std_img  = 0.06
-    # min_img  = -4.57
-    # max_img  = 15.32
+    elif vpr_model == 'cricavpr':
+        mu_img   = 0.0094
+        std_img  = 0.026
+        min_img  = -5.67
+        max_img  = 28.56
     
     # pre-computed mu and std for normalization over nordland 
     # mu_text  = 0.75

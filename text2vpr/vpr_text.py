@@ -187,6 +187,7 @@ class VPR_Text_Model(pl.LightningModule):
                 is_encode_image=True,
                 is_encode_text=True,
                 is_trainable_text_encoder=False,
+                is_text_pooling=False,
                  ):
         super().__init__()
         
@@ -216,6 +217,7 @@ class VPR_Text_Model(pl.LightningModule):
         self.is_encode_image = is_encode_image
         self.is_encode_text = is_encode_text
         self.is_trainable_text_encoder = is_trainable_text_encoder
+        self.is_text_pooling = is_text_pooling
         self.my_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')        
         
         self.fusion_type = fusion_type
@@ -223,6 +225,8 @@ class VPR_Text_Model(pl.LightningModule):
         text_encoder_dim = 1024        
         
         if is_encode_image and is_encode_text:
+            if is_text_pooling:
+                 self.text_pooling = CLSReweightingPooler(text_encoder_dim)
             if self.fusion_type == 'transformer':
                 self.vpr_adapter = nn.Linear(256, embeds_dim)  # mix vpr dim embedding
                 self.text_adapter = nn.Linear(text_encoder_dim, embeds_dim)  # BGE large has 1024-dim embedding     
@@ -248,8 +252,7 @@ class VPR_Text_Model(pl.LightningModule):
                 input_dim = vpr_encoder_dim + text_encoder_dim
                 #learn fixed parameter for weighting image and text
                 self.w_alpha = Parameter(torch.tensor([0.5]), requires_grad=True)                
-            elif self.fusion_type == 'text_adapter':
-                self.text_adapter = CLSReweightingPooler(text_encoder_dim)
+            elif self.fusion_type == 'text_adapter':               
                 input_dim = vpr_encoder_dim + text_encoder_dim
                 self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, 2), nn.Softmax(dim=1))
                 
@@ -341,6 +344,10 @@ class VPR_Text_Model(pl.LightningModule):
             # token_feature = model_output[0]
             # token_feature = self.text_aggregation(token_feature, attention_mask=text_tokens['attention_mask']) 
             # text_embeds = torch.nn.functional.normalize(token_feature, p=2, dim=-1)
+            if self.is_text_pooling:
+                text_last_hidden_state = model_output.last_hidden_state
+                text_features = self.text_pooling(text_last_hidden_state, mask=text_tokens['attention_mask'])
+                text_embeds = torch.nn.functional.normalize(text_features, p=2, dim=1)
         
         batch_size = img.shape[0]   
         
@@ -377,10 +384,7 @@ class VPR_Text_Model(pl.LightningModule):
                 # use fixed weighting
                 w = self.w_alpha
                 embeds = img_embeds
-            elif self.fusion_type == 'text_adapter':
-                text_last_hidden_state = model_output.last_hidden_state
-                text_features = self.text_adapter(text_last_hidden_state, mask=text_tokens['attention_mask'])
-                text_embeds = torch.nn.functional.normalize(text_features, p=2, dim=1)
+            elif self.fusion_type == 'text_adapter':               
                  # calc dynamic weighting
                 embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
                 w = self.fusion(embeds_input)                

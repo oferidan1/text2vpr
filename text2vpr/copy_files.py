@@ -1,9 +1,9 @@
 import os
 import pandas as pd
 
-root_src = '/mnt/d/data/amstertime/test'
-files_csv = 'amstertime_w_text.csv'
-dst_folder = '/mnt/d/data/amstertime/test_with_text'
+root_src = '/mnt/d/data/msls/val'
+files_csv = 'msls_val_w_text_queries.csv'
+dst_folder = '/mnt/d/data/msls/val/test_with_text'
 
 df = pd.read_csv(os.path.join(root_src, files_csv))
 #loop over rows and copy files to new folder
@@ -17,7 +17,7 @@ if not df.empty:
         
     for idx, row in df.iterrows():
         src_image_path = os.path.join(root_src, row['image_path'])
-        if 'queries' in row['image_path']:
+        if 'queries' in row['image_path'] or 'query' in row['image_path'] :
             dst_image_path = os.path.join(queries_folder, os.path.basename(row['image_path']))
             os.system(f'cp "{src_image_path}" "{dst_image_path}"')
         # if 'database' in row['image_path']:

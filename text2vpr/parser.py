@@ -13,7 +13,7 @@ def parse_arguments():
     parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")    
     parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
     parser.add_argument("--image_root", type=str, default="/mnt/d/data/amstertime/test")
-    ## parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_w_text.csv")    
+#     parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_w_text_snow.csv")    
     
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/nordland/images/test/database")    
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/nordland/images/test/queries")
@@ -27,9 +27,9 @@ def parse_arguments():
     
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/msls/val/database")    
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/msls/val/query")
-    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_predictions.csv")
+    # #parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_predictions.csv")
     # parser.add_argument("--image_root", type=str, default="/mnt/d/data/msls/val")    
-    ## parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text.csv")
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text_snow.csv")
     
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/gsv_cities/Images")    
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/gsv_cities/Images")
@@ -100,6 +100,7 @@ def parse_arguments():
     parser.add_argument("--is_pca", type=int, default="0", help="do pca on descriptors or not")
     parser.add_argument("--pca_dim", type=int, default="512", help="pca dimension")
     parser.add_argument("--is_ref_model", type=int, default="0", help="is ref model")
+    parser.add_argument("--is_text_pooling", type=int, default="0", help="pool text or not")
 
     args = parser.parse_args()
     

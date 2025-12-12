@@ -27,9 +27,10 @@ def parse_arguments():
     parser.add_argument("--is_freeze_text", type=int, default="1", help="freeze text encoder or not")
     parser.add_argument("--is_freeze_vpr", type=int, default="1", help="freeze vpr encoder or not")    
     parser.add_argument("--embeds_dim", type=int, default=512, help="dimension of the embeddings")
-    parser.add_argument("--fusion_type", type=str, default='text_adapter', help="type of fusion to use: mlp, add, transformer, dynamic_weighting, fixed_weighting, text_adapter")
+    parser.add_argument("--fusion_type", type=str, default='fixed_weighting', help="type of fusion to use: mlp, add, transformer, dynamic_weighting, fixed_weighting, text_adapter")
     parser.add_argument("--is_encode_image", type=int, default="1", help="encode image or not")
     parser.add_argument("--is_encode_text", type=int, default="1", help="encode text or not")
+    parser.add_argument("--is_text_pooling", type=int, default="0", help="pool text or not")
     parser.add_argument("--is_trainable_text_encoder", type=int, default="0", help="train text encoder or not")
     parser.add_argument("--batch_size", type=int, default="120", help="batch size for training")
     parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss_Sij", help="name of the loss function to use")
@@ -55,10 +56,13 @@ if __name__ == '__main__':
         num_workers=4,#28,
         show_data_stats=True,
         #val_set_names=['pitts30k_val', 'pitts30k_test', 'msls_val'], # pitts30k_val, pitts30k_test, msls_val
-        val_set_names=['pitts30k_test'],
-        #val_set_names=[],
+        #val_set_names=['pitts30k_test'],
+        val_set_names=[],
     )
-    
+
+    if args.fusion_type == 'text_adapter':
+        args.is_text_pooling = 1
+
     # examples of backbones
     # resnet18, resnet50, resnet101, resnet152,
     # resnext50_32x4d, resnext50_32x4d_swsl , resnext101_32x4d_swsl, resnext101_32x8d_swsl
@@ -66,7 +70,7 @@ if __name__ == '__main__':
     # swinv2_base_window12to16_192to256_22kft1k
     model = VPR_Text_Model(
         #---- Encoder
-        vpr_model_name=args.vpr_model_name,
+        vpr_model_name=args.vpr_model_name.lower(),
         vpr_model_backbone=args.vpr_model_backbone,
         vpr_encoder_dim=args.vpr_dim,
         
@@ -95,6 +99,7 @@ if __name__ == '__main__':
         is_encode_image=args.is_encode_image,
         is_encode_text=args.is_encode_text,
         is_trainable_text_encoder=args.is_trainable_text_encoder,
+        is_text_pooling=args.is_text_pooling
     )
     
     # if args.is_encode_image and  args.vpr_resume_model is not None:
@@ -105,22 +110,22 @@ if __name__ == '__main__':
     
     # model params saving using Pytorch Lightning
     # we save the best 3 models accoring to Recall@1 on pittsburg val
-    checkpoint_cb = ModelCheckpoint(
-        monitor='pitts30k_test/R1',
-        filename=f'{"resnet50"}' +
-        '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_test/R1:.4f}]_R5[{pitts30k_test/R5:.4f}]',
-        auto_insert_metric_name=False,
-        save_weights_only=True,
-        save_top_k=3,
-        mode='max',)
-    # checkpoint_cb = ModelCheckpoint(        
+    # checkpoint_cb = ModelCheckpoint(
+    #     monitor='pitts30k_test/R1',
     #     filename=f'{"resnet50"}' +
-    #     '_epoch({epoch:02d})_step({step:04d})',
+    #     '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_test/R1:.4f}]_R5[{pitts30k_test/R5:.4f}]',
     #     auto_insert_metric_name=False,
     #     save_weights_only=True,
-    #     save_top_k=-1,
-    #     every_n_epochs=1,
+    #     save_top_k=3,
     #     mode='max',)
+    checkpoint_cb = ModelCheckpoint(        
+        filename=f'{"resnet50"}' +
+        '_epoch({epoch:02d})_step({step:04d})',
+        auto_insert_metric_name=False,
+        save_weights_only=True,
+        save_top_k=-1,
+        every_n_epochs=1,
+        mode='max',)
 
     #------------------
     # we instanciate a trainer

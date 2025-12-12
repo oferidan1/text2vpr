@@ -19,12 +19,15 @@ class VLM_Model:
         self.device = args.device
         self.text_encoder_dim = 1024
         self.vpr_encoder_dim = args.vpr_dim
+        if args.fusion_type == 'text_adapter':
+            args.is_text_pooling = 1
+            
         if args.is_dual_encoder or args.encode_mode!='both':                        
             self.tokenizer = AutoTokenizer.from_pretrained(self.text_model_name)  
             self.text_encoder = AutoModel.from_pretrained(self.text_model_name).to(args.device)
             self.text_encoder.eval()
             
-            self.vpr_encoder = vpr_models.get_model(args.vpr_model_name, args.vpr_model_backbone, self.vpr_encoder_dim)
+            self.vpr_encoder = vpr_models.get_model(args.vpr_model_name.lower(), args.vpr_model_backbone, self.vpr_encoder_dim)
             self.vpr_encoder = self.vpr_encoder.eval().to(args.device)
             
             self.encoder_dim = self.text_encoder_dim + self.vpr_encoder_dim

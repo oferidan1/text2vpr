@@ -21,6 +21,7 @@ class BLIP_Retrieval(nn.Module):
                  distributed = False,
                  loss_type = 1,
                  max_text_length = 35,
+                 is_adapter = False,
                  ):
         """
         Args:
@@ -78,20 +79,42 @@ class BLIP_Retrieval(nn.Module):
             #self.triplet_loss = nn.TripletMarginLoss(margin=1.0, p=2, eps=1e-7)
             self.triplet_loss = (nn.TripletMarginWithDistanceLoss(distance_function=lambda x, y: 1.0 - F.cosine_similarity(x,y)))
             
+        self.is_adapter = is_adapter
+        if is_adapter:
+            for param in self.visual_encoder.parameters():
+                param.requires_grad = False
+            for param in self.text_encoder.parameters():
+                param.requires_grad = False            
+            for param in self.vision_proj.parameters():
+                param.requires_grad = False   
+            for param in self.text_proj.parameters():
+                param.requires_grad = False   
+            for param in self.itm_head.parameters():
+                param.requires_grad = False   
+        
+            self.text_adapter = nn.Linear(embed_dim, embed_dim)
+            self.vision_adapter = nn.Linear(embed_dim, embed_dim)
+            
     def forward(self, image, caption, alpha, idx):
         with torch.no_grad():
             self.temp.clamp_(0.001,0.5)
         
         image_embeds = self.visual_encoder(image) 
         image_atts = torch.ones(image_embeds.size()[:-1],dtype=torch.long).to(image.device)        
-        image_feat = F.normalize(self.vision_proj(image_embeds[:,0,:]),dim=-1)    
+        image_feat = self.vision_proj(image_embeds[:,0,:])    
+        if self.is_adapter:
+            image_feat = self.vision_adapter(image_feat)
+        image_feat = F.normalize(image_feat,dim=-1)
         
         text = self.tokenizer(caption, padding='max_length', truncation=True, max_length=self.max_text_length, 
                               return_tensors="pt").to(image.device) 
         
         text_output = self.text_encoder(text.input_ids, attention_mask = text.attention_mask,                      
                                         return_dict = True, mode = 'text')            
-        text_feat = F.normalize(self.text_proj(text_output.last_hidden_state[:,0,:]),dim=-1)        
+        text_feat = self.text_proj(text_output.last_hidden_state[:,0,:])
+        if self.is_adapter:
+            text_feat = self.text_adapter(text_feat) 
+        text_feat = F.normalize(text_feat,dim=-1)
         
         ###============== Image-text Contrastive Learning ===================###
         idx = idx.view(-1,1)
@@ -103,12 +126,18 @@ class BLIP_Retrieval(nn.Module):
         with torch.no_grad():
             self._momentum_update()
             image_embeds_m = self.visual_encoder_m(image) 
-            image_feat_m = F.normalize(self.vision_proj_m(image_embeds_m[:,0,:]),dim=-1)  
+            image_feat_m = self.vision_proj_m(image_embeds_m[:,0,:])
+            if self.is_adapter:
+                image_feat_m = self.vision_adapter(image_feat_m)
+            image_feat_m = F.normalize(image_feat_m,dim=-1)
             image_feat_m_all = torch.cat([image_feat_m.t(),self.image_queue.clone().detach()],dim=1)                   
             
             text_output_m = self.text_encoder_m(text.input_ids, attention_mask = text.attention_mask,                      
                                                 return_dict = True, mode = 'text')    
-            text_feat_m = F.normalize(self.text_proj_m(text_output_m.last_hidden_state[:,0,:]),dim=-1) 
+            text_feat_m = self.text_proj_m(text_output_m.last_hidden_state[:,0,:])
+            if self.is_adapter:
+                text_feat_m = self.text_adapter(text_feat_m)
+            text_feat_m = F.normalize(text_feat_m,dim=-1)
             text_feat_m_all = torch.cat([text_feat_m.t(),self.text_queue.clone().detach()],dim=1)
 
             sim_i2t_m = image_feat_m @ text_feat_m_all / self.temp  
