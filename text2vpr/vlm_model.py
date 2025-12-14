@@ -10,6 +10,9 @@ from sentence_transformers import SentenceTransformer
 import vpr_models
 from vpr_text import VPR_Text_Model
 from transformers import AutoTokenizer, AutoModel
+from blip_model import BlipForImageTextRetrievalWrapper
+from transformers import BlipProcessor, BlipModel
+
 
 class VLM_Model:
     def __init__(self, args):
@@ -19,10 +22,20 @@ class VLM_Model:
         self.device = args.device
         self.text_encoder_dim = 1024
         self.vpr_encoder_dim = args.vpr_dim
+        if 'blip' in self.vpr_model_name:            
+            self.text_encoder_dim = args.vpr_dim
+            
         if args.fusion_type == 'text_adapter':
             args.is_text_pooling = 1
+        
+        if args.cross_modal==1:
+            if 'blip' in self.vpr_model_name:
+                self.vpr_encoder = BlipForImageTextRetrievalWrapper.from_pretrained(self.vpr_model_name)
+                self.processor = BlipProcessor.from_pretrained(self.vpr_model_name)
+                self.vpr_encoder = self.vpr_encoder.eval().to(args.device)
+            self.encoder_dim = self.vpr_encoder_dim
             
-        if args.is_dual_encoder or args.encode_mode!='both':                        
+        elif args.is_dual_encoder or args.encode_mode!='both':    
             self.tokenizer = AutoTokenizer.from_pretrained(self.text_model_name)  
             self.text_encoder = AutoModel.from_pretrained(self.text_model_name).to(args.device)
             self.text_encoder.eval()
@@ -47,6 +60,8 @@ class VLM_Model:
                 is_encode_text=args.is_encode_text,
                 is_trainable_text_encoder=args.is_trainable_text_encoder,
                 embeds_dim=args.vpr_dim,
+                is_text_pooling=args.is_text_pooling,
+                is_image_pooling=args.is_image_pooling,
             )
             
             model_state_dict = torch.load(args.model_name)['state_dict']
@@ -85,24 +100,29 @@ class VLM_Model:
     
     def encode_single(self, images, texts):
         with torch.no_grad():
-            features, text_features, w = self.single_encoder(images, texts)
+            features, text_features, w, _, _ = self.single_encoder(images, texts)
         return features, text_features, w 
     
     def encode_image(self, images):
-        with torch.no_grad():
-            image_features = self.vpr_encoder(images)            
+        if 'blip' in self.vpr_model_name:
+            with torch.no_grad():
+                image_features = self.vpr_encoder.encode_image(images)[:,0]
+        else:
+            with torch.no_grad():
+                image_features = self.vpr_encoder(images)            
         return image_features
     
     def encode_text(self, texts):
-        # with torch.no_grad():            
-        #     text_features = self.text_encoder.encode(texts, normalize_embeddings=True, convert_to_tensor=True)
-        text_tokens = self.tokenizer(texts, padding=True, truncation=True, return_tensors='pt').to(self.device)
-        with torch.no_grad():      
-            model_output = self.text_encoder(**text_tokens)                        
-            text_features = model_output[0][:, 0]
-            #text_features = model_output.last_hidden_state[:, 0]
-        #text_features = self.mean_pooling(model_output, text_tokens['attention_mask'])
-        text_features = torch.nn.functional.normalize(text_features, p=2, dim=1)   
+        if 'blip' in self.vpr_model_name:            
+            text_inputs = self.processor(text=texts, return_tensors="pt", padding=True).input_ids.to(self.device)
+            with torch.no_grad():     
+                text_features = self.vpr_encoder.encode_text(text_inputs)[:,0]
+        else:
+            text_tokens = self.tokenizer(texts, padding=True, truncation=True, return_tensors='pt').to(self.device)
+            with torch.no_grad():      
+                model_output = self.text_encoder(**text_tokens)                        
+                text_features = model_output[0][:, 0]            
+            text_features = torch.nn.functional.normalize(text_features, p=2, dim=1)   
         return text_features
 
 

@@ -81,7 +81,7 @@ def parse_arguments():
     )
     parser.add_argument("--gpu", type=str, default="0", help="which gpu to use")
     parser.add_argument("--model_name", type=str, default='')
-    parser.add_argument("--vpr_model_name", type=str, default="mixvpr")
+    parser.add_argument("--vpr_model_name", type=str, default="Salesforce/blip-itm-base-coco")
     parser.add_argument("--vpr_model_backbone", type=str, default="ResNet50")
     parser.add_argument("--text_model_name", type=str, default="BAAI/bge-large-en-v1.5")
     parser.add_argument("--lora_path", type=str, default=None)    
@@ -101,6 +101,9 @@ def parse_arguments():
     parser.add_argument("--pca_dim", type=int, default="512", help="pca dimension")
     parser.add_argument("--is_ref_model", type=int, default="0", help="is ref model")
     parser.add_argument("--is_text_pooling", type=int, default="0", help="pool text or not")
+    parser.add_argument("--is_image_pooling", type=int, default="0", help="pool image or not")
+    parser.add_argument("--cross_modal", type=int, default="0", help="cross modal 0/1/2")
+
 
     args = parser.parse_args()
     

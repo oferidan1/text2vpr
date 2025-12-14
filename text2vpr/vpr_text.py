@@ -13,143 +13,11 @@ import numpy as np
 import torchvision.transforms as transforms
 import vpr_models
 import os
+from blip_model import BlipForImageTextRetrievalWrapper
+from transformers import BlipProcessor, BlipModel
+from sklearn.decomposition import PCA
+import torch.cuda.amp as amp
 
-
-class CLSReweightingPooler(nn.Module):
-    """
-    Combines the CLS token with attention-pooled tokens.
-    Output: a single pooled vector per sequence.
-    """
-
-    def __init__(self, hidden_size):
-        super().__init__()
-
-        # Attention for token-level importance
-        self.attention = nn.Linear(hidden_size, 1)
-        
-        self.dropout = nn.Dropout(0.1)
-
-        # Learnable mixing of CLS and attention-pooled vector
-        self.mix = nn.Linear(hidden_size * 2, hidden_size)
-
-        # Optional nonlinearity
-        self.activation = nn.Tanh()
-
-    def forward(self, hidden_states, mask=None, return_scores=False):
-        """
-        hidden_states: [B, T, H]
-        mask (optional): [B, T] (1 = keep token, 0 = ignore)
-        """
-
-        # ---- 1. CLS embedding ----
-        cls = hidden_states[:, 0]  # [B, H]
-
-        # ---- 2. Attention scores for each token ----
-        scores = self.attention(hidden_states).squeeze(-1)  # [B, T]
-        
-        # Mask out CLS token
-        scores[:, 0] = -1e4
-
-        if mask is not None:
-            scores = scores.masked_fill(~mask.bool(), -1e4)
-
-        weights = torch.softmax(scores, dim=-1)  # [B, T]
-
-        # ---- 3. Attention-based pooled vector ----
-        pooled = torch.sum(hidden_states * weights.unsqueeze(-1), dim=1)  # [B, H]
-
-        # # ---- 4. Concatenate CLS + attention-pooled ----
-        combined = torch.cat([cls, pooled], dim=-1)  # [B, 2H]        
-        combined = self.dropout(combined) 
-
-        # ---- 5. Learnable mixing ----
-        pooled = self.activation(self.mix(combined))  # [B, H]
-        
-        #pooled = cls + attn_pooled  # [B, H]
-
-        if return_scores:
-            return pooled, weights  # return per-token weights
-        return pooled   
-    
-
-class GeMPooling(nn.Module):
-    """
-    Generalized Mean Pooling (GeM) layer for sequence embeddings.
-    
-    Based on the paper: 
-    "Fine-tuning CNN Image Retrieval with Noisy Labels"
-    "Enhancing Sentence Embedding with Generalized Pooling"
-    """
-    def __init__(self, p=3.0, eps=1e-6):
-        super(GeMPooling, self).__init__()
-        self.p = nn.Parameter(torch.ones(1) * p)
-        self.eps = eps
-
-    def forward(self, x, attention_mask=None):
-        # x shape: (batch_size, sequence_length, hidden_size)
-        # x = F.normalize(x, p=2, dim=-1)
-        
-        # Clamp x to ensure stability with power operation, especially important if x has negative values
-        # We use .abs() and clamp, and then restore the sign.
-        # This is a simplification; a more robust implementation might handle signs differently
-        # or use a softplus for p if it's trainable and could become negative.
-        x_clamped = x.clamp(min=self.eps)
-        
-        # Apply the power p
-        x_p = x_clamped.pow(self.p)
-        
-        # If an attention mask is provided, apply it to ignore padding tokens
-        if attention_mask is not None:
-            # Expand mask to match hidden_size dimension: (batch_size, sequence_length) -> (batch_size, sequence_length, 1)
-            attention_mask_expanded = attention_mask.unsqueeze(-1).expand_as(x_p)
-            x_p = x_p * attention_mask_expanded.float()
-            
-            # Sum over the sequence dimension
-            sum_x_p = x_p.sum(dim=1)
-            
-            # Calculate the sum of weights (number of non-padding tokens)
-            sum_mask = torch.clamp(attention_mask_expanded.sum(dim=1), min=self.eps)
-            
-            # Divide to get the generalized mean
-            pooled_output = sum_x_p / sum_mask
-        else:
-            # If no mask, just take the mean over the sequence dimension
-            pooled_output = x_p.mean(dim=1)
-
-        # Apply the final power (1/p)
-        return pooled_output.pow(1. / self.p)
-
-    def __repr__(self):
-        return self.__class__.__name__ + \
-               '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + \
-               ', ' + 'eps=' + str(self.eps) + ')'
-
-
-class Adapter(nn.Module):
-    """Conventional Adapter layer, in which the weights of up and down sampler modules
-    are parameters and are optimized."""
-
-    def __init__(self, hidden_size):
-        super().__init__()
-        self.input_dim = hidden_size
-        reduction_factor = 4
-        self.down_sample_size = self.input_dim // reduction_factor
-        self.activation = nn.GELU()
-        self.down_sampler = nn.Linear(self.input_dim, self.down_sample_size)
-        self.up_sampler = nn.Linear(self.down_sample_size, self.input_dim)
-
-        # self.track_z = config.track_z
-
-    def forward(self, x):
-        z = self.down_sampler(x)
-        z = self.activation(z)
-        # if self.track_z:
-        #     self.z = z
-        output = self.up_sampler(z)
-        # Residual connection.
-        output = output + x
-        return output
-    
 
 class VPR_Text_Model(pl.LightningModule):
     """This is the main model for Visual Place Recognition
@@ -188,6 +56,8 @@ class VPR_Text_Model(pl.LightningModule):
                 is_encode_text=True,
                 is_trainable_text_encoder=False,
                 is_text_pooling=False,
+                is_image_pooling=False,
+                is_pca=False,
                  ):
         super().__init__()
         
@@ -218,15 +88,26 @@ class VPR_Text_Model(pl.LightningModule):
         self.is_encode_text = is_encode_text
         self.is_trainable_text_encoder = is_trainable_text_encoder
         self.is_text_pooling = is_text_pooling
+        self.is_image_pooling = is_image_pooling
+        self.is_pca = is_pca
         self.my_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')        
         
         self.fusion_type = fusion_type
         self.embeds_dim = embeds_dim        
         text_encoder_dim = 1024        
+        if 'blip' in vpr_model_name:
+            text_encoder_dim = vpr_encoder_dim
+            
+        self.mse_loss = torch.nn.MSELoss()
+        if is_pca:
+            self.vpr_encoder_dim = embeds_dim            
         
         if is_encode_image and is_encode_text:
             if is_text_pooling:
                  self.text_pooling = CLSReweightingPooler(text_encoder_dim)
+            if is_image_pooling:
+                self.image_pooling = CLSReweightingPooler(vpr_encoder_dim)
+                
             if self.fusion_type == 'transformer':
                 self.vpr_adapter = nn.Linear(256, embeds_dim)  # mix vpr dim embedding
                 self.text_adapter = nn.Linear(text_encoder_dim, embeds_dim)  # BGE large has 1024-dim embedding     
@@ -249,7 +130,6 @@ class VPR_Text_Model(pl.LightningModule):
                 input_dim = vpr_encoder_dim + text_encoder_dim
                 self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, 2), nn.Softmax(dim=1))                
             elif self.fusion_type == 'fixed_weighting':
-                input_dim = vpr_encoder_dim + text_encoder_dim
                 #learn fixed parameter for weighting image and text
                 self.w_alpha = Parameter(torch.tensor([0.5]), requires_grad=True)                
             elif self.fusion_type == 'text_adapter':               
@@ -261,14 +141,18 @@ class VPR_Text_Model(pl.LightningModule):
         
         # initialize the vpr encoder and text encoder
         if is_encode_image:
-            self.vpr_encoder = vpr_models.get_model(vpr_model_name, vpr_model_backbone, vpr_encoder_dim)                      
+            if 'blip' in vpr_model_name:
+                self.vpr_encoder = BlipForImageTextRetrievalWrapper.from_pretrained(vpr_model_name)
+                self.processor = BlipProcessor.from_pretrained(vpr_model_name)
+            else:
+                self.vpr_encoder = vpr_models.get_model(vpr_model_name, vpr_model_backbone, vpr_encoder_dim)                      
             if is_freeze_vpr:
                 # Freeze vpr encoder parameters
                 for param in self.vpr_encoder.parameters():
                     param.requires_grad = False
             self.vpr_encoder.eval()                    
         
-        if is_encode_text:
+        if is_encode_text and 'blip' not in vpr_model_name:
             self.tokenizer = AutoTokenizer.from_pretrained(text_encoder_name)  
             self.text_encoder = AutoModel.from_pretrained(text_encoder_name, attn_implementation="sdpa")                    
             #self.text_aggregation = GeMPooling()
@@ -324,30 +208,54 @@ class VPR_Text_Model(pl.LightningModule):
 
         if self.is_encode_image:
             with torch.no_grad():      
-                img_embeds = self.vpr_encoder(img)                
+                if 'blip' in self.vpr_model_name:
+                    img_embeds_all = self.vpr_encoder.encode_image(img)
+                    img_embeds = img_embeds_all[:,0]
+                else:
+                    img_embeds = self.vpr_encoder(img)             
+                if self.is_pca:
+                    with amp.autocast(enabled=False):
+                        U, S, V = torch.pca_lowrank(img_embeds.float(), q=self.embeds_dim, center=True)
+                    img_embeds = torch.matmul(img_embeds, V[:, :self.embeds_dim])
+                    # self.pca.fit(img_embeds)
+                    # img_embeds = self.pca.transform(img_embeds)   
                 embeds = img_embeds
+            embeds_orig = img_embeds
         if self.is_encode_text:                    
-            text_tokens = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(img.device)
-            if self.is_trainable_text_encoder:
-                model_output = self.text_encoder(**text_tokens, output_hidden_states=True, return_dict=True)                                     
-                text_embeds_not_normilized = model_output[0][:, 0]
-                #text_embeds_not_normilized = self.text_adapter(text_embeds_not_normilized)
-                text_embeds = torch.nn.functional.normalize(text_embeds_not_normilized, p=2, dim=1)
-            else:
-                with torch.no_grad():      
+            if 'blip' in self.vpr_model_name:
+                text_inputs = self.processor(text=text, return_tensors="pt", padding=True)
+                text_tokens = text_inputs.input_ids.to(img.device)
+                attention_mask = text_inputs['attention_mask'].to(img.device)
+                with torch.no_grad():     
+                    text_embeds_all = self.vpr_encoder.encode_text(input_ids=text_tokens, attention_mask=attention_mask)
+                text_embeds = text_embeds_all[:,0]
+            else:                
+                text_tokens = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(img.device)
+                if self.is_trainable_text_encoder:
                     model_output = self.text_encoder(**text_tokens, output_hidden_states=True, return_dict=True)                                     
-                    text_embeds_not_normilized = model_output[0][:, 0]                    
-                    text_embeds = torch.nn.functional.normalize(text_embeds_not_normilized, p=2, dim=1)                        
-        
+                    text_embeds_not_normilized = model_output[0][:, 0]
+                    #text_embeds_not_normilized = self.text_adapter(text_embeds_not_normilized)
+                    text_embeds = torch.nn.functional.normalize(text_embeds_not_normilized, p=2, dim=1)
+                else:
+                    with torch.no_grad():      
+                        model_output = self.text_encoder(**text_tokens, output_hidden_states=True, return_dict=True)                                     
+                        text_embeds_not_normilized = model_output[0][:, 0]                    
+                        text_embeds = torch.nn.functional.normalize(text_embeds_not_normilized, p=2, dim=1)    
+                text_embeds_all = model_output.last_hidden_state       
+                attention_mask = text_tokens['attention_mask']      
+            text_embeds_orig = text_embeds
+            
             # GEM pooling            
             # model_output = self.text_encoder(**text_tokens, output_hidden_states=True, return_dict=True)
             # token_feature = model_output[0]
             # token_feature = self.text_aggregation(token_feature, attention_mask=text_tokens['attention_mask']) 
             # text_embeds = torch.nn.functional.normalize(token_feature, p=2, dim=-1)
             if self.is_text_pooling:
-                text_last_hidden_state = model_output.last_hidden_state
-                text_features = self.text_pooling(text_last_hidden_state, mask=text_tokens['attention_mask'])
+                text_features = self.text_pooling(text_embeds_all, mask=attention_mask)
                 text_embeds = torch.nn.functional.normalize(text_features, p=2, dim=1)
+            if self.is_image_pooling:
+                image_features = self.image_pooling(img_embeds_all)
+                img_embeds = torch.nn.functional.normalize(image_features, p=2, dim=1)
         
         batch_size = img.shape[0]   
         
@@ -392,10 +300,11 @@ class VPR_Text_Model(pl.LightningModule):
                            
         elif self.is_encode_text:
             embeds = text_embeds
+            embeds_orig = text_embeds_orig
         elif self.is_encode_image:
             embeds = img_embeds
 
-        return embeds, text_embeds, w
+        return embeds, text_embeds, w, embeds_orig, text_embeds_orig
     
     def encoder_image(self, img):
         img_embeds = self.vpr_encoder.backbone(img)
@@ -495,7 +404,8 @@ class VPR_Text_Model(pl.LightningModule):
         return loss
             
     #  The loss function call (this method will be called at each training iteration)
-    def loss_function(self, descriptors, labels, text_embeds, w):
+    def loss_function(self, descriptors, labels, text_embeds, w, orig_descriptors, orig_text_embeds):
+        
         # we mine the pairs/triplets if there is an online mining strategy
         if self.miner is not None:
             miner_outputs = self.miner(descriptors, labels)     
@@ -503,6 +413,11 @@ class VPR_Text_Model(pl.LightningModule):
                 loss = self.loss_fn(descriptors, labels, miner_outputs)
             else:
                 loss = self.loss_fn(descriptors, labels, miner_outputs, embeds2=text_embeds, w=w)
+                
+            if 'blip' in self.vpr_model_name:
+                image_loss = self.mse_loss(descriptors, orig_descriptors)
+                text_loss  = self.mse_loss(text_embeds, orig_text_embeds)
+                loss += image_loss + text_loss                
             
             # mining hard negatives by text embeddings
             # miner_outputs_text = self.miner(text_embeds, labels)
@@ -557,8 +472,8 @@ class VPR_Text_Model(pl.LightningModule):
                 flat_texts.append(texts[j][i])
 
         # Feed forward the batch to the model
-        descriptors, text_embeds, w = self(images, flat_texts) # Here we are calling the method forward that we defined above
-        loss = self.loss_function(descriptors, labels, text_embeds, w) # Call the loss_function we defined above
+        descriptors, text_embeds, w, descriptors_orig, text_embeds_orig = self(images, flat_texts) # Here we are calling the method forward that we defined above
+        loss = self.loss_function(descriptors, labels, text_embeds, w, descriptors_orig, text_embeds_orig) # Call the loss_function we defined above
         
         self.log('loss', loss.item(), logger=True)
         
@@ -697,4 +612,137 @@ class VPR_Text_Model(pl.LightningModule):
     
 
     
+class CLSReweightingPooler(nn.Module):
+    """
+    Combines the CLS token with attention-pooled tokens.
+    Output: a single pooled vector per sequence.
+    """
+
+    def __init__(self, hidden_size):
+        super().__init__()
+
+        # Attention for token-level importance
+        self.attention = nn.Linear(hidden_size, 1)
+        
+        self.dropout = nn.Dropout(0.1)
+
+        # Learnable mixing of CLS and attention-pooled vector
+        self.mix = nn.Linear(hidden_size * 2, hidden_size)
+
+        # Optional nonlinearity
+        self.activation = nn.Tanh()
+
+    def forward(self, hidden_states, mask=None, return_scores=False):
+        """
+        hidden_states: [B, T, H]
+        mask (optional): [B, T] (1 = keep token, 0 = ignore)
+        """
+
+        # ---- 1. CLS embedding ----
+        cls = hidden_states[:, 0]  # [B, H]
+
+        # ---- 2. Attention scores for each token ----
+        scores = self.attention(hidden_states).squeeze(-1)  # [B, T]
+        
+        # Mask out CLS token
+        scores[:, 0] = -1e4
+
+        if mask is not None:
+            scores = scores.masked_fill(~mask.bool(), -1e4)
+
+        weights = torch.softmax(scores, dim=-1)  # [B, T]
+
+        # ---- 3. Attention-based pooled vector ----
+        pooled = torch.sum(hidden_states * weights.unsqueeze(-1), dim=1)  # [B, H]
+
+        # # ---- 4. Concatenate CLS + attention-pooled ----
+        combined = torch.cat([cls, pooled], dim=-1)  # [B, 2H]        
+        combined = self.dropout(combined) 
+
+        # ---- 5. Learnable mixing ----
+        pooled = self.activation(self.mix(combined))  # [B, H]
+        
+        #pooled = cls + attn_pooled  # [B, H]
+
+        if return_scores:
+            return pooled, weights  # return per-token weights
+        return pooled   
     
+
+class GeMPooling(nn.Module):
+    """
+    Generalized Mean Pooling (GeM) layer for sequence embeddings.
+    
+    Based on the paper: 
+    "Fine-tuning CNN Image Retrieval with Noisy Labels"
+    "Enhancing Sentence Embedding with Generalized Pooling"
+    """
+    def __init__(self, p=3.0, eps=1e-6):
+        super(GeMPooling, self).__init__()
+        self.p = nn.Parameter(torch.ones(1) * p)
+        self.eps = eps
+
+    def forward(self, x, attention_mask=None):
+        # x shape: (batch_size, sequence_length, hidden_size)
+        # x = F.normalize(x, p=2, dim=-1)
+        
+        # Clamp x to ensure stability with power operation, especially important if x has negative values
+        # We use .abs() and clamp, and then restore the sign.
+        # This is a simplification; a more robust implementation might handle signs differently
+        # or use a softplus for p if it's trainable and could become negative.
+        x_clamped = x.clamp(min=self.eps)
+        
+        # Apply the power p
+        x_p = x_clamped.pow(self.p)
+        
+        # If an attention mask is provided, apply it to ignore padding tokens
+        if attention_mask is not None:
+            # Expand mask to match hidden_size dimension: (batch_size, sequence_length) -> (batch_size, sequence_length, 1)
+            attention_mask_expanded = attention_mask.unsqueeze(-1).expand_as(x_p)
+            x_p = x_p * attention_mask_expanded.float()
+            
+            # Sum over the sequence dimension
+            sum_x_p = x_p.sum(dim=1)
+            
+            # Calculate the sum of weights (number of non-padding tokens)
+            sum_mask = torch.clamp(attention_mask_expanded.sum(dim=1), min=self.eps)
+            
+            # Divide to get the generalized mean
+            pooled_output = sum_x_p / sum_mask
+        else:
+            # If no mask, just take the mean over the sequence dimension
+            pooled_output = x_p.mean(dim=1)
+
+        # Apply the final power (1/p)
+        return pooled_output.pow(1. / self.p)
+
+    def __repr__(self):
+        return self.__class__.__name__ + \
+               '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + \
+               ', ' + 'eps=' + str(self.eps) + ')'
+
+
+class Adapter(nn.Module):
+    """Conventional Adapter layer, in which the weights of up and down sampler modules
+    are parameters and are optimized."""
+
+    def __init__(self, hidden_size):
+        super().__init__()
+        self.input_dim = hidden_size
+        reduction_factor = 4
+        self.down_sample_size = self.input_dim // reduction_factor
+        self.activation = nn.GELU()
+        self.down_sampler = nn.Linear(self.input_dim, self.down_sample_size)
+        self.up_sampler = nn.Linear(self.down_sample_size, self.input_dim)
+
+        # self.track_z = config.track_z
+
+    def forward(self, x):
+        z = self.down_sampler(x)
+        z = self.activation(z)
+        # if self.track_z:
+        #     self.z = z
+        output = self.up_sampler(z)
+        # Residual connection.
+        output = output + x
+        return output

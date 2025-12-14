@@ -24,7 +24,15 @@ class GenericPairLoss(BaseMetricLossFunction):
         std_text = 0.07
         min_text = -6.07
         max_text = 4.92
-       
+        
+        is_normalize = 1
+        
+        if embeddings.shape[1] == 256:
+            #cricavpr
+            mu_img   = 0.0094
+            std_img  = 0.026
+            min_img  = -5.67
+            max_img  = 28.56    
         if embeddings.shape[1] == 512:
             #mixvpr 512
             mu_img   = 0.0111
@@ -36,7 +44,8 @@ class GenericPairLoss(BaseMetricLossFunction):
             mu_img   = 0.043
             std_img  = 0.0596
             min_img  = -5.24
-            max_img  = 15.08
+            max_img  = 15.08            
+          
         elif embeddings.shape[1] == 4096: #mixvpr 4096
             mu_img   = 0.0048
             std_img  = 0.027
@@ -49,9 +58,11 @@ class GenericPairLoss(BaseMetricLossFunction):
             max_img  = 28.56
 
         img_sim = torch.matmul(embeddings, embeddings.T)
-        img_sim  = torch.clamp(img_sim, min=-1.0, max=1.0)
-        img_sim  = (img_sim - mu_img) / std_img        
-        img_sim  = ((img_sim - min_img) / (max_img - min_img)) *2-1     
+        # normalize features
+        if is_normalize:
+            img_sim  = torch.clamp(img_sim, min=-1.0, max=1.0)
+            img_sim  = (img_sim - mu_img) / std_img        
+            img_sim  = ((img_sim - min_img) / (max_img - min_img)) *2-1     
          
         #TBD: is_trainable_text_encoder
         # img_sim  = (img_sim - mu_text) / std_text
@@ -63,9 +74,10 @@ class GenericPairLoss(BaseMetricLossFunction):
             text_sim = torch.matmul(embeds2, embeds2.T)
             
             # normalize features
-            text_sim = torch.clamp(text_sim, min=-1.0, max=1.0)        
-            text_sim = (text_sim - mu_text) / std_text
-            text_sim = ((text_sim - min_text) / (max_text - min_text)) *2-1          
+            if is_normalize:
+                text_sim = torch.clamp(text_sim, min=-1.0, max=1.0)        
+                text_sim = (text_sim - mu_text) / std_text
+                text_sim = ((text_sim - min_text) / (max_text - min_text)) *2-1          
             
             s_ij = text_sim      
 

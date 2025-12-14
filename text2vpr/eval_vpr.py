@@ -23,59 +23,6 @@ from typing import Tuple, List
 from scipy.interpolate import interp1d
 from scipy.stats import ecdf
 
-def compute_ecdf(x):
-    """Return sorted samples and empirical CDF values."""
-    xs = np.sort(x)
-    n = len(xs)
-    ps = (np.arange(n) + 0.5) / n   # midpoint ECDF in (0,1)
-    return xs, ps
-
-
-def wasserstein_transform_batch(X, target):
-    """
-    Apply row-wise 1D Wasserstein transform:
-    For each i:  X[i] is mapped to target[i].
-
-    X:      array (N, K)
-    target: array (N, K)
-
-    Returns:
-        transformed: array (N, K)
-    """
-    N, K = X.shape
-    Nt, Kt = target.shape
-    assert N == Nt and K == Kt, "X and target must have identical shapes"
-
-    X_out = np.zeros_like(X)
-
-    for i in range(N):
-
-        row = X[i]
-        tgt = target[i]
-
-        # --- ECDF of source row ---
-        xs, ps = compute_ecdf(row)
-        order = np.argsort(row)
-        inv_order = np.argsort(order)
-        p_row = ps[inv_order]       # ECDF values in original order
-
-        # --- ICDF of target row ---
-        xt_sorted, pt = compute_ecdf(tgt)
-        icdf = interp1d(
-            pt, xt_sorted,
-            bounds_error=False,
-            fill_value="extrapolate"
-        )
-
-        # clamp probabilities to target ECDF domain
-        pmin, pmax = pt[0], pt[-1]
-        p_clamped = np.clip(p_row, pmin, pmax)
-
-        # --- Wasserstein map ---
-        X_out[i] = icdf(p_clamped)
-
-    return X_out
-
 def standarize_scores(text_scores, vision_scores, vpr_dim, vpr_model):
      # pre-computed mu and std for normalization over GSV
     mu_text  = 0.65
@@ -234,6 +181,59 @@ def rerank_predictions_by_rank(vision_scores, vision_predictions, text_scores, t
 def normlize_features(x):
     return x / np.linalg.norm(x, axis=1, keepdims=True)    
 
+def compute_ecdf(x):
+    """Return sorted samples and empirical CDF values."""
+    xs = np.sort(x)
+    n = len(xs)
+    ps = (np.arange(n) + 0.5) / n   # midpoint ECDF in (0,1)
+    return xs, ps
+
+
+def wasserstein_transform_batch(X, target):
+    """
+    Apply row-wise 1D Wasserstein transform:
+    For each i:  X[i] is mapped to target[i].
+
+    X:      array (N, K)
+    target: array (N, K)
+
+    Returns:
+        transformed: array (N, K)
+    """
+    N, K = X.shape
+    Nt, Kt = target.shape
+    assert N == Nt and K == Kt, "X and target must have identical shapes"
+
+    X_out = np.zeros_like(X)
+
+    for i in range(N):
+
+        row = X[i]
+        tgt = target[i]
+
+        # --- ECDF of source row ---
+        xs, ps = compute_ecdf(row)
+        order = np.argsort(row)
+        inv_order = np.argsort(order)
+        p_row = ps[inv_order]       # ECDF values in original order
+
+        # --- ICDF of target row ---
+        xt_sorted, pt = compute_ecdf(tgt)
+        icdf = interp1d(
+            pt, xt_sorted,
+            bounds_error=False,
+            fill_value="extrapolate"
+        )
+
+        # clamp probabilities to target ECDF domain
+        pmin, pmax = pt[0], pt[-1]
+        p_clamped = np.clip(p_row, pmin, pmax)
+
+        # --- Wasserstein map ---
+        X_out[i] = icdf(p_clamped)
+
+    return X_out
+
 def encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors, w_alpha):
     if args.encode_mode == 'text':
         # single vector - text
@@ -245,6 +245,13 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
         descriptors = model.encode_image(images.to(args.device))
         descriptors = descriptors.cpu().numpy()
         all_descriptors[indices.numpy(), :] = descriptors    
+    elif args.cross_modal==1:
+        image_features = model.encode_text(texts)
+        image_features = image_features.cpu().numpy()
+        vision_descriptors[indices.numpy(), :] = image_features     
+        text_features = model.encode_image(images.to(args.device))
+        text_features = text_features.cpu().numpy()
+        text_descriptors[indices.numpy(), :] = text_features            
     elif args.is_dual_encoder:
         image_features, text_features = model.encode_dual(images.to(args.device), texts)
         # cat fusion: concat text and vision vectors
@@ -263,10 +270,13 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
         descriptors, text_features, w = model.encode_single(images.to(args.device), texts)
         descriptors = descriptors.cpu().numpy()
         all_descriptors[indices.numpy(), :] = descriptors
+        vision_descriptors[indices.numpy(), :] = descriptors
+        text_features = text_features.cpu().numpy()
+        text_descriptors[indices.numpy(), :] = text_features  
         if args.fusion_type == 'dynamic_weighting' or args.fusion_type == 'fixed_weighting' or args.fusion_type == 'text_adapter' or args.fusion_type == 'transformer':
-            vision_descriptors[indices.numpy(), :] = descriptors
-            text_features = text_features.cpu().numpy()
-            text_descriptors[indices.numpy(), :] = text_features  
+            # vision_descriptors[indices.numpy(), :] = descriptors
+            # text_features = text_features.cpu().numpy()
+            # text_descriptors[indices.numpy(), :] = text_features  
             w = w.cpu().numpy()
             if args.fusion_type == 'fixed_weighting':
                 #make w a 2D vector of [w, 1-w]. w in numpy
@@ -397,7 +407,13 @@ def main(args):
     if 1:
         # w_alpha[:,0] = alpha
         # w_alpha[:,1] = 1.0-alpha
-        if (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting' or args.fusion_type=='text_adapter' or args.fusion_type == 'transformer': 
+        
+        if args.cross_modal:
+            vision_database_descriptors = vision_descriptors[: test_ds.num_database]    
+            text_queries_descriptors = text_descriptors[test_ds.num_database :]
+            scores, predictions = get_queries_predictions(model.encoder_dim, vision_database_descriptors, all_descriptors, text_queries_descriptors, max_results)
+            
+        elif (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting' or args.fusion_type=='text_adapter' or args.fusion_type == 'transformer': 
             # vision
             vision_queries_descriptors = vision_descriptors[test_ds.num_database :]
             vision_database_descriptors = vision_descriptors[: test_ds.num_database]    

@@ -5,7 +5,7 @@ from torch.optim import lr_scheduler, optimizer
 import utils
 from torch import nn
 
-from dataloaders.GSVCitiesDataloader import GSVCitiesDataModule
+from dataloaders.GSVCitiesDataloader import GSVCitiesDataModule, IMAGENET_MEAN_STD, BLIP_MEAN_STD
 from models import helper
 from sentence_transformers import SentenceTransformer
 import os
@@ -16,8 +16,9 @@ from vpr_text import VPR_Text_Model
 def parse_arguments():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # Resume parameters
-    parser.add_argument("--vpr_dim", type=int, default=512, help="dimension of the vpr embeddings")
-    parser.add_argument("--vpr_model_name", type=str, default="mixvpr")
+    parser.add_argument("--vpr_dim", type=int, default=10752, help="dimension of the vpr embeddings")
+    parser.add_argument("--vpr_model_name", type=str, default="Salesforce/blip-itm-base-coco")
+    #parser.add_argument("--vpr_model_name", type=str, default="cricavpr")
     parser.add_argument("--vpr_model_backbone", type=str, default="ResNet50")
     # Other parameters
     parser.add_argument("--gpu", type=str, default='1', help="gpu id(s) to use")    
@@ -31,10 +32,12 @@ def parse_arguments():
     parser.add_argument("--is_encode_image", type=int, default="1", help="encode image or not")
     parser.add_argument("--is_encode_text", type=int, default="1", help="encode text or not")
     parser.add_argument("--is_text_pooling", type=int, default="0", help="pool text or not")
+    parser.add_argument("--is_image_pooling", type=int, default="0", help="pool image or not")
+    parser.add_argument("--is_pca", type=int, default="0", help="pool image or not")
     parser.add_argument("--is_trainable_text_encoder", type=int, default="0", help="train text encoder or not")
     parser.add_argument("--batch_size", type=int, default="120", help="batch size for training")
-    parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss_Sij", help="name of the loss function to use")
-    #parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss", help="name of the loss function to use")
+    #parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss_Sij", help="name of the loss function to use")
+    parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss", help="name of the loss function to use")
 
     args = parser.parse_args()
     
@@ -45,6 +48,10 @@ if __name__ == '__main__':
     
     args = parse_arguments()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+    
+    dataset_mean_std = IMAGENET_MEAN_STD
+    if 'blip' in args.vpr_model_name.lower():
+        dataset_mean_std = BLIP_MEAN_STD
         
     datamodule = GSVCitiesDataModule(
         batch_size=args.batch_size,
@@ -52,9 +59,10 @@ if __name__ == '__main__':
         min_img_per_place=4,
         shuffle_all=False, # shuffle all images or keep shuffling in-city only
         random_sample_from_each_place=True,
-        image_size=(320, 320),
+        image_size=(384, 384),
         num_workers=4,#28,
         show_data_stats=True,
+        mean_std=dataset_mean_std,
         #val_set_names=['pitts30k_val', 'pitts30k_test', 'msls_val'], # pitts30k_val, pitts30k_test, msls_val
         #val_set_names=['pitts30k_test'],
         val_set_names=[],
@@ -99,7 +107,9 @@ if __name__ == '__main__':
         is_encode_image=args.is_encode_image,
         is_encode_text=args.is_encode_text,
         is_trainable_text_encoder=args.is_trainable_text_encoder,
-        is_text_pooling=args.is_text_pooling
+        is_text_pooling=args.is_text_pooling,
+        is_image_pooling=args.is_image_pooling,
+        is_pca=args.is_pca
     )
     
     # if args.is_encode_image and  args.vpr_resume_model is not None:
