@@ -25,7 +25,7 @@ class GenericPairLoss(BaseMetricLossFunction):
         min_text = -6.07
         max_text = 4.92
         
-        is_normalize = 1
+        is_normalize = 0
         
         if embeddings.shape[1] == 256:
             #cricavpr
@@ -51,6 +51,7 @@ class GenericPairLoss(BaseMetricLossFunction):
             std_img  = 0.027
             min_img  = -5.55
             max_img  = 30.67
+            
         elif embeddings.shape[1] == 10752: #cricavpr 10752
             mu_img   = 0.0094
             std_img  = 0.026

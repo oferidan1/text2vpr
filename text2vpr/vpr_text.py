@@ -217,8 +217,6 @@ class VPR_Text_Model(pl.LightningModule):
                     with amp.autocast(enabled=False):
                         U, S, V = torch.pca_lowrank(img_embeds.float(), q=self.embeds_dim, center=True)
                     img_embeds = torch.matmul(img_embeds, V[:, :self.embeds_dim])
-                    # self.pca.fit(img_embeds)
-                    # img_embeds = self.pca.transform(img_embeds)   
                 embeds = img_embeds
             embeds_orig = img_embeds
         if self.is_encode_text:                    
@@ -250,9 +248,13 @@ class VPR_Text_Model(pl.LightningModule):
             # token_feature = model_output[0]
             # token_feature = self.text_aggregation(token_feature, attention_mask=text_tokens['attention_mask']) 
             # text_embeds = torch.nn.functional.normalize(token_feature, p=2, dim=-1)
+            
+            # attention pooling on text
             if self.is_text_pooling:
                 text_features = self.text_pooling(text_embeds_all, mask=attention_mask)
                 text_embeds = torch.nn.functional.normalize(text_features, p=2, dim=1)
+                
+            # attention pooling on image
             if self.is_image_pooling:
                 image_features = self.image_pooling(img_embeds_all)
                 img_embeds = torch.nn.functional.normalize(image_features, p=2, dim=1)

@@ -66,10 +66,10 @@ def main(args):
     args.is_dual_encoder = 1
     args.encode_mode = 'both'
     args.dual_encoder_fusion = 'each'
-    # args.database_folder = "/mnt/d/data/gsv_cities/Images"
-    # args.queries_folder = "/mnt/d/data/gsv_cities/Images"
-    # args.queries_csv = "/mnt/d/data/gsv_cities/gsv_cities_predictions.csv"
-    # args.image_root = "/mnt/d/data/gsv_cities"
+    args.database_folder = "/mnt/d/data/gsv_cities/Images"
+    args.queries_folder = "/mnt/d/data/gsv_cities/Images"
+    args.queries_csv = "/mnt/d/data/gsv_cities/gsv_cities_predictions.csv"
+    args.image_root = "/mnt/d/data/gsv_cities"
 
     logger.remove()  # Remove possibly previously existing loggers
     log_dir = Path("logs") / args.log_dir / start_time.strftime("%Y-%m-%d_%H-%M-%S")

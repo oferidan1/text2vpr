@@ -51,6 +51,11 @@ def standarize_scores(text_scores, vision_scores, vpr_dim, vpr_model):
         std_img  = 0.026
         min_img  = -5.67
         max_img  = 28.56
+        
+        # mu_img   = 0.068
+        # std_img  = 0.045
+        # min_img  = -3.32
+        # max_img  = 20.63
     
     # pre-computed mu and std for normalization over nordland 
     # mu_text  = 0.75

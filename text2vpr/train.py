@@ -16,9 +16,11 @@ from vpr_text import VPR_Text_Model
 def parse_arguments():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # Resume parameters
-    parser.add_argument("--vpr_dim", type=int, default=10752, help="dimension of the vpr embeddings")
-    parser.add_argument("--vpr_model_name", type=str, default="Salesforce/blip-itm-base-coco")
-    #parser.add_argument("--vpr_model_name", type=str, default="cricavpr")
+    parser.add_argument("--vpr_dim", type=int, default=512, help="dimension of the vpr embeddings")
+    parser.add_argument("--vpr_model_name", type=str, default="mixvpr")
+    #parser.add_argument("--vpr_dim", type=int, default=10752, help="dimension of the vpr embeddings")    
+    #parser.add_argument("--vpr_model_name", type=str, default="cricavpr")    
+    #parser.add_argument("--vpr_model_name", type=str, default="Salesforce/blip-itm-base-coco")    
     parser.add_argument("--vpr_model_backbone", type=str, default="ResNet50")
     # Other parameters
     parser.add_argument("--gpu", type=str, default='1', help="gpu id(s) to use")    
@@ -27,17 +29,18 @@ def parse_arguments():
     parser.add_argument("--text_encoder", type=str, default="BAAI/bge-large-en-v1.5", help="text encoder model name")
     parser.add_argument("--is_freeze_text", type=int, default="1", help="freeze text encoder or not")
     parser.add_argument("--is_freeze_vpr", type=int, default="1", help="freeze vpr encoder or not")    
+    parser.add_argument("--image_size", type=int, default="320", help="image size to vpr")
     parser.add_argument("--embeds_dim", type=int, default=512, help="dimension of the embeddings")
-    parser.add_argument("--fusion_type", type=str, default='fixed_weighting', help="type of fusion to use: mlp, add, transformer, dynamic_weighting, fixed_weighting, text_adapter")
+    parser.add_argument("--fusion_type", type=str, default='dynamic_weighting', help="type of fusion to use: mlp, add, transformer, dynamic_weighting, fixed_weighting, text_adapter")
     parser.add_argument("--is_encode_image", type=int, default="1", help="encode image or not")
     parser.add_argument("--is_encode_text", type=int, default="1", help="encode text or not")
-    parser.add_argument("--is_text_pooling", type=int, default="0", help="pool text or not")
+    parser.add_argument("--is_text_pooling", type=int, default="1", help="pool text or not")
     parser.add_argument("--is_image_pooling", type=int, default="0", help="pool image or not")
     parser.add_argument("--is_pca", type=int, default="0", help="pool image or not")
     parser.add_argument("--is_trainable_text_encoder", type=int, default="0", help="train text encoder or not")
     parser.add_argument("--batch_size", type=int, default="120", help="batch size for training")
-    #parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss_Sij", help="name of the loss function to use")
-    parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss", help="name of the loss function to use")
+    parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss_Sij", help="name of the loss function to use")
+    #parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss", help="name of the loss function to use")
 
     args = parser.parse_args()
     
@@ -50,8 +53,10 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     
     dataset_mean_std = IMAGENET_MEAN_STD
+    image_size = args.image_size
     if 'blip' in args.vpr_model_name.lower():
         dataset_mean_std = BLIP_MEAN_STD
+        image_size = 384
         
     datamodule = GSVCitiesDataModule(
         batch_size=args.batch_size,
@@ -59,7 +64,7 @@ if __name__ == '__main__':
         min_img_per_place=4,
         shuffle_all=False, # shuffle all images or keep shuffling in-city only
         random_sample_from_each_place=True,
-        image_size=(384, 384),
+        image_size=(image_size, image_size),
         num_workers=4,#28,
         show_data_stats=True,
         mean_std=dataset_mean_std,
