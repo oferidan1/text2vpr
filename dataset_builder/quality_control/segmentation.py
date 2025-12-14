@@ -230,6 +230,13 @@ class Segmenter:
                 self.model.to(self.device)
             except Exception:
                 pass
+        elif self.backend == "hf_clipseg_vpr":
+            # Open-vocabulary CLIPSeg (text-guided) over VPR-relevant terms
+            if not _TRANSFORMERS_AVAILABLE:
+                raise RuntimeError("Transformers not available for clipseg backend.")
+            # Defer heavy imports/models to segment_image for memory friendliness
+            self.id_to_name = {}
+            self.device = self._torch_device()
         else:
             raise ValueError(f"Unknown segmentation backend: {self.backend}")
 
@@ -239,8 +246,20 @@ class Segmenter:
     def _torch_device(self) -> str:
         try:
             import torch
-            if self.config.device.startswith("cuda") and torch.cuda.is_available():
+            # Honor explicit device string if provided
+            explicit = getattr(self.config, "device", None)
+            if isinstance(explicit, str) and explicit:
+                if explicit.startswith("cuda"):
+                    return explicit if torch.cuda.is_available() else "cpu"
+                if explicit.startswith("mps"):
+                    return "mps"
+                if explicit == "cpu":
+                    return "cpu"
+            # Auto fallback
+            if torch.cuda.is_available():
                 return "cuda"
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                return "mps"
             return "cpu"
         except Exception:
             return "cpu"
@@ -675,8 +694,20 @@ class Segmenter:
     def _torch_device(self) -> str:
         try:
             import torch
-            if self.config.device.startswith("cuda") and torch.cuda.is_available():
+            # Honor explicit device string if provided
+            explicit = getattr(self.config, "device", None)
+            if isinstance(explicit, str) and explicit:
+                if explicit.startswith("cuda"):
+                    return explicit if torch.cuda.is_available() else "cpu"
+                if explicit.startswith("mps"):
+                    return "mps"
+                if explicit == "cpu":
+                    return "cpu"
+            # Auto fallback
+            if torch.cuda.is_available():
                 return "cuda"
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                return "mps"
             return "cpu"
         except Exception:
             return "cpu"
@@ -967,6 +998,69 @@ class Segmenter:
             logits = outputs.logits.squeeze(0).cpu().numpy()  # [C, h, w]
             label_map = logits.argmax(axis=0).astype(np.int32)
             objects = self._postprocess_objects(label_map, logits)
+            return label_map, objects
+
+        if self.backend == "hf_clipseg_vpr":
+            # Open-vocabulary, text-guided segmentation using CLIPSeg across VPR terms
+            import torch
+            import torch.nn.functional as F  # type: ignore
+            from transformers import CLIPSegProcessor, CLIPSegForImageSegmentation  # type: ignore
+
+            # Lazy model init
+            if not hasattr(self, "_clipseg_ready"):
+                self._clipseg_processor = CLIPSegProcessor.from_pretrained("CIDAS/clipseg-rd64-refined")
+                self._clipseg_model = CLIPSegForImageSegmentation.from_pretrained("CIDAS/clipseg-rd64-refined")
+                self._clipseg_model.eval()
+                try:
+                    self._clipseg_model.to(self.device)
+                except Exception:
+                    pass
+                if not hasattr(self, "_vpr_canonical"):
+                    self._init_vpr_relevance()
+                self._clipseg_ready = True
+
+            # Queries from canonical VPR lexicon
+            queries = sorted(list(self._vpr_canonical))
+            if not queries:
+                queries = ["building", "bridge", "tower", "sign", "storefront", "window", "door", "arch", "dome", "column", "stairs", "fence", "wall", "road", "street", "square", "clock"]
+
+            # Batch inference
+            batch_size = 8
+            H, W = img.size[1], img.size[0]
+            prob_maps: List[np.ndarray] = []
+            with torch.no_grad():
+                for start in range(0, len(queries), batch_size):
+                    q_batch = queries[start : start + batch_size]
+                    inputs = self._clipseg_processor(
+                        text=q_batch,
+                        images=[img] * len(q_batch),
+                        padding="max_length",
+                        return_tensors="pt",
+                    )
+                    inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                    outputs = self._clipseg_model(**inputs)
+                    logits_b = outputs.logits  # [N, 1, h, w]
+                    probs_b = torch.sigmoid(logits_b)
+                    probs_up = F.interpolate(probs_b, size=(H, W), mode="bilinear", align_corners=False)  # [N,1,H,W]
+                    probs_up = probs_up.squeeze(1).cpu().numpy()  # [N,H,W]
+                    for i in range(probs_up.shape[0]):
+                        prob_maps.append(probs_up[i])
+
+            if not prob_maps:
+                label_map = np.zeros((H, W), dtype=np.int32)
+                self.id_to_name = {}
+                return label_map, []
+
+            probs = np.stack(prob_maps, axis=0)  # [C,H,W]
+            max_probs = probs.max(axis=0)  # [H,W]
+            labels = probs.argmax(axis=0) + 1  # ids start at 1
+            pixel_thresh = float(self.config.prob_threshold) if self.config.prob_threshold is not None else 0.3
+            label_map = np.where(max_probs >= pixel_thresh, labels, 0).astype(np.int32)
+
+            # Map ids to names
+            self.id_to_name = {i + 1: queries[i] for i in range(len(queries))}
+
+            objects = self._postprocess_objects(label_map, logits=None)  # type: ignore
             return label_map, objects
 
         raise ValueError(f"Unsupported backend: {self.backend}")

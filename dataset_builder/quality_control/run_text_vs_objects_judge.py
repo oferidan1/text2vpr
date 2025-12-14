@@ -91,6 +91,12 @@ def main() -> None:
         help="Segmentation backend",
     )
     parser.add_argument(
+        "--device-id",
+        type=int,
+        default=0,
+        help="CUDA device index to use for both segmentation and judge (use -1 for CPU).",
+    )
+    parser.add_argument(
         "--prob-threshold",
         type=float,
         default=0.4,
@@ -176,14 +182,30 @@ def main() -> None:
     global_log = os.path.join(args.output_dir, "run_log.txt")
     with open(global_log, "a", encoding="utf-8") as flog:
         flog.write(
-            f"[{datetime.now().isoformat(timespec='seconds')}] predictions_csv={args.predictions_csv} images_root={args.images_root} seg_backend={args.seg_backend} prob_threshold={args.prob_threshold} min_area_pct={args.min_area_pct} model_name={args.model_name} dtype={args.dtype or ''} city_filter={args.city or ''} score_only={bool(args.score_only)}\n"
+            f"[{datetime.now().isoformat(timespec='seconds')}] predictions_csv={args.predictions_csv} images_root={args.images_root} seg_backend={args.seg_backend} prob_threshold={args.prob_threshold} min_area_pct={args.min_area_pct} model_name={args.model_name} dtype={args.dtype or ''} device_id={int(args.device_id)} city_filter={args.city or ''} score_only={bool(args.score_only)}\n"
         )
     df = pd.read_csv(args.predictions_csv)
     if "image_path" not in df.columns or "description" not in df.columns:
         raise SystemExit("Predictions CSV must contain 'image_path' and 'description'.")
 
-    seg = Segmenter(SegConfig(backend=args.seg_backend, prob_threshold=args.prob_threshold, min_area_pct=args.min_area_pct))
-    judge = HFJudge(JudgeConfig(model_name=args.model_name, temperature=args.temperature, dtype=args.dtype or None))
+    # Resolve device string for segmenter
+    seg_device = "cpu" if int(args.device_id) < 0 else f"cuda:{int(args.device_id)}"
+    seg = Segmenter(
+        SegConfig(
+            backend=args.seg_backend,
+            prob_threshold=args.prob_threshold,
+            min_area_pct=args.min_area_pct,
+            device=seg_device,
+        )
+    )
+    judge = HFJudge(
+        JudgeConfig(
+            model_name=args.model_name,
+            temperature=args.temperature,
+            dtype=args.dtype or None,
+            device=int(args.device_id),
+        )
+    )
 
     # Derive city from image_path and optionally filter by --city
     df["city_id"] = df["image_path"].apply(extract_city_from_path)
@@ -232,7 +254,7 @@ def main() -> None:
         city_log = os.path.join(city_dir, "run_log.txt")
         with open(city_log, "a", encoding="utf-8") as flog:
             flog.write(
-                f"[{datetime.now().isoformat(timespec='seconds')}] predictions_csv={args.predictions_csv} seg_backend={args.seg_backend} prob_threshold={args.prob_threshold} min_area_pct={args.min_area_pct} model_name={args.model_name} dtype={args.dtype or ''} overlays_dir={overlays_dir} results_csv={city_results_path} score_only={bool(args.score_only)}\n"
+                f"[{datetime.now().isoformat(timespec='seconds')}] predictions_csv={args.predictions_csv} seg_backend={args.seg_backend} prob_threshold={args.prob_threshold} min_area_pct={args.min_area_pct} model_name={args.model_name} dtype={args.dtype or ''} device_id={int(args.device_id)} overlays_dir={overlays_dir} results_csv={city_results_path} score_only={bool(args.score_only)}\n"
             )
         print(f"{city}: saving overlays to {overlays_dir}")
 

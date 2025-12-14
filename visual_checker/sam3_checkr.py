@@ -1140,10 +1140,53 @@ def run_batch(
         # Track per-CSV counts for the summary.
         summary_counts: dict[str, dict[str, float]] = {}
 
+        # Track which cluster directories we've already checked for their
+        # companion cluster_items CSV to avoid redundant waits.
+        checked_cluster_dirs: set[Path] = set()
+
         for idx, csv_path in enumerate(csv_files, start=1):
             csv_path = csv_path.resolve()
             log_f.write(f"[{idx}/{len(csv_files)}] Processing CSV: {csv_path}\n")
             log_f.flush()
+
+            # When using LLM-based object CSVs, ensure that for each cluster_* directory
+            # we also have the corresponding 'cluster_items_objects_llm_v2.csv'.
+            # If it does not exist yet, wait up to 5 minutes for it to appear; if it
+            # still does not show up, exit with a meaningful error.
+            if use_llm:
+                cluster_dir: Optional[Path] = None
+                for parent in csv_path.parents:
+                    if parent.name.startswith("cluster_"):
+                        cluster_dir = parent
+                        break
+                if cluster_dir is None:
+                    cluster_dir = csv_path.parent
+
+                if cluster_dir not in checked_cluster_dirs:
+                    cluster_items_name = "cluster_items_objects_llm_v2.csv"
+                    cluster_items_path = cluster_dir / cluster_items_name
+                    if not cluster_items_path.is_file():
+                        timeout_sec = 300
+                        poll_interval = 5.0
+                        print(
+                            f"[INFO] Waiting up to {timeout_sec} seconds for "
+                            f"'{cluster_items_name}' in cluster directory "
+                            f"{cluster_dir}..."
+                        )
+                        found = wait_for_file(
+                            cluster_items_path,
+                            timeout_sec=timeout_sec,
+                            poll_interval=poll_interval,
+                        )
+                        if not found:
+                            print(
+                                f"[ERROR] Expected '{cluster_items_name}' not found in "
+                                f"{cluster_dir} after waiting {timeout_sec} seconds. "
+                                "Exiting."
+                            )
+                            sys.exit(1)
+
+                    checked_cluster_dirs.add(cluster_dir)
 
             # Determine per-CSV debug directory in batch mode.
             per_csv_debug_dir: Optional[Path] = None
@@ -1176,7 +1219,7 @@ def run_batch(
                 no_overwrite=no_overwrite,
                 use_filtered=use_filtered,
                 realtime_missing_csv=realtime_missing_path,
-                 realtime_progress_csv=realtime_progress_path,
+                realtime_progress_csv=realtime_progress_path,
             )
 
             output_suffix = "_sam3_filtered.csv" if use_filtered else "_sam3.csv"

@@ -1,5 +1,6 @@
 import argparse
 import os
+import base64
 from typing import Dict, Tuple
 
 import folium
@@ -61,7 +62,52 @@ def build_map(
     assignments_csv: str = "",
     show_all_images: bool = False,
     output_html: str = "",
+    predictions_csv: str = "",
+    viz_images_root: str = "",
+    max_images_per_cluster: int = 0,
 ) -> str:
+    def extract_panoid_from_image_path(image_path: str) -> str:
+        """
+        Extract panoid from an image file path. Assumes the panoid is the last underscore-separated
+        token in the filename before extension, e.g. ..._<panoid>.jpg
+        """
+        name = os.path.splitext(os.path.basename(str(image_path)))[0]
+        if "_" in name:
+            return name.split("_")[-1]
+        return name
+
+    def load_panoid_to_image_map(pred_csv: str, images_root: str) -> Dict[str, str]:
+        if not pred_csv or not os.path.exists(pred_csv):
+            return {}
+        try:
+            df_pred = pd.read_csv(pred_csv)
+        except Exception:
+            return {}
+        if "image_path" not in df_pred.columns:
+            return {}
+        panoid_to_path: Dict[str, str] = {}
+        root = images_root or ""
+        for p in df_pred["image_path"].astype(str).tolist():
+            panoid = extract_panoid_from_image_path(p)
+            abs_path = os.path.join(root, p) if root else p
+            panoid_to_path[panoid] = abs_path
+        return panoid_to_path
+
+    def html_img_for_panoid(panoid: str, p2img: Dict[str, str], max_width_px: int = 320) -> str:
+        if not panoid:
+            return ""
+        img_path = p2img.get(panoid, "")
+        if not img_path or not os.path.exists(img_path):
+            return ""
+        try:
+            with open(img_path, "rb") as f:
+                data = f.read()
+            b64 = base64.b64encode(data).decode("ascii")
+            return f'<br><img src="data:image/jpeg;base64,{b64}" style="max-width:{max_width_px}px; height:auto;" alt="panoid image" />'
+        except Exception:
+            return ""
+
+    panoid_to_image = load_panoid_to_image_map(predictions_csv, viz_images_root)
     centers_df = pd.read_csv(centers_csv)
     if centers_df.empty:
         raise SystemExit("Centers CSV is empty.")
@@ -88,6 +134,15 @@ def build_map(
         max_year = int(row.get("max_year", 0))
         color = color_for_cluster(cid)
 
+        center_popup_html = (
+            f"<b>Cluster</b>: {cid}<br>"
+            f"<b>Count</b>: {count}<br>"
+            f"<b>Years</b>: {min_year}-{max_year}<br>"
+            f"<b>Rep panoid</b>: {pano}"
+        )
+        if panoid_to_image:
+            center_popup_html += html_img_for_panoid(pano, panoid_to_image, max_width_px=360)
+
         folium.Circle(
             location=[lat, lon],
             radius=radius_m,
@@ -95,15 +150,7 @@ def build_map(
             fill=True,
             fill_opacity=0.15,
             weight=2,
-            popup=folium.Popup(
-                html=(
-                    f"<b>Cluster</b>: {cid}<br>"
-                    f"<b>Count</b>: {count}<br>"
-                    f"<b>Years</b>: {min_year}-{max_year}<br>"
-                    f"<b>Rep panoid</b>: {pano}"
-                ),
-                max_width=300,
-            ),
+            popup=folium.Popup(html=center_popup_html, max_width=420),
         ).add_to(fmap)
 
         # Heading ray (short line indicating viewing direction)
@@ -123,6 +170,7 @@ def build_map(
     # Optionally add all image points colored by cluster
     if show_all_images and not assign_df.empty and "cluster_id" in assign_df.columns:
         cluster_layer = MarkerCluster(name="All images").add_to(fmap)
+        per_cluster_img_counts: Dict[int, int] = {}
         for _, r in assign_df.iterrows():
             cid = int(r["cluster_id"]) if not np.isnan(r["cluster_id"]) else -1
             lat = float(r["lat"])
@@ -131,21 +179,29 @@ def build_map(
             month = int(r.get("month", 0))
             head = float(r.get("northdeg", 0.0))
             panoid = str(r.get("panoid", ""))
+            popup_html = (
+                f"<b>Cluster</b>: {cid}<br>"
+                f"<b>Date</b>: {year}-{month:02d}<br>"
+                f"<b>Heading</b>: {head:.1f}<br>"
+                f"<b>Panoid</b>: {panoid}"
+            )
+            if panoid_to_image:
+                can_embed = True
+                if isinstance(max_images_per_cluster, int) and max_images_per_cluster > 0:
+                    used = per_cluster_img_counts.get(cid, 0)
+                    can_embed = used < max_images_per_cluster
+                if can_embed:
+                    img_html = html_img_for_panoid(panoid, panoid_to_image, max_width_px=320)
+                    if img_html:
+                        popup_html += img_html
+                        per_cluster_img_counts[cid] = per_cluster_img_counts.get(cid, 0) + 1
             folium.CircleMarker(
                 location=[lat, lon],
                 radius=2,
                 color=color_for_cluster(cid),
                 fill=True,
                 fill_opacity=0.7,
-                popup=folium.Popup(
-                    html=(
-                        f"<b>Cluster</b>: {cid}<br>"
-                        f"<b>Date</b>: {year}-{month:02d}<br>"
-                        f"<b>Heading</b>: {head:.1f}<br>"
-                        f"<b>Panoid</b>: {panoid}"
-                    ),
-                    max_width=300,
-                ),
+                popup=folium.Popup(html=popup_html, max_width=360),
             ).add_to(cluster_layer)
 
     if not output_html:
@@ -183,6 +239,24 @@ def main() -> None:
         default="",
         help="Optional explicit output HTML path",
     )
+    parser.add_argument(
+        "--predictions-csv",
+        type=str,
+        default="",
+        help="CSV containing at least the 'image_path' column; panoid is inferred from filename",
+    )
+    parser.add_argument(
+        "--viz-images-root",
+        type=str,
+        default="",
+        help="Root folder to prepend to 'image_path' from predictions CSV",
+    )
+    parser.add_argument(
+        "--max-images-per-cluster",
+        type=int,
+        default=0,
+        help="Limit number of embedded images per cluster in popups (0 = no limit)",
+    )
 
     args = parser.parse_args()
     centers_csv = os.path.join(args.clustered_dir, f"{args.city}_centers.csv")
@@ -196,6 +270,9 @@ def main() -> None:
         assignments_csv=assign_csv,
         show_all_images=args.show_all_images,
         output_html=args.output,
+        predictions_csv=args.predictions_csv,
+        viz_images_root=args.viz_images_root,
+        max_images_per_cluster=args.max_images_per_cluster,
     )
     print(f"Saved map to: {output_path}")
 

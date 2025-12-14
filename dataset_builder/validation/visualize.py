@@ -3,7 +3,7 @@ import glob
 import json
 import os
 import textwrap
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
@@ -69,6 +69,7 @@ def _load_image_safe(path: str, target_width: int) -> Image.Image:
 def _compose_collage(
     images: List[Image.Image],
     numbers: List[int],
+    outlier_flags: Optional[List[int]],
     header_title: str,
     subtitle_lines: List[str],
     cols: int,
@@ -123,6 +124,13 @@ def _compose_collage(
         draw.text((x + 4, y + 2), num_text, font=font, fill=(0, 0, 0))
         # image
         out.paste(img, (x, y + label_h))
+        # outlier highlight (red border around the image area)
+        if outlier_flags and idx < len(outlier_flags) and int(outlier_flags[idx]) == 1:
+            bx0, by0 = x, y + label_h
+            bx1, by1 = x + cell_w, y + label_h + thumb_h
+            # draw a thicker rectangle by overdrawing
+            for k in range(3):
+                draw.rectangle([bx0 + k, by0 + k, bx1 - k, by1 - k], outline=(220, 0, 0))
 
     return out
 
@@ -137,7 +145,7 @@ def visualize_clusters(
 ) -> str:
     os.makedirs(output_dir, exist_ok=True)
     summary = pd.read_csv(summary_csv)
-    needed_cols = {"cluster_id", "cluster_score", "critical_inconsistencies"}
+    needed_cols = {"cluster_id", "cluster_score"}
     missing = [c for c in needed_cols if c not in summary.columns]
     if missing:
         raise SystemExit(f"Summary CSV missing columns: {missing}")
@@ -147,7 +155,7 @@ def visualize_clusters(
         if cid is None:
             continue
         score = int(row["cluster_score"]) if not pd.isna(row["cluster_score"]) else -1
-        crit = _parse_json_list(str(row.get("critical_inconsistencies", "")))
+        rationale = str(row.get("score_rationale", "")).strip()
 
         # read cluster members
         path = _find_cluster_csv(clusters_dir, cid)
@@ -159,6 +167,7 @@ def visualize_clusters(
             _resolve_path(images_root, str(p))
             for p in df["image_path"].astype(str).tolist()
         ]
+        outlier_flags = df["is_outlier"].astype(int).tolist() if "is_outlier" in df.columns else [0] * len(image_paths)
 
         # load images
         thumbs: List[Image.Image] = []
@@ -166,15 +175,26 @@ def visualize_clusters(
             thumbs.append(_load_image_safe(p, thumb_width))
 
         # header/subtitle
-        header = f"Cluster {cid}  |  Score {score}  |  N={len(thumbs)}"
-        if crit:
-            subtitle = ["Critical inconsistencies:"] + [f"- {c}" for c in crit]
-        else:
-            subtitle = ["Critical inconsistencies: (none)"]
+        num_outliers = sum(1 for v in outlier_flags if int(v) == 1)
+        header = f"Cluster {cid}  |  Score {score}  |  N={len(thumbs)}  |  Outliers={num_outliers}"
+        subtitle = []
+        if rationale:
+            subtitle.append(f"Why: {rationale}")
+        subtitle.append("Red border = outlier (is_outlier=1)")
+        # include a few outlier reasons if present
+        outlier_reasons = df["outlier_reason"].astype(str).tolist() if "outlier_reason" in df.columns else ["" for _ in image_paths]
+        added = 0
+        for idx, (flag, reason) in enumerate(zip(outlier_flags, outlier_reasons)):
+            if int(flag) == 1 and str(reason).strip():
+                subtitle.append(f"#{idx}: {str(reason).strip()}")
+                added += 1
+                if added >= 8:
+                    break
 
         collage = _compose_collage(
             images=thumbs,
             numbers=list(range(len(thumbs))),
+            outlier_flags=outlier_flags,
             header_title=header,
             subtitle_lines=subtitle,
             cols=cols,
@@ -188,8 +208,64 @@ def visualize_clusters(
     return output_dir
 
 
+def visualize_single_cluster(
+    clusters_dir: str,
+    cluster_id: int,
+    score: int,
+    score_rationale: str,
+    output_dir: str,
+    images_root: str,
+    cols: int,
+    thumb_width: int,
+) -> str:
+    os.makedirs(output_dir, exist_ok=True)
+    path = _find_cluster_csv(clusters_dir, cluster_id)
+    df = pd.read_csv(path)
+    if "image_path" not in df.columns:
+        raise SystemExit(f"Cluster CSV {path} lacks 'image_path' column")
+    image_paths = [
+        _resolve_path(images_root, str(p))
+        for p in df["image_path"].astype(str).tolist()
+    ]
+    outlier_flags = df["is_outlier"].astype(int).tolist() if "is_outlier" in df.columns else [0] * len(image_paths)
+
+    thumbs: List[Image.Image] = []
+    for p in image_paths:
+        thumbs.append(_load_image_safe(p, thumb_width))
+
+    num_outliers = sum(1 for v in outlier_flags if int(v) == 1)
+    outlier_reasons = df["outlier_reason"].astype(str).tolist() if "outlier_reason" in df.columns else ["" for _ in image_paths]
+    header = f"Cluster {cluster_id}  |  Score {score}  |  N={len(thumbs)}  |  Outliers={num_outliers}"
+    subtitle = []
+    if score_rationale:
+        subtitle.append(f"Why: {score_rationale}")
+    subtitle.append("Red border = outlier (is_outlier=1)")
+    # Add a few outlier reasons
+    added = 0
+    for idx, (flag, reason) in enumerate(zip(outlier_flags, outlier_reasons)):
+        if int(flag) == 1 and str(reason).strip():
+            subtitle.append(f"#{idx}: {str(reason).strip()}")
+            added += 1
+            if added >= 8:
+                break
+
+    collage = _compose_collage(
+        images=thumbs,
+        numbers=list(range(len(thumbs))),
+        outlier_flags=outlier_flags,
+        header_title=header,
+        subtitle_lines=subtitle,
+        cols=cols,
+    )
+    score_dir = os.path.join(output_dir, str(score))
+    os.makedirs(score_dir, exist_ok=True)
+    out_path = os.path.join(score_dir, f"cluster_{cluster_id}.jpg")
+    collage.save(out_path, quality=90)
+    return out_path
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Visualize clusters as collages with critical inconsistencies")
+    parser = argparse.ArgumentParser(description="Visualize clusters (single method): score and outliers only")
     parser.add_argument("--clusters-dir", type=str, required=True, help="Path to city clusters directory")
     parser.add_argument("--summary-csv", type=str, required=True, help="Path to per-city cluster_consistency CSV")
     parser.add_argument("--output-dir", type=str, required=True, help="Directory to save collages")

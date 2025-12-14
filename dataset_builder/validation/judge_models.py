@@ -15,6 +15,7 @@ class JudgeConfig:
     top_p: float = 0.9
     device_map: str = "auto"
     dtype: Optional[str] = None  # e.g., "float16"
+    device: Optional[int] = None  # GPU device index; -1 for CPU; None=auto
 
 
 class HFJudge:
@@ -44,12 +45,34 @@ class HFJudge:
 
         # If not using accelerate sharding, place the model on a single device
         if not use_accelerate:
-            if torch.cuda.is_available():
-                model.to("cuda")
-            elif torch.backends.mps.is_available():  # macOS GPU
-                model.to("mps")
+            # Determine target device based on config.device
+            target_device_str = "cpu"
+            pipeline_device = -1
+            if self.config.device is not None:
+                if self.config.device >= 0 and torch.cuda.is_available():
+                    target_device_str = f"cuda:{self.config.device}"
+                    pipeline_device = int(self.config.device)
+                elif self.config.device < 0:
+                    target_device_str = "cpu"
+                    pipeline_device = -1
+                elif torch.backends.mps.is_available():  # macOS GPU fallback
+                    target_device_str = "mps"
+                    pipeline_device = -1
+                else:
+                    target_device_str = "cpu"
+                    pipeline_device = -1
             else:
-                model.to("cpu")
+                # Auto
+                if torch.cuda.is_available():
+                    target_device_str = "cuda"
+                    pipeline_device = 0
+                elif torch.backends.mps.is_available():
+                    target_device_str = "mps"
+                    pipeline_device = -1
+                else:
+                    target_device_str = "cpu"
+                    pipeline_device = -1
+            model.to(target_device_str)
 
         tokenizer = AutoTokenizer.from_pretrained(self.config.model_name)
 
@@ -61,7 +84,11 @@ class HFJudge:
             "return_full_text": False,
         }
         if not use_accelerate:
-            pipeline_kwargs["device"] = 0 if torch.cuda.is_available() else -1
+            # Use explicit device selection when provided; otherwise auto
+            if self.config.device is not None:
+                pipeline_kwargs["device"] = int(self.config.device) if int(self.config.device) >= 0 else -1
+            else:
+                pipeline_kwargs["device"] = 0 if torch.cuda.is_available() else -1
 
         self.generator = pipeline(**pipeline_kwargs)
 
@@ -75,7 +102,11 @@ class HFJudge:
             top_p=self.config.top_p,
         )
         text = outputs[0]["generated_text"] if outputs and outputs[0] else ""
-        return self._parse_json_output(text)
+        parsed = self._parse_json_output(text)
+        # Include raw artifacts for optional persistence by callers
+        parsed["_raw_text"] = text
+        parsed["_full_prompt"] = full_prompt
+        return parsed
 
     @staticmethod
     def _parse_json_output(text: str) -> Dict[str, Any]:
@@ -179,6 +210,50 @@ class HFJudge:
         rationale = obj.get("rationale", obj.get("explanation", ""))
         outliers = obj.get("outlier_indices", obj.get("outliers", []))
 
+        # Normalize outlier reasons into a map[int, str]
+        reasons_map: Dict[int, str] = {}
+        # Preferred: explicit map
+        raw_map = obj.get("outlier_reasons_map", None)
+        if isinstance(raw_map, dict):
+            for k, v in raw_map.items():
+                try:
+                    ki = int(k)
+                except Exception:
+                    try:
+                        ki = int(v.get("index")) if isinstance(v, dict) and "index" in v else None
+                    except Exception:
+                        ki = None
+                if ki is not None:
+                    reasons_map[ki] = str(v if not isinstance(v, dict) else v.get("reason", "")).strip()[:300]
+        else:
+            raw_reasons = obj.get("outlier_reasons", None)
+            # If list aligned with outlier indices
+            if isinstance(raw_reasons, list):
+                ints = HFJudge._to_int_list(outliers)
+                for i, reason in enumerate(raw_reasons):
+                    if i < len(ints):
+                        reasons_map[ints[i]] = str(reason).strip()[:300]
+            # If dict form
+            if isinstance(raw_reasons, dict):
+                for k, v in raw_reasons.items():
+                    try:
+                        ki = int(k)
+                        reasons_map[ki] = str(v).strip()[:300]
+                    except Exception:
+                        continue
+            # If 'outliers' is list of objects with {index, reason}
+            raw_outliers = obj.get("outliers", None)
+            if isinstance(raw_outliers, list):
+                for item in raw_outliers:
+                    if isinstance(item, dict):
+                        try:
+                            ki = int(item.get("index"))
+                            rv = str(item.get("reason", "")).strip()[:300]
+                            if rv:
+                                reasons_map[ki] = rv
+                        except Exception:
+                            continue
+
         return {
             "overlap": HFJudge._to_list(overlap)[:20],
             "critical_inconsistencies": HFJudge._to_list(crit)[:20],
@@ -186,6 +261,7 @@ class HFJudge:
             "score": score,
             "rationale": str(rationale).strip()[:1000],
             "outlier_indices": HFJudge._to_int_list(outliers)[:100],
+            "outlier_reasons_map": reasons_map,
         }
 
 
