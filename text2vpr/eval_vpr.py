@@ -110,8 +110,8 @@ def rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores,
         if vision_scores_ref is not None:
             vision_scores = wasserstein_transform_batch(vision_scores, vision_scores_ref)    
 
-    print("mean w_alpha vision:", w_alpha[:,0].mean(), w_alpha[:,0].std())
-    print("mean w_alpha text:", w_alpha[:,1].mean(), w_alpha[:,1].std())
+    logger.info(f"mean w_alpha vision: {w_alpha[:,0].mean()}, {w_alpha[:,0].std()}")
+    logger.info(f"mean w_alpha text: {w_alpha[:,1].mean()}, {w_alpha[:,1].std()}")
    
     try:    
         for v_scores, v_preds, t_scores, t_preds in zip(vision_scores, vision_predictions, text_scores, text_predictions):
@@ -148,8 +148,8 @@ def rerank_predictions_by_rank(vision_scores, vision_predictions, text_scores, t
     combined_scores = []
     combined_predictions = []
 
-    print("mean w_alpha vision:", w_alpha[:,0].mean(), w_alpha[:,0].std())
-    print("mean w_alpha text:", w_alpha[:,1].mean(), w_alpha[:,1].std())
+    logger.info(f"mean w_alpha vision: {w_alpha[:,0].mean()}, {w_alpha[:,0].std()}")
+    logger.info(f"mean w_alpha text: {w_alpha[:,1].mean()}, {w_alpha[:,1].std()}")
    
     try:    
         for v_scores, v_preds, t_scores, t_preds in zip(vision_scores, vision_predictions, text_scores, text_predictions):
@@ -245,11 +245,13 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
         descriptors = model.encode_text(texts)
         descriptors = descriptors.cpu().numpy()
         all_descriptors[indices.numpy(), :] = descriptors        
+        text_descriptors[indices.numpy(), :] = descriptors 
     elif args.encode_mode == 'image':
         # single vector - image
         descriptors = model.encode_image(images.to(args.device))
         descriptors = descriptors.cpu().numpy()
         all_descriptors[indices.numpy(), :] = descriptors    
+        vision_descriptors[indices.numpy(), :] = descriptors
     elif args.cross_modal==1:
         image_features = model.encode_text(texts)
         image_features = image_features.cpu().numpy()
@@ -264,12 +266,11 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
             descriptors = torch.cat((image_features, text_features), dim=1)
             descriptors = descriptors.cpu().numpy()
             all_descriptors[indices.numpy(), :] = descriptors
-        else:
-            # each fusion: save each modality
-            image_features = image_features.cpu().numpy()
-            vision_descriptors[indices.numpy(), :] = image_features
-            text_features = text_features.cpu().numpy()
-            text_descriptors[indices.numpy(), :] = text_features                    
+        # each fusion: save each modality
+        image_features = image_features.cpu().numpy()
+        vision_descriptors[indices.numpy(), :] = image_features
+        text_features = text_features.cpu().numpy()
+        text_descriptors[indices.numpy(), :] = text_features                    
     else:
         # single vector of both image and text
         descriptors, text_features, w = model.encode_single(images.to(args.device), texts)
@@ -279,9 +280,6 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
         text_features = text_features.cpu().numpy()
         text_descriptors[indices.numpy(), :] = text_features  
         if args.fusion_type == 'dynamic_weighting' or args.fusion_type == 'fixed_weighting' or args.fusion_type == 'text_adapter' or args.fusion_type == 'transformer':
-            # vision_descriptors[indices.numpy(), :] = descriptors
-            # text_features = text_features.cpu().numpy()
-            # text_descriptors[indices.numpy(), :] = text_features  
             w = w.cpu().numpy()
             if args.fusion_type == 'fixed_weighting':
                 #make w a 2D vector of [w, 1-w]. w in numpy
@@ -305,6 +303,13 @@ def get_queries_predictions(encoder_dim, database_descriptors, all_descriptors, 
     scores, predictions = faiss_index.search(queries_descriptors, max_results)
     return scores, predictions
 
+def do_pca(descriptors, pca_dim):
+    logger.debug("Fitting PCA on all descriptors")
+    pca = PCA(n_components=pca_dim)
+    pca.fit(descriptors)
+    logger.debug("Transforming all descriptors using PCA")                        
+    descriptors = pca.transform(descriptors)
+    return descriptors
 
 def main(args):
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
@@ -352,16 +357,22 @@ def main(args):
     max_results = max(args.recall_values)
     query_index = 0
 
+    logger.info(f"VPR dimension: {model.vpr_encoder_dim}, text dimension: {model.text_encoder_dim}, fusion type: {args.fusion_type}")
+
     with torch.inference_mode():
         logger.debug("Extracting database descriptors for evaluation/testing")
         database_subset_ds = Subset(test_ds, list(range(test_ds.num_database)))
         database_dataloader = DataLoader(
             dataset=database_subset_ds, num_workers=args.num_workers, batch_size=args.batch_size
         )
-        
-        vision_descriptors = np.empty((len(test_ds), model.vpr_encoder_dim), dtype="float32")
+
+        # if args.is_pca and args.fusion_type == 'dynamic_weighting':
+        #     vision_descriptors = np.empty((len(test_ds), args.pca_dim), dtype="float32")
+        # else:
+        #     vision_descriptors = np.empty((len(test_ds), model.vpr_encoder_dim), dtype="float32")
         if args.is_ref_model:
             ref_vision_descriptors = np.empty((len(test_ds), ref_model.vpr_encoder_dim), dtype="float32")
+        vision_descriptors = np.empty((len(test_ds), model.vpr_encoder_dim), dtype="float32")
         text_descriptors = np.empty((len(test_ds), model.text_encoder_dim), dtype="float32")            
         all_descriptors = np.empty((len(test_ds), model.encoder_dim), dtype="float32")
         w_alpha = np.empty((len(test_ds), 2), dtype="float32")
@@ -387,21 +398,18 @@ def main(args):
                 descriptors = ref_model.encode_image(images.to(args.device))
                 descriptors = descriptors.cpu().numpy()
                 ref_vision_descriptors[indices.numpy(), :] = descriptors                    
-            
-        if args.is_pca:
-            logger.debug("Fitting PCA on all descriptors")
-            pca = PCA(n_components=args.pca_dim)
-            pca.fit(all_descriptors)
-            logger.debug("Transforming all descriptors using PCA")                        
-            all_descriptors = pca.transform(all_descriptors)
-            model.encoder_dim = args.pca_dim
-            if (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting' or args.fusion_type=='text_adapter': 
-                pca = PCA(n_components=args.pca_dim)
-                pca.fit(vision_descriptors)
-                logger.debug("Transforming vision descriptors using PCA")
-                vision_descriptors = pca.transform(vision_descriptors)
-                model.vpr_encoder_dim = args.pca_dim
-                
+        
+        if args.is_pca:            
+            vision_descriptors = do_pca(vision_descriptors, args.pca_dim)
+            model.vpr_encoder_dim = args.pca_dim
+            logger.info(f"PCA reduced vision descriptors to dimension: {model.vpr_encoder_dim}")
+            if args.encode_mode == 'image':
+                all_descriptors = vision_descriptors
+                model.encoder_dim = all_descriptors.shape[1]
+            if args.fusion_type == 'cat':
+                all_descriptors = np.concatenate((vision_descriptors, text_descriptors), axis=1)
+                model.encoder_dim = all_descriptors.shape[1]
+                logger.info(f"Concatenated descriptors dimension: {model.encoder_dim}")
    
     alpha = args.alpha_vision
     max_results_reranking = test_ds.num_database
@@ -422,6 +430,7 @@ def main(args):
             # vision
             vision_queries_descriptors = vision_descriptors[test_ds.num_database :]
             vision_database_descriptors = vision_descriptors[: test_ds.num_database]    
+            
             vision_scores, vision_predictions = get_queries_predictions(model.vpr_encoder_dim, vision_database_descriptors, vision_descriptors, vision_queries_descriptors, max_results_reranking)
             # text
             text_queries_descriptors = text_descriptors[test_ds.num_database :]
@@ -447,6 +456,7 @@ def main(args):
         else:
             queries_descriptors = all_descriptors[test_ds.num_database :]
             database_descriptors = all_descriptors[: test_ds.num_database]    
+            logger.info(f"dim database descriptors: {model.encoder_dim}")
             # get queries predictions
             scores, predictions = get_queries_predictions(model.encoder_dim, database_descriptors, all_descriptors, queries_descriptors, max_results)
             
@@ -464,6 +474,10 @@ def main(args):
             recalls = recalls / test_ds.num_queries * 100
             recalls_str = ", ".join([f"R@{val}: {rec:.1f}" for val, rec in zip(args.recall_values, recalls)])
             logger.info(recalls_str)
+            
+            #open eval_vpr_results.csv in append mode and write the recalls
+            with open("eval_vpr_results.csv", "a") as f:
+                f.write(f"{args.vpr_model_name},{args.fusion_type},{args.is_pca},{args.pca_dim},{args.encode_mode},{recalls_str}\n")
 
     # Save visualizations of predictions
     if args.num_preds_to_save != 0:

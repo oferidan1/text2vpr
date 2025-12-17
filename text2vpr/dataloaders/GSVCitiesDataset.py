@@ -30,10 +30,12 @@ class GSVCitiesDataset(Dataset):
                  min_img_per_place=4,
                  random_sample_from_each_place=True,
                  transform=default_transform,
-                 base_path=BASE_PATH
+                 base_path=BASE_PATH,
+                 train_csv=TRAIN_CSV
                  ):
         super(GSVCitiesDataset, self).__init__()
         self.base_path = base_path
+        self.train_csv = train_csv
         self.cities = cities
 
         assert img_per_place <= min_img_per_place, \
@@ -50,7 +52,7 @@ class GSVCitiesDataset(Dataset):
         self.places_ids = pd.unique(self.dataframe.index)
         self.total_nb_images = len(self.dataframe)        
         
-        self.image_path, self.description = GSVCitiesDataset.read_csv_file(TRAIN_CSV, BASE_PATH)
+        self.image_path, self.description = GSVCitiesDataset.read_csv_file(train_csv, base_path)
         
     def __getdataframes(self):
         ''' 

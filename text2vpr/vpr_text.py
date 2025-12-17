@@ -6,7 +6,6 @@ from torch import nn
 from torch.nn.parameter import Parameter
 import torch.nn.functional as F
 from sentence_transformers import SentenceTransformer
-from models import helper
 from peft import LoraConfig, get_peft_model, TaskType
 from transformers import AutoTokenizer, AutoModel
 import numpy as np
@@ -99,14 +98,15 @@ class VPR_Text_Model(pl.LightningModule):
             text_encoder_dim = vpr_encoder_dim
             
         self.mse_loss = torch.nn.MSELoss()
-        if is_pca:
-            self.vpr_encoder_dim = embeds_dim            
+        # if is_pca:
+        #     self.vpr_encoder_dim = embeds_dim            
+        #     # self.pca = PCA(n_components=embeds_dim)
         
         if is_encode_image and is_encode_text:
             if is_text_pooling:
                  self.text_pooling = CLSReweightingPooler(text_encoder_dim)
             if is_image_pooling:
-                self.image_pooling = CLSReweightingPooler(vpr_encoder_dim)
+                self.image_pooling = CLSReweightingPooler(self.vpr_encoder_dim)
                 
             if self.fusion_type == 'transformer':
                 self.vpr_adapter = nn.Linear(256, embeds_dim)  # mix vpr dim embedding
@@ -121,19 +121,19 @@ class VPR_Text_Model(pl.LightningModule):
                 # self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, 2), nn.Softmax(dim=1))
                 self.w_proj = nn.Sequential(nn.Linear(embeds_dim, 2), nn.Softmax(dim=1))
             elif self.fusion_type == 'mlp':
-                input_dim = vpr_encoder_dim + text_encoder_dim
+                input_dim = self.vpr_encoder_dim + text_encoder_dim
                 self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, embeds_dim))                
             elif self.fusion_type == 'add':
-                self.vpr_proj = nn.Linear(vpr_encoder_dim, embeds_dim)
+                self.vpr_proj = nn.Linear(self.vpr_encoder_dim, embeds_dim)
                 self.text_proj = nn.Linear(text_encoder_dim, embeds_dim)
             elif self.fusion_type == 'dynamic_weighting':
-                input_dim = vpr_encoder_dim + text_encoder_dim
+                input_dim = self.vpr_encoder_dim + text_encoder_dim
                 self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, 2), nn.Softmax(dim=1))                
             elif self.fusion_type == 'fixed_weighting':
                 #learn fixed parameter for weighting image and text
                 self.w_alpha = Parameter(torch.tensor([0.5]), requires_grad=True)                
             elif self.fusion_type == 'text_adapter':               
-                input_dim = vpr_encoder_dim + text_encoder_dim
+                input_dim = self.vpr_encoder_dim + text_encoder_dim
                 self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, 2), nn.Softmax(dim=1))
                 
         # init weight of linear layers but not the pretrained backbones
@@ -213,10 +213,12 @@ class VPR_Text_Model(pl.LightningModule):
                     img_embeds = img_embeds_all[:,0]
                 else:
                     img_embeds = self.vpr_encoder(img)             
-                if self.is_pca:
-                    with amp.autocast(enabled=False):
-                        U, S, V = torch.pca_lowrank(img_embeds.float(), q=self.embeds_dim, center=True)
-                    img_embeds = torch.matmul(img_embeds, V[:, :self.embeds_dim])
+                # if self.is_pca:
+                #     # self.pca.fit(img_embeds.cpu().numpy())
+                #     # img_embeds = torch.from_numpy(self.pca.transform(img_embeds.cpu().numpy())).to(img.device)
+                #     with amp.autocast(enabled=False):
+                #         U, S, V = torch.pca_lowrank(img_embeds.float(), q=self.embeds_dim, center=True)
+                #     img_embeds = torch.matmul(img_embeds, V[:, :self.embeds_dim])
                 embeds = img_embeds
             embeds_orig = img_embeds
         if self.is_encode_text:                    
@@ -293,6 +295,7 @@ class VPR_Text_Model(pl.LightningModule):
             elif self.fusion_type == 'fixed_weighting':
                 # use fixed weighting
                 w = self.w_alpha
+                w = torch.clamp(w, min=0, max=1)
                 embeds = img_embeds
             elif self.fusion_type == 'text_adapter':               
                  # calc dynamic weighting

@@ -71,6 +71,8 @@ if __name__ == '__main__':
         #val_set_names=['pitts30k_val', 'pitts30k_test', 'msls_val'], # pitts30k_val, pitts30k_test, msls_val
         #val_set_names=['pitts30k_test'],
         val_set_names=[],
+        train_image_root=args.image_root,
+        train_csv=args.train_csv
     )
 
     if args.fusion_type == 'text_adapter':

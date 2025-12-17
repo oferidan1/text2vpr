@@ -66,9 +66,9 @@ class TestDataset(data.Dataset):
         self.images_paths_csv, self.descriptions = read_csv_file(csv_path, image_root)
 
         #loop over images_paths_csv. if path contains database_folder, add to database_paths
-        self.database_paths = [path for path in self.images_paths_csv if database_folder in path]       
-
-        #self.database_paths = read_images_paths(database_folder)
+        #self.database_paths = read_images_paths(database_folder)        
+        self.database_paths = [path for path in self.images_paths_csv if database_folder in path]   
+        self.database_paths = sorted(self.database_paths)
         
         # only for debug - small data check!!!!
         # random select a subset for quick testing in a random indices
@@ -80,12 +80,18 @@ class TestDataset(data.Dataset):
         self.num_database = len(self.database_paths)
         self.num_queries = 0        
         
-        if queries_folder is not None:
-            #self.queries_paths = read_images_paths(queries_folder)
+        if queries_folder is not None:            
              #loop over images_paths_csv. if path contains queries_folder, add to queries_paths
-            self.queries_paths = [path for path in self.images_paths_csv if queries_folder in path]
+            #self.queries_paths = read_images_paths(queries_folder)
+            self.queries_paths = [path for path in self.images_paths_csv if queries_folder in path]            
+            self.queries_paths = sorted(self.queries_paths)
             self.images_paths += list(self.queries_paths)
             self.num_queries = len(self.queries_paths)
+            
+        # print(self.num_database)
+        # print(self.num_queries)        
+        # assert(sorted(self.database_paths) == sorted(self.database_paths_))
+        # assert(sorted(self.queries_paths) == sorted(self.queries_paths_))
 
         if use_labels:
             # Read UTM coordinates, which must be contained within the paths
@@ -111,8 +117,8 @@ class TestDataset(data.Dataset):
             # Find positives_per_query, which are within positive_dist_threshold (default 25 meters)
             knn = NearestNeighbors(n_jobs=-1)
             knn.fit(self.database_utms)
-            self.positives_per_query = knn.radius_neighbors(
-                self.queries_utms, radius=positive_dist_threshold, return_distance=False
+            _, self.positives_per_query = knn.radius_neighbors(
+                self.queries_utms, radius=positive_dist_threshold, return_distance=True, sort_results=True
             )
 
         transformations = [
@@ -135,6 +141,7 @@ class TestDataset(data.Dataset):
             desc_index = self.images_paths_csv.index(image_path)
             max_length = 1024
             description = self.descriptions[desc_index][:max_length]     
+
         return normalized_img, index, description
 
     def __len__(self):

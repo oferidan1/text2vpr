@@ -58,7 +58,9 @@ class GSVCitiesDataModule(pl.LightningDataModule):
                  mean_std=IMAGENET_MEAN_STD,
                  batch_sampler=None,
                  random_sample_from_each_place=True,
-                 val_set_names=['pitts30k_val', 'msls_val']
+                 val_set_names=['pitts30k_val', 'msls_val'],
+                 train_image_root=None,
+                 train_csv=None,
                  ):
         super().__init__()
         self.batch_size = batch_size
@@ -74,6 +76,8 @@ class GSVCitiesDataModule(pl.LightningDataModule):
         self.std_dataset = mean_std['std']
         self.random_sample_from_each_place = random_sample_from_each_place
         self.val_set_names = val_set_names
+        self.train_image_root = train_image_root
+        self.train_csv = train_csv
         self.save_hyperparameters() # save hyperparameter with Pytorch Lightening
 
         self.train_transform = T.Compose([
@@ -134,7 +138,9 @@ class GSVCitiesDataModule(pl.LightningDataModule):
             img_per_place=self.img_per_place,
             min_img_per_place=self.min_img_per_place,
             random_sample_from_each_place=self.random_sample_from_each_place,
-            transform=self.train_transform)
+            transform=self.train_transform,
+            base_path=self.train_image_root,
+            train_csv=self.train_csv)
 
     def train_dataloader(self):
         self.reload()
