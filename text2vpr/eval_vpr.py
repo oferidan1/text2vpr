@@ -274,12 +274,15 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
     else:
         # single vector of both image and text
         descriptors, text_features, w = model.encode_single(images.to(args.device), texts)
-        descriptors = descriptors.cpu().numpy()
-        all_descriptors[indices.numpy(), :] = descriptors
-        vision_descriptors[indices.numpy(), :] = descriptors
-        text_features = text_features.cpu().numpy()
-        text_descriptors[indices.numpy(), :] = text_features  
-        if args.fusion_type == 'dynamic_weighting' or args.fusion_type == 'fixed_weighting' or args.fusion_type == 'text_adapter' or args.fusion_type == 'transformer':
+        descriptors = descriptors.cpu().numpy()        
+        if args.cross_modal:
+            vision_descriptors[indices.numpy(), :] = descriptors
+            text_features = text_features.cpu().numpy()
+            text_descriptors[indices.numpy(), :] = text_features
+        elif args.fusion_type == 'dynamic_weighting' or args.fusion_type == 'fixed_weighting' or args.fusion_type == 'text_adapter' or args.fusion_type == 'transformer':
+            vision_descriptors[indices.numpy(), :] = descriptors
+            text_features = text_features.cpu().numpy()
+            text_descriptors[indices.numpy(), :] = text_features  
             w = w.cpu().numpy()
             if args.fusion_type == 'fixed_weighting':
                 #make w a 2D vector of [w, 1-w]. w in numpy
@@ -288,6 +291,8 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
                 w_alpha[indices.numpy(), :] = np.stack([w, 1-w], axis=1)                
             else:
                 w_alpha[indices.numpy(), :] = w
+        else:
+            all_descriptors[indices.numpy(), :] = descriptors        
             
 def get_queries_predictions(encoder_dim, database_descriptors, all_descriptors, queries_descriptors, max_results):
      # Use a kNN to find predictions
@@ -477,7 +482,7 @@ def main(args):
             
             #open eval_vpr_results.csv in append mode and write the recalls
             with open("eval_vpr_results.csv", "a") as f:
-                f.write(f"{args.vpr_model_name},{args.fusion_type},{args.is_pca},{args.pca_dim},{args.encode_mode},{recalls_str}\n")
+                f.write(f"{args.vpr_model_name},{args.fusion_type},{args.vpr_dim},{args.is_pca},{args.encode_mode},{recalls_str}\n")
 
     # Save visualizations of predictions
     if args.num_preds_to_save != 0:

@@ -12,20 +12,12 @@ class GenericPairLoss(BaseMetricLossFunction):
             self.mat_based_loss if mat_based_loss else self.pair_based_loss
         )
 
-
-    def compute_loss(self, embeddings, labels, indices_tuple, ref_emb, ref_labels, embeds2, w):
-        c_f.labels_or_indices_tuple_required(labels, indices_tuple)
-        indices_tuple = lmu.convert_to_pairs(indices_tuple, labels, ref_labels)
-        if all(len(x) <= 1 for x in indices_tuple):
-            return self.zero_losses()
-        mat = self.distance(embeddings, ref_emb)
-        
+    def get_mu_std(self, embeddings):
+                
         mu_text  = 0.65
         std_text = 0.07
         min_text = -6.07
         max_text = 4.92
-        
-        is_normalize = 0
         
         if embeddings.shape[1] == 256:
             #cricavpr
@@ -57,41 +49,58 @@ class GenericPairLoss(BaseMetricLossFunction):
             std_img  = 0.026
             min_img  = -5.67
             max_img  = 28.56
-
-        img_sim = torch.matmul(embeddings, embeddings.T)
-        # normalize features
-        if is_normalize:
-            img_sim  = torch.clamp(img_sim, min=-1.0, max=1.0)
-            img_sim  = (img_sim - mu_img) / std_img        
-            img_sim  = ((img_sim - min_img) / (max_img - min_img)) *2-1     
-         
-        #TBD: is_trainable_text_encoder
-        # img_sim  = (img_sim - mu_text) / std_text
-        # img_sim  = ((img_sim - min_text) / (max_text - min_text)) *2-1      
-        
-        s_ij = img_sim
-        
-        if embeds2 is not None:
-            text_sim = torch.matmul(embeds2, embeds2.T)
             
+        return mu_img, std_img, min_img, max_img, mu_text, std_text, min_text, max_text
+            
+    def compute_loss(self, embeddings, labels, indices_tuple, ref_emb, ref_labels, embeds2, w):
+        c_f.labels_or_indices_tuple_required(labels, indices_tuple)
+        indices_tuple = lmu.convert_to_pairs(indices_tuple, labels, ref_labels)
+        if all(len(x) <= 1 for x in indices_tuple):
+            return self.zero_losses()
+        #mat = self.distance(embeddings, ref_emb)
+        
+        # cross modal case
+        if w is None:
+            s_ij = torch.matmul(embeddings, embeds2.T)
+            
+        # dual encoder or single encoder case
+        else:        
+            img_sim = torch.matmul(embeddings, embeddings.T)
+        
+            is_normalize = 0
             # normalize features
             if is_normalize:
-                text_sim = torch.clamp(text_sim, min=-1.0, max=1.0)        
-                text_sim = (text_sim - mu_text) / std_text
-                text_sim = ((text_sim - min_text) / (max_text - min_text)) *2-1          
+                mu_img, std_img, min_img, max_img, mu_text, std_text, min_text, max_text = self.get_mu_std(embeddings)               
+                img_sim  = torch.clamp(img_sim, min=-1.0, max=1.0)
+                img_sim  = (img_sim - mu_img) / std_img        
+                img_sim  = ((img_sim - min_img) / (max_img - min_img)) *2-1              
+                #TBD: is_trainable_text_encoder
+                # img_sim  = (img_sim - mu_text) / std_text
+                # img_sim  = ((img_sim - min_text) / (max_text - min_text)) *2-1      
             
-            s_ij = text_sim      
+            s_ij = img_sim
+            
+            if embeds2 is not None:
+                text_sim = torch.matmul(embeds2, embeds2.T)
+                
+                # normalize features
+                if is_normalize:
+                    text_sim = torch.clamp(text_sim, min=-1.0, max=1.0)        
+                    text_sim = (text_sim - mu_text) / std_text
+                    text_sim = ((text_sim - min_text) / (max_text - min_text)) *2-1          
+                
+                s_ij = text_sim      
 
-            # calculate dynamic weights
-            if len(w.shape) > 1:
-                w_i = w[:,0].unsqueeze(1)
-                w_t = w[:,1].unsqueeze(1)   
-                w_i_ij = ((w_i.unsqueeze(1) + w_i.unsqueeze(0)) / 2.0).squeeze(-1)
-                w_t_ij = ((w_t.unsqueeze(1) + w_t.unsqueeze(0)) / 2.0).squeeze(-1)
-                s_ij = w_i_ij * img_sim + w_t_ij * text_sim
-            else:
-                # calculate fixed weights
-                s_ij = w*img_sim + (1-w)*text_sim
+                # calculate dynamic weights
+                if len(w.shape) > 1:
+                    w_i = w[:,0].unsqueeze(1)
+                    w_t = w[:,1].unsqueeze(1)   
+                    w_i_ij = ((w_i.unsqueeze(1) + w_i.unsqueeze(0)) / 2.0).squeeze(-1)
+                    w_t_ij = ((w_t.unsqueeze(1) + w_t.unsqueeze(0)) / 2.0).squeeze(-1)
+                    s_ij = w_i_ij * img_sim + w_t_ij * text_sim
+                else:
+                    # calculate fixed weights
+                    s_ij = w*img_sim + (1-w)*text_sim
 
         return self.loss_method(s_ij, indices_tuple)
 

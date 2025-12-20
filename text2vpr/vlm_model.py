@@ -59,7 +59,7 @@ class VLM_Model:
                 is_encode_image=args.is_encode_image,
                 is_encode_text=args.is_encode_text,
                 is_trainable_text_encoder=args.is_trainable_text_encoder,
-                embeds_dim=args.vpr_dim,
+                embeds_dim=args.pca_dim,
                 is_pca=args.is_pca,
                 is_text_pooling=args.is_text_pooling,
                 is_image_pooling=args.is_image_pooling,

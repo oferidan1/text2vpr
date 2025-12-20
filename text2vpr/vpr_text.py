@@ -57,6 +57,8 @@ class VPR_Text_Model(pl.LightningModule):
                 is_text_pooling=False,
                 is_image_pooling=False,
                 is_pca=False,
+                is_orig_desc_mining=False,
+                cross_modal=0,
                  ):
         super().__init__()
         
@@ -76,12 +78,6 @@ class VPR_Text_Model(pl.LightningModule):
         self.miner_name = miner_name
         self.miner_margin = miner_margin
         
-        self.save_hyperparameters() # write hyperparams into a file
-        
-        self.loss_fn = utils.get_loss(loss_name)
-        self.miner = utils.get_miner(miner_name, miner_margin)
-        self.batch_acc = [] # we will keep track of the % of trivial pairs/triplets at the loss level 
-
         self.faiss_gpu = faiss_gpu
         self.is_encode_image = is_encode_image
         self.is_encode_text = is_encode_text
@@ -89,6 +85,15 @@ class VPR_Text_Model(pl.LightningModule):
         self.is_text_pooling = is_text_pooling
         self.is_image_pooling = is_image_pooling
         self.is_pca = is_pca
+        self.is_orig_desc_mining = is_orig_desc_mining
+        self.cross_modal = cross_modal
+        
+        self.save_hyperparameters() # write hyperparams into a file
+        
+        self.loss_fn = utils.get_loss(loss_name)
+        self.miner = utils.get_miner(miner_name, miner_margin)
+        self.batch_acc = [] # we will keep track of the % of trivial pairs/triplets at the loss level 
+       
         self.my_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')        
         
         self.fusion_type = fusion_type
@@ -108,7 +113,11 @@ class VPR_Text_Model(pl.LightningModule):
             if is_image_pooling:
                 self.image_pooling = CLSReweightingPooler(self.vpr_encoder_dim)
                 
-            if self.fusion_type == 'transformer':
+            if self.cross_modal:
+                self.vpr_proj = nn.Linear(self.vpr_encoder_dim, embeds_dim)
+                self.text_proj = nn.Linear(text_encoder_dim, embeds_dim)                
+                
+            elif self.fusion_type == 'transformer':
                 self.vpr_adapter = nn.Linear(256, embeds_dim)  # mix vpr dim embedding
                 self.text_adapter = nn.Linear(text_encoder_dim, embeds_dim)  # BGE large has 1024-dim embedding     
                 self.cls = nn.Parameter(torch.randn(1, 1, embeds_dim))  # Learnable [CLS] token
@@ -135,6 +144,9 @@ class VPR_Text_Model(pl.LightningModule):
             elif self.fusion_type == 'text_adapter':               
                 input_dim = self.vpr_encoder_dim + text_encoder_dim
                 self.fusion = nn.Sequential(nn.Linear(input_dim, input_dim), nn.ReLU(), nn.Linear(input_dim, 2), nn.Softmax(dim=1))
+            elif self.fusion_type == 'cat':         
+                self.embeds_dim = self.vpr_encoder_dim + text_encoder_dim
+                self.is_orig_desc_mining = True
                 
         # init weight of linear layers but not the pretrained backbones
         self.apply(self._init_weights)
@@ -264,7 +276,14 @@ class VPR_Text_Model(pl.LightningModule):
         batch_size = img.shape[0]   
         
         if self.is_encode_image and self.is_encode_text:        
-            if self.fusion_type == 'transformer':
+            if self.cross_modal:
+                img_embeds = self.vpr_proj(img_embeds)
+                text_embeds = self.text_proj(text_embeds)
+                img_embeds = torch.nn.functional.normalize(img_embeds, p=2, dim=1)
+                text_embeds = torch.nn.functional.normalize(text_embeds, p=2, dim=1)
+                embeds = img_embeds
+                
+            elif self.fusion_type == 'transformer':
                 text_last_hidden_state = model_output.last_hidden_state
                 img_embeds_proj = self.vpr_adapter(img_embeds_proj)
                 text_features = self.text_adapter(text_last_hidden_state)
@@ -301,7 +320,9 @@ class VPR_Text_Model(pl.LightningModule):
                  # calc dynamic weighting
                 embeds_input = torch.cat([img_embeds, text_embeds], dim=1)
                 w = self.fusion(embeds_input)                
-                embeds = img_embeds
+                embeds = img_embeds                
+            elif self.fusion_type == 'cat':
+                embeds = torch.cat([img_embeds, text_embeds], dim=1)    
                            
         elif self.is_encode_text:
             embeds = text_embeds
@@ -413,11 +434,15 @@ class VPR_Text_Model(pl.LightningModule):
         
         # we mine the pairs/triplets if there is an online mining strategy
         if self.miner is not None:
-            miner_outputs = self.miner(descriptors, labels)     
-            if w is None:
-                loss = self.loss_fn(descriptors, labels, miner_outputs)
+            if self.is_orig_desc_mining:
+                miner_outputs = self.miner(orig_descriptors, labels)     
             else:
-                loss = self.loss_fn(descriptors, labels, miner_outputs, embeds2=text_embeds, w=w)
+                miner_outputs = self.miner(descriptors, labels)     
+                
+            # if w is None:
+            #     loss = self.loss_fn(descriptors, labels, miner_outputs)
+            # else:
+            loss = self.loss_fn(descriptors, labels, miner_outputs, embeds2=text_embeds, w=w)
                 
             if 'blip' in self.vpr_model_name:
                 image_loss = self.mse_loss(descriptors, orig_descriptors)
@@ -497,7 +522,7 @@ class VPR_Text_Model(pl.LightningModule):
     def validation_step(self, batch, batch_idx, dataloader_idx=None):
         places, _, texts = batch
         # calculate descriptors
-        descriptors, text_embeds, w = self(places, texts)
+        descriptors, text_embeds, w, _, _ = self(places, texts)
         #return descriptors.detach().cpu()
         descriptors = descriptors.detach().cpu()
         text_embeds_cpu = None
@@ -534,10 +559,7 @@ class VPR_Text_Model(pl.LightningModule):
                         text_embeds.append(value)
                     elif key == 'w' and value is not None:
                         w.append(value)                        
-
-            # descriptors = val_step_outputs[i]['descriptors']
-            # text_embeds = val_step_outputs[i]['text_embeds']
-            # w = val_step_outputs[i]['w']    
+            
             feats = torch.cat(descriptors, dim=0)
             text_feats = None
             if text_embeds != []:
@@ -564,7 +586,21 @@ class VPR_Text_Model(pl.LightningModule):
             r_list = feats[ : num_references]
             q_list = feats[num_references : ]
             
-            if self.fusion_type == 'dynamic_weighting' or self.fusion_type == 'fixed_weighting' or self.fusion_type == 'text_adapter' or self.fusion_type == 'transformer':
+            if self.cross_modal:
+                r_text_list = text_feats[ : num_references]
+                q_text_list = text_feats[num_references : ]
+                
+                pitts_dict = utils.get_validation_recalls(r_list=r_list, 
+                                                    q_list=q_text_list,
+                                                    k_values=[1, 5, 10, 15, 20, 50, 100],
+                                                    gt=positives,
+                                                    print_results=True,
+                                                    dataset_name=val_set_name,
+                                                    faiss_gpu=self.faiss_gpu
+                                                )
+                
+            
+            elif self.fusion_type == 'dynamic_weighting' or self.fusion_type == 'fixed_weighting' or self.fusion_type == 'text_adapter' or self.fusion_type == 'transformer':
                 r_text_list = text_feats[ : num_references]
                 q_text_list = text_feats[num_references : ]
                 r_w_list = w_feats[ : num_references]

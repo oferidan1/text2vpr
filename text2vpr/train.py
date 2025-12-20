@@ -6,7 +6,6 @@ import utils
 from torch import nn
 
 from dataloaders.GSVCitiesDataloader import GSVCitiesDataModule, IMAGENET_MEAN_STD, BLIP_MEAN_STD
-from models import helper
 from sentence_transformers import SentenceTransformer
 import os
 import argparse
@@ -31,16 +30,17 @@ def parse_arguments():
     parser.add_argument("--is_freeze_vpr", type=int, default="1", help="freeze vpr encoder or not")    
     parser.add_argument("--image_size", type=int, default="320", help="image size to vpr")
     parser.add_argument("--embeds_dim", type=int, default=512, help="dimension of the embeddings")
-    parser.add_argument("--fusion_type", type=str, default='dynamic_weighting', help="type of fusion to use: mlp, add, transformer, dynamic_weighting, fixed_weighting, text_adapter")
+    parser.add_argument("--fusion_type", type=str, default='none', help="type of fusion to use: mlp, add, transformer, dynamic_weighting, fixed_weighting, text_adapter")
     parser.add_argument("--is_encode_image", type=int, default="1", help="encode image or not")
     parser.add_argument("--is_encode_text", type=int, default="1", help="encode text or not")
-    parser.add_argument("--is_text_pooling", type=int, default="1", help="pool text or not")
+    parser.add_argument("--is_text_pooling", type=int, default="0", help="pool text or not")
     parser.add_argument("--is_image_pooling", type=int, default="0", help="pool image or not")
     parser.add_argument("--is_pca", type=int, default="0", help="pool image or not")
     parser.add_argument("--is_trainable_text_encoder", type=int, default="0", help="train text encoder or not")
     parser.add_argument("--batch_size", type=int, default="120", help="batch size for training")
     parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss_Sij", help="name of the loss function to use")
     #parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss", help="name of the loss function to use")
+    parser.add_argument("--cross_modal", type=int, default="2", help="cross modal 0=no/1=blip orig/2=our model")    
 
     args = parser.parse_args()
     
@@ -69,8 +69,8 @@ if __name__ == '__main__':
         show_data_stats=True,
         mean_std=dataset_mean_std,
         #val_set_names=['pitts30k_val', 'pitts30k_test', 'msls_val'], # pitts30k_val, pitts30k_test, msls_val
-        #val_set_names=['pitts30k_test'],
-        val_set_names=[],
+        val_set_names=['pitts30k_test'],
+        #val_set_names=[],
         train_image_root=args.image_root,
         train_csv=args.train_csv
     )
@@ -116,7 +116,8 @@ if __name__ == '__main__':
         is_trainable_text_encoder=args.is_trainable_text_encoder,
         is_text_pooling=args.is_text_pooling,
         is_image_pooling=args.is_image_pooling,
-        is_pca=args.is_pca
+        is_pca=args.is_pca,
+        cross_modal=args.cross_modal,
     )
     
     # if args.is_encode_image and  args.vpr_resume_model is not None:
@@ -127,22 +128,22 @@ if __name__ == '__main__':
     
     # model params saving using Pytorch Lightning
     # we save the best 3 models accoring to Recall@1 on pittsburg val
-    # checkpoint_cb = ModelCheckpoint(
-    #     monitor='pitts30k_test/R1',
-    #     filename=f'{"resnet50"}' +
-    #     '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_test/R1:.4f}]_R5[{pitts30k_test/R5:.4f}]',
-    #     auto_insert_metric_name=False,
-    #     save_weights_only=True,
-    #     save_top_k=3,
-    #     mode='max',)
-    checkpoint_cb = ModelCheckpoint(        
+    checkpoint_cb = ModelCheckpoint(
+        monitor='pitts30k_test/R1',
         filename=f'{"resnet50"}' +
-        '_epoch({epoch:02d})_step({step:04d})',
+        '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_test/R1:.4f}]_R5[{pitts30k_test/R5:.4f}]',
         auto_insert_metric_name=False,
         save_weights_only=True,
-        save_top_k=-1,
-        every_n_epochs=1,
+        save_top_k=3,
         mode='max',)
+    # checkpoint_cb = ModelCheckpoint(        
+    #     filename=f'{"resnet50"}' +
+    #     '_epoch({epoch:02d})_step({step:04d})',
+    #     auto_insert_metric_name=False,
+    #     save_weights_only=True,
+    #     save_top_k=-1,
+    #     every_n_epochs=1,
+    #     mode='max',)
 
     #------------------
     # we instanciate a trainer

@@ -12,8 +12,8 @@ def parse_arguments():
     parser.add_argument("--database_folder", type=str, default="/mnt/d/data/amstertime/test/database")    
     parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")        
     parser.add_argument("--image_root", type=str, default="/mnt/d/data/amstertime/test")
-#    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
-    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_w_text.csv")    
+    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
+#    ##parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_w_text.csv")    
     
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/nordland/images/test/database")    
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/nordland/images/test/queries")
@@ -26,9 +26,10 @@ def parse_arguments():
     # parser.add_argument("--image_root", type=str, default="/mnt/d/data/Pittsburgh30K/images/test")    
     
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/msls/val/database")    
-    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/msls/val/query")
-    # #parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_predictions.csv")
+    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/msls/val/query")   
     # parser.add_argument("--image_root", type=str, default="/mnt/d/data/msls/val")    
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_predictions.csv")
+    # #parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text_blur.csv")
     # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text_snow.csv")
     
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/gsv_cities/Images")    
@@ -104,7 +105,7 @@ def parse_arguments():
     parser.add_argument("--is_ref_model", type=int, default="0", help="is ref model")
     parser.add_argument("--is_text_pooling", type=int, default="1", help="pool text or not")
     parser.add_argument("--is_image_pooling", type=int, default="0", help="pool image or not")
-    parser.add_argument("--cross_modal", type=int, default="0", help="cross modal 0/1/2")
+    parser.add_argument("--cross_modal", type=int, default="0", help="cross modal 0=no/1=blip orig/2=our model")
 
 
     args = parser.parse_args()
