@@ -1,4 +1,4 @@
-image_root: '/mnt/d/data/sf_xl/small/'
+image_root: '/mnt/d/data/gsv_cities/'
 ann_root: 'annotation'
 #dataset: 'coco'
 dataset: 'vpr'
@@ -34,5 +34,5 @@ weight_decay: 0.05
 min_lr: 0
 max_epoch: 6
 
-csv_file: '/mnt/d/data/sf_xl/small/sf_xl_small_train_descriptions.csv'
+csv_file: '/mnt/d/data/gsv_cities/gsv_cities_predictions.csv'
 

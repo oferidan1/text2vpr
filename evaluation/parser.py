@@ -4,27 +4,43 @@ import argparse
 def parse_arguments():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument(
-        "--positive_dist_threshold",
-        type=int,
-        default=25,
-        help="distance (in meters) for a prediction to be considered a positive",
-    )
-    parser.add_argument(
-        "--method",
-        type=str,
-        default="mixvpr",
-        help="_",
-    )
-    parser.add_argument("--descriptors_dimension", type=int, default=512, help="_")
+    parser.add_argument("--positive_dist_threshold", type=int, default=25, help="distance (in meters) for a prediction to be considered a positive")
+    
+    parser.add_argument("--vision_dimension", type=int, default=512, help="_")
+    parser.add_argument("--vpr_rows", type=int, default=2, help="number of rows for vpr embeddings")
+    # parser.add_argument("--vision_dimension", type=int, default=4096, help="_")
+    # parser.add_argument("--vpr_rows", type=int, default=4, help="number of rows for vpr embeddings")
+    
     parser.add_argument("--database_folder", type=str, default="/mnt/d/data/amstertime/test/database")    
-    parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")
+    parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")    
     parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
     parser.add_argument("--image_root", type=str, default="/mnt/d/data/amstertime/test")
+    
+    # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/amstertime/test_with_text/database")    
+    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test_with_text/queries")
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_w_text.csv")
+    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/amstertime/test_with_text")
+    
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/nordland/images/test/database")    
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/nordland/images/test/queries")
     # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/nordland/images/test/nordland_predictions.csv")
     # parser.add_argument("--image_root", type=str, default="/mnt/d/data/nordland/images/test")
+    
+    # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/Pittsburgh30K/images/test/database")    
+    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/Pittsburgh30K/images/test/queries")
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/Pittsburgh30K/images/test/Pittsburgh30K_test_predictions.csv")
+    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/Pittsburgh30K/images/test")    
+    
+    # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/msls/val/database")    
+    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/msls/val/query")
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_predictions.csv")
+    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/msls/val")    
+    
+    # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/gsv_cities/Images")    
+    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/gsv_cities/Images")
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/gsv_cities/gsv_cities_predictions.csv")
+    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/gsv_cities")
+    
     parser.add_argument("--num_workers", type=int, default=4, help="_")
     parser.add_argument(
         "--batch_size", type=int, default=64, help="set to 1 if database images may have different resolution"
@@ -58,7 +74,7 @@ def parse_arguments():
     parser.add_argument(
         "--image_size",
         type=int,
-        default=None,
+        default=320,
         nargs="+",
         help="Resizing shape for images (HxW). If a single int is passed, set the"
         "smallest edge of all images to this value, while keeping aspect ratio",
@@ -68,14 +84,27 @@ def parse_arguments():
         action="store_true",
         help="set to True if you want to save the descriptors extracted by the model",
     )
-    parser.add_argument("--gpu", type=str, default="1", help="which gpu to use")
-    parser.add_argument("--model_name", type=str, default=None)
+    parser.add_argument("--gpu", type=str, default="0", help="which gpu to use")
+    parser.add_argument("--model_name", type=str, default='/mnt/d/ofer/localization/text2vpr/MixVPR_text/LOGS/resnet50/lightning_logs/version_38_mixvpr4096_fixed_weighting/checkpoints/resnet50_epoch(09)_step(5210).ckpt')
     parser.add_argument("--vision_model_name", type=str, default="mixvpr")
+    parser.add_argument("--vision_model_backbone", type=str, default="ResNet50")
     parser.add_argument("--text_model_name", type=str, default="BAAI/bge-large-en-v1.5")
     parser.add_argument("--lora_path", type=str, default=None)    
-    parser.add_argument("--is_dual_encoder", type=int, default="0")    
+    parser.add_argument("--is_dual_encoder", type=int, default="0", help="is dual encoder")    
     parser.add_argument("--dual_encoder_fusion", type=str, default="each", help="cat/each")    
-    parser.add_argument("--encode_mode", type=str, default="both", help="both/image/text")    
+    parser.add_argument("--encode_mode", type=str, default="text", help="both/image/text")   
+    parser.add_argument("--fusion_type", type=str, default='none', help="type of fusion to use: mlp, transformer, dynamic_weighting, fixed_weighting, text_adapter")
+    parser.add_argument("--is_normalize_features", type=int, default="0", help="is normalize features")    
+    parser.add_argument("--max_results_reranking", type=int, default="25000", help="max results for reranking")    
+    parser.add_argument("--alpha_vision", type=float, default=0.9, help="weight for vision scores in reranking")    
+    parser.add_argument("--alpha_loop", type=int, default=0, help="try multiple alpha values in loop of reranking")    
+    parser.add_argument("--is_trainable_text_encoder", type=int, default="0", help="train text encoder or not")
+    parser.add_argument("--is_encode_image", type=int, default="1", help="encode image or not")
+    parser.add_argument("--is_encode_text", type=int, default="1", help="encode text or not")
+    parser.add_argument("--rerank_by_scores", type=int, default="1", help="rerank_by_scores or rerank_by_rank")
+    parser.add_argument("--is_pca", type=int, default="0", help="do pca on descriptors or not")
+    parser.add_argument("--pca_dim", type=int, default="512", help="pca dimension")
+    parser.add_argument("--is_ref_model", type=int, default="0", help="is ref model")
 
     args = parser.parse_args()
     

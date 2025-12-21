@@ -64,12 +64,19 @@ class TestDataset(data.Dataset):
         super().__init__()
 
         self.database_paths = read_images_paths(database_folder)
-        self.queries_paths = read_images_paths(queries_folder)
-
-        self.images_paths = list(self.database_paths) + list(self.queries_paths)
-
+        
+        # only for debug - small data check!!!!
+        # random select a subset for quick testing in a random indices
+        # self.database_paths = np.random.choice(self.database_paths, size=20000, replace=False)        
+        
+        self.images_paths = list(self.database_paths)
         self.num_database = len(self.database_paths)
-        self.num_queries = len(self.queries_paths)
+        self.num_queries = 0        
+        
+        if queries_folder is not None:
+            self.queries_paths = read_images_paths(queries_folder)
+            self.images_paths += list(self.queries_paths)
+            self.num_queries = len(self.queries_paths)
 
         if use_labels:
             # Read UTM coordinates, which must be contained within the paths
@@ -115,9 +122,12 @@ class TestDataset(data.Dataset):
         image_path = self.images_paths[index]
         pil_img = Image.open(image_path).convert("RGB")
         normalized_img = self.transform(pil_img)        
-        # get the description for this image, find image_path index in self.image_path        
-        desc_index = self.images_paths_csv.index(image_path)
-        description = self.descriptions[desc_index]     
+        # get the description for this image, find image_path index in self.image_path     
+        description = ""      
+        if image_path in self.images_paths_csv:   
+            desc_index = self.images_paths_csv.index(image_path)
+            max_length = 1024
+            description = self.descriptions[desc_index][:max_length]     
         return normalized_img, index, description
 
     def __len__(self):

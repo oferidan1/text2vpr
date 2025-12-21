@@ -16,6 +16,9 @@ from sklearn.neighbors import NearestNeighbors
 root_dir = '/mnt/d/data/Pittsburgh30K/orig'
 images_root = '/mnt/d/data/Pittsburgh30K/Images/test/'
 csv_path = '/mnt/d/data/Pittsburgh30K/Images/test/Pittsburgh30K_test_predictions.csv'
+# root_dir = 'd:/data/Pittsburgh30K/orig'
+# images_root = 'd:/data/Pittsburgh30K/Images/test/'
+# csv_path = 'd:/data/Pittsburgh30K/Images/test/Pittsburgh30K_test_predictions.csv'
 
 if not exists(root_dir):
     raise FileNotFoundError(
@@ -178,7 +181,9 @@ class WholeDatasetFromStruct(data.Dataset):
         if self.input_transform:
             img = self.input_transform(img)
         
-        description = self.description[index]       
+        description = self.description[index]  
+        max_len = 512
+        description = description[:max_len]
 
         return img, index, description
 

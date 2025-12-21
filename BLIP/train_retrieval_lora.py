@@ -318,7 +318,8 @@ def main(args, config):
     model = blip_retrieval(pretrained=args.pretrained, image_size=config['image_size'], vit=config['vit'], 
                              vit_grad_ckpt=config['vit_grad_ckpt'], vit_ckpt_layer=config['vit_ckpt_layer'], 
                              queue_size=config['queue_size'], negative_all_rank=config['negative_all_rank'], 
-                             distributed=args.distributed, loss_type=args.loss_type, max_text_length=args.max_text_length)
+                             distributed=args.distributed, loss_type=args.loss_type, max_text_length=args.max_text_length, is_adapter=args.is_adapter)
+    
 
     model = model.to(device)   
     
@@ -454,10 +455,11 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size_test', default=256, type=int)
     parser.add_argument('--is_train', default=1, type=int)
     parser.add_argument('--is_itc_only', default=1, type=int)    
+    parser.add_argument('--is_adapter', default=0, type=int)    
     parser.add_argument('--loss_type', default=2, type=int, choices=[1, 2, 3], help='1: ITC only, 2: ITC + ITM, 3: Triplet Loss')    
     parser.add_argument('--pretrained', default='https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base.pth')    
     parser.add_argument('--eval_on', default='both', type=str, choices=['val', 'test', 'both'], help='which set to evaluate on')
-    parser.add_argument('--max_text_length', default=35, type=int, help='maximum length for text tokenizer')
+    parser.add_argument('--max_text_length', default=128, type=int, help='maximum length for text tokenizer')
     parser.add_argument('--gradient_checkpointing', default=0, type=int, help='enable gradient checkpointing to save memory')
     parser.add_argument('--empty_cache_freq', default=0, type=int, help='empty CUDA cache every N iterations (0=disabled)')
     

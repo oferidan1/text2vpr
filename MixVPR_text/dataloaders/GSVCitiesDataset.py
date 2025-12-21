@@ -16,6 +16,8 @@ default_transform = T.Compose([
 # NOTE: Hard coded path to dataset folder 
 BASE_PATH = '/mnt/d/data/gsv_cities/'
 TRAIN_CSV = '/mnt/d/data/gsv_cities/gsv_cities_predictions.csv'
+# BASE_PATH = 'd:/data/gsv_cities/'
+# TRAIN_CSV = 'd:/data/gsv_cities/gsv_cities_predictions.csv'
 
 if not Path(BASE_PATH).exists():
     raise FileNotFoundError(
@@ -46,7 +48,7 @@ class GSVCitiesDataset(Dataset):
         
         # get all unique place ids
         self.places_ids = pd.unique(self.dataframe.index)
-        self.total_nb_images = len(self.dataframe)
+        self.total_nb_images = len(self.dataframe)        
         
         self.image_path, self.description = GSVCitiesDataset.read_csv_file(TRAIN_CSV, BASE_PATH)
         
@@ -116,9 +118,13 @@ class GSVCitiesDataset(Dataset):
             imgs.append(img)
             
             # get the description for this image
-            # find image_path index in self.image_path        
-            desc_index = self.image_path.index(img_path)
-            description = self.description[desc_index]        
+            # find image_path index in self.image_path  
+            description = ""      
+            if img_path in self.image_path:
+                desc_index = self.image_path.index(img_path)
+                description = self.description[desc_index]                  
+                max_length = 256
+                description = description[:max_length]  # truncate to max_length chars
             descriptions.append(description) 
 
         # NOTE: contrary to image classification where __getitem__ returns only one image 
