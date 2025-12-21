@@ -13,9 +13,9 @@ from glob import glob
 from PIL import Image
 from sklearn.neighbors import NearestNeighbors
 
-# root_dir = '/mnt/d/data/Pittsburgh30K/orig'
-# images_root = '/mnt/d/data/Pittsburgh30K/Images/test/'
-# csv_path = '/mnt/d/data/Pittsburgh30K/Images/test/Pittsburgh30K_test_predictions.csv'
+# root_dir = '/mnt/d/data/pitts30k/orig'
+# images_root = '/mnt/d/data/pitts30k/Images/test/'
+# csv_path = '/mnt/d/data/pitts30k/Images/test/Pittsburgh30K_test_predictions.csv'
 root_dir = '/mnt/d/data/amstertime/test'
 images_root = '/mnt/d/data/amstertime/test'
 csv_path = '/mnt/d/data/amstertime/test/amstertime_test_predictions.csv'

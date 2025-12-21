@@ -114,8 +114,10 @@ class VPR_Text_Model(pl.LightningModule):
                 self.image_pooling = CLSReweightingPooler(self.vpr_encoder_dim)
                 
             if self.cross_modal:
-                self.vpr_proj = nn.Linear(self.vpr_encoder_dim, embeds_dim)
-                self.text_proj = nn.Linear(text_encoder_dim, embeds_dim)                
+                #self.vpr_proj = nn.Linear(self.vpr_encoder_dim, embeds_dim)
+                #self.text_proj = nn.Linear(text_encoder_dim, embeds_dim)                
+                self.vpr_proj = nn.Sequential(nn.Linear(self.vpr_encoder_dim, self.vpr_encoder_dim), nn.ReLU(), nn.Linear(self.vpr_encoder_dim, embeds_dim))
+                self.text_proj = nn.Sequential(nn.Linear(text_encoder_dim, text_encoder_dim), nn.ReLU(), nn.Linear(text_encoder_dim, embeds_dim))           
                 
             elif self.fusion_type == 'transformer':
                 self.vpr_adapter = nn.Linear(256, embeds_dim)  # mix vpr dim embedding
@@ -434,6 +436,8 @@ class VPR_Text_Model(pl.LightningModule):
         
         # we mine the pairs/triplets if there is an online mining strategy
         if self.miner is not None:
+            # if w is None and text_embeds is not None:
+            #     miner_outputs = self.miner(descriptors, labels, ref_emb=text_embeds, ref_labels=labels)     
             if self.is_orig_desc_mining:
                 miner_outputs = self.miner(orig_descriptors, labels)     
             else:

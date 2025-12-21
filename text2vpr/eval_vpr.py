@@ -15,6 +15,7 @@ from tqdm import tqdm
 from vlm_model import VLM_Model
 import os
 from test_dataset import TestDataset
+from dataloaders.MapillaryTestDataset import MSLSTest
 import visualizations
 from math import sqrt
 from sklearn.decomposition import PCA
@@ -345,15 +346,20 @@ def main(args):
         ref_args.vpr_rows = 2
         ref_model = VLM_Model(ref_args)
 
-    test_ds = TestDataset(
-        args.database_folder,   
-        args.queries_folder,
-        args.queries_csv,
-        args.image_root,        
-        positive_dist_threshold=args.positive_dist_threshold,
-        image_size=args.image_size,
-        use_labels=args.use_labels,
-    )
+    is_msls_challenge = False
+    if 'msls_challenge' in args.image_root:        
+        test_ds = MSLSTest(dataset_root=args.dataset_root, image_root=args.image_root, csv_path=args.queries_csv, image_size=args.image_size)
+        is_msls_challenge = True
+    else:
+        test_ds = TestDataset(
+            args.database_folder,   
+            args.queries_folder,
+            args.queries_csv,
+            args.image_root,        
+            positive_dist_threshold=args.positive_dist_threshold,
+            image_size=args.image_size,
+            use_labels=args.use_labels,
+        )
     logger.info(f"Testing on {test_ds}")
     all_descriptors = None
     vision_descriptors = None
@@ -464,25 +470,29 @@ def main(args):
             logger.info(f"dim database descriptors: {model.encoder_dim}")
             # get queries predictions
             scores, predictions = get_queries_predictions(model.encoder_dim, database_descriptors, all_descriptors, queries_descriptors, max_results)
-            
-        # For each query, check if the predictions are correct
-        if args.use_labels:
-            positives_per_query = test_ds.get_positives()
-            recalls = np.zeros(len(args.recall_values))
-            for query_index, preds in enumerate(predictions):
-                for i, n in enumerate(args.recall_values):
-                    if np.any(np.in1d(preds[:n], positives_per_query[query_index])):
-                        recalls[i:] += 1
-                        break
+        
+        if is_msls_challenge:
+            # save predictions to msls_challenge format
+            test_ds.save_predictions(predictions, log_dir / "msls_challenge_predictions.txt", k=25)
+        else:
+            # For each query, check if the predictions are correct
+            if args.use_labels:
+                positives_per_query = test_ds.get_positives()
+                recalls = np.zeros(len(args.recall_values))
+                for query_index, preds in enumerate(predictions):
+                    for i, n in enumerate(args.recall_values):
+                        if np.any(np.in1d(preds[:n], positives_per_query[query_index])):
+                            recalls[i:] += 1
+                            break
 
-            # Divide by num_queries and multiply by 100, so the recalls are in percentages
-            recalls = recalls / test_ds.num_queries * 100
-            recalls_str = ", ".join([f"R@{val}: {rec:.1f}" for val, rec in zip(args.recall_values, recalls)])
-            logger.info(recalls_str)
-            
-            #open eval_vpr_results.csv in append mode and write the recalls
-            with open("eval_vpr_results.csv", "a") as f:
-                f.write(f"{args.vpr_model_name},{args.fusion_type},{args.vpr_dim},{args.is_pca},{args.encode_mode},{recalls_str}\n")
+                # Divide by num_queries and multiply by 100, so the recalls are in percentages
+                recalls = recalls / test_ds.num_queries * 100
+                recalls_str = ", ".join([f"R@{val}: {rec:.1f}" for val, rec in zip(args.recall_values, recalls)])
+                logger.info(recalls_str)
+                
+                #open eval_vpr_results.csv in append mode and write the recalls
+                with open("eval_vpr_results.csv", "a") as f:
+                    f.write(f"{args.vpr_model_name},{args.fusion_type},{args.vpr_dim},{args.is_pca},{args.encode_mode},{recalls_str}\n")
 
     # Save visualizations of predictions
     if args.num_preds_to_save != 0:
