@@ -2,8 +2,9 @@ import argparse
 import csv
 from dataclasses import dataclass
 from datetime import datetime
+import hashlib
 from pathlib import Path
-from typing import Iterator, List, Optional
+from typing import TYPE_CHECKING, Iterator, List, Optional, Any
 import os
 import shlex
 import shutil
@@ -19,26 +20,9 @@ try:
 except Exception:  # pragma: no cover - tqdm is optional
     tqdm = None  # type: ignore[assignment]
 
-# Prefer the installed sam3 package (with its compiled extensions).
-# This avoids issues where importing directly from the source repo bypasses the
-# compiled extensions and leads to runtime errors.
-try:
-    from sam3.model_builder import build_sam3_image_model
-    from sam3.model.sam3_image_processor import Sam3Processor
-except ModuleNotFoundError:
-    # Fallback: attempt to use a sibling sam3 repo if the package
-    # is not installed in the current environment.
-    _THIS_FILE = Path(__file__).resolve()
-    _ROOT_DIR = _THIS_FILE.parents[2]  # /mnt/d/dan/git_projects
-    _SAM3_DIR = _ROOT_DIR / "sam3"
-    if not _SAM3_DIR.is_dir():
-        raise
-
-    # Add the repo itself to sys.path
-    sys.path.insert(0, str(_SAM3_DIR))
-
-    from sam3.model_builder import build_sam3_image_model
-    from sam3.model.sam3_image_processor import Sam3Processor
+if TYPE_CHECKING:  # pragma: no cover
+    # Only for type hints; actual imports are done lazily in load_model().
+    from sam3.model.sam3_image_processor import Sam3Processor  # noqa: F401
 
 
 @dataclass
@@ -162,8 +146,31 @@ def load_model(
     device: str,
     confidence_threshold: float = 0.3,
     verbose: bool = False,
-) -> tuple[torch.nn.Module, Sam3Processor]:
+) -> tuple[torch.nn.Module, "Sam3Processor"]:
     """Load a SAM3 model and processor."""
+    # Import SAM3 lazily so `--help` (and other non-inference operations) work
+    # even when SAM3 dependencies aren't installed.
+    try:
+        # Prefer the installed sam3 package (with its compiled extensions).
+        # This avoids issues where importing directly from the source repo bypasses the
+        # compiled extensions and leads to runtime errors.
+        from sam3.model_builder import build_sam3_image_model  # type: ignore
+        from sam3.model.sam3_image_processor import Sam3Processor  # type: ignore
+    except ModuleNotFoundError:
+        # Fallback: attempt to use a sibling sam3 repo if the package
+        # is not installed in the current environment.
+        _THIS_FILE = Path(__file__).resolve()
+        _ROOT_DIR = _THIS_FILE.parents[2]  # /mnt/d/dan/git_projects
+        _SAM3_DIR = _ROOT_DIR / "sam3"
+        if not _SAM3_DIR.is_dir():
+            raise
+
+        # Add the repo itself to sys.path
+        sys.path.insert(0, str(_SAM3_DIR))
+
+        from sam3.model_builder import build_sam3_image_model  # type: ignore
+        from sam3.model.sam3_image_processor import Sam3Processor  # type: ignore
+
     model = build_sam3_image_model(device=device, eval_mode=True)
     processor = Sam3Processor(
         model=model, device=device, confidence_threshold=confidence_threshold
@@ -174,7 +181,7 @@ def load_model(
 
 
 def run_sam3_for_object(
-    processor: Sam3Processor,
+    processor: "Sam3Processor",
     image_pil: Image.Image,
     inference_state: dict,
     object_name: str,
@@ -433,6 +440,41 @@ def maybe_load_cluster_index_map(csv_dir: Path) -> dict[tuple[str, str], str]:
     return mapping
 
 
+def _load_processed_image_paths(output_csv: Path) -> set[str]:
+    """
+    Load a set of image_path values that already exist in a SAM3 output CSV.
+
+    This enables resume/append mode without duplicating work.
+    """
+    if not output_csv.is_file():
+        return set()
+
+    processed: set[str] = set()
+    try:
+        with output_csv.open("r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            if not reader.fieldnames or "image_path" not in reader.fieldnames:
+                return set()
+            for row in reader:
+                img = (row.get("image_path") or "").strip()
+                if img:
+                    processed.add(img)
+    except Exception:  # noqa: BLE001 - best-effort; resume should not hard-fail
+        return set()
+
+    return processed
+
+
+def _debug_file_prefix(row: DetectionRow, ordinal: int) -> str:
+    """
+    Create a short, stable-ish prefix for debug image filenames.
+    Uses a truncated hash to avoid filename collisions across resume runs.
+    """
+    stem = Path(row.image_path).stem or "image"
+    h = hashlib.sha1(row.image_path.encode("utf-8", errors="ignore")).hexdigest()[:10]
+    return f"{ordinal:06d}_{stem}_{h}"
+
+
 def run(
     input_csv: Path,
     output_csv: Optional[Path],
@@ -442,9 +484,16 @@ def run(
     debug: bool,
     debug_dir: Optional[Path],
     no_overwrite: bool = False,
+    resume: bool = False,
     use_filtered: bool = False,
     realtime_missing_csv: Optional[Path] = None,
     realtime_progress_csv: Optional[Path] = None,
+    follow: bool = False,
+    poll_interval: float = 5.0,
+    follow_idle_minutes: Optional[int] = None,
+    watch: bool = False,
+    watch_poll_sec: int = 60,
+    watch_idle_minutes: int = 20,
 ) -> None:
     # Determine suffix based on whether we're using filtered objects.
     suffix = "_sam3_filtered" if use_filtered else "_sam3"
@@ -518,9 +567,12 @@ def run(
                     prog_f.flush()
             return
 
-    # At this point we are going to regenerate outputs; clean debug directory first.
-    if debug and debug_dir is not None:
+    # In non-resume mode we regenerate outputs; clean debug directory first.
+    # In resume mode we *append* and should not delete existing debug outputs.
+    if debug and debug_dir is not None and not resume:
         prepare_clean_directory(debug_dir)
+    if debug and debug_dir is not None and resume:
+        debug_dir.mkdir(parents=True, exist_ok=True)
 
     device = "cpu" if cpu_only or not torch.cuda.is_available() else "cuda"
 
@@ -593,23 +645,372 @@ def run(
             realtime_progress_writer.writeheader()
 
     try:
+        effective_follow = bool(follow or watch)
+        effective_poll_interval = (
+            float(watch_poll_sec)
+            if watch and float(poll_interval) == 5.0
+            else float(poll_interval)
+        )
+        effective_idle_minutes: Optional[int] = (
+            int(watch_idle_minutes) if watch else follow_idle_minutes
+        )
+
+        if effective_follow:
+            # Follow mode: incrementally process rows as they are appended to the input CSV.
+            # Keep the SAM3 model loaded and reuse it across iterations.
+
+            # Resume mode: if enabled and output exists, skip images already written.
+            processed_image_paths: set[str] = set()
+            if resume:
+                processed_image_paths = _load_processed_image_paths(output_csv)
+                if processed_image_paths:
+                    print(
+                        f"[resume] Loaded {len(processed_image_paths)} existing image_path values from "
+                        f"{output_csv}; will skip re-processing those images.",
+                        flush=True,
+                    )
+
+            output_exists = output_csv.is_file()
+            output_mode = "a" if (resume and output_exists) else "w"
+
+            # Follow mode: optional idle timeout (no file signature changes).
+            idle_timeout_s: Optional[float] = None
+            if effective_idle_minutes is not None:
+                if effective_idle_minutes <= 0:
+                    effective_idle_minutes = 20
+                idle_timeout_s = float(effective_idle_minutes * 60)
+
+            try:
+                st0 = input_csv.stat()
+                prev_sig: tuple[int, int] | None = (st0.st_mtime_ns, st0.st_size)
+            except FileNotFoundError:
+                prev_sig = None
+
+            idle_elapsed_s = 0.0
+            processed_input_rows = 0  # number of data rows read from the input CSV (excluding header)
+
+            print(f"[follow] Watching for new rows in: {input_csv}", flush=True)
+            print(f"[follow] Poll interval: {effective_poll_interval:.1f}s", flush=True)
+            if idle_timeout_s is not None:
+                print(
+                    f"[follow] Idle timeout: {int(idle_timeout_s // 60)} minutes "
+                    f"(exit when input CSV is unchanged for that long).",
+                    flush=True,
+                )
+
+            with output_csv.open(output_mode, newline="", encoding="utf-8") as f_out:
+                writer = csv.DictWriter(f_out, fieldnames=fieldnames)
+                if output_mode == "w":
+                    writer.writeheader()
+                    f_out.flush()
+
+                while True:
+                    new_rows_seen = 0
+
+                    try:
+                        with input_csv.open("r", newline="", encoding="utf-8") as f_in:
+                            reader = csv.DictReader(f_in)
+                            if reader.fieldnames is None:
+                                raise ValueError(f"CSV file has no header: {input_csv}")
+
+                            fieldnames_in = set(reader.fieldnames)
+                            if use_filtered:
+                                if "filtered_by_llm" not in fieldnames_in:
+                                    raise ValueError(
+                                        f"CSV {input_csv} must contain a 'filtered_by_llm' column when "
+                                        f"--filtered is set. Found columns: {reader.fieldnames}"
+                                    )
+                                schema = "filtered"
+                            elif "objects_and_stuff" in fieldnames_in:
+                                schema = "merged"
+                            elif "objects" in fieldnames_in:
+                                schema = "split"
+                            else:
+                                raise ValueError(
+                                    f"CSV {input_csv} must contain either an 'objects_and_stuff' column "
+                                    f"(merged schema) or an 'objects' column (split schema). "
+                                    f"Found columns: {reader.fieldnames}"
+                                )
+
+                            # Skip already-read rows so we only handle newly appended lines.
+                            for _ in range(processed_input_rows):
+                                try:
+                                    next(reader)
+                                except StopIteration:
+                                    break
+
+                            for raw in reader:
+                                processed_input_rows += 1
+                                new_rows_seen += 1
+                                global_row_idx = processed_input_rows  # 1-based among data rows
+
+                                image_path = str((raw.get("image_path") or "")).strip()
+                                description = str((raw.get("description") or "")).strip()
+                                if schema == "merged":
+                                    objects_raw = str((raw.get("objects_and_stuff") or "")).strip()
+                                elif schema == "filtered":
+                                    objects_raw = str((raw.get("filtered_by_llm") or "")).strip()
+                                else:
+                                    objects_raw = str((raw.get("objects") or "")).strip()
+                                stuff_raw = str((raw.get("stuff") or "")).strip()
+
+                                if not image_path:
+                                    continue
+
+                                if resume and image_path in processed_image_paths:
+                                    continue
+
+                                row = DetectionRow(
+                                    image_path=image_path,
+                                    description=description,
+                                    objects_raw=objects_raw,
+                                    stuff_raw=stuff_raw,
+                                )
+
+                                objects = parse_objects_field(row.objects_raw)
+                                stuff_list = (
+                                    parse_objects_field(row.stuff_raw) if row.stuff_raw else []
+                                )
+                                if not objects and not stuff_list:
+                                    continue
+
+                                # Measure per-image processing time (loading image + SAM3 calls).
+                                row_start_time = time.perf_counter()
+
+                                try:
+                                    row_path = Path(row.image_path)
+                                    if row_path.is_absolute():
+                                        full_image_path = str(row_path)
+                                    elif images_root is not None:
+                                        full_image_path = str((images_root / row_path).resolve())
+                                    else:
+                                        full_image_path = str(row_path)
+                                    image_pil = load_image(full_image_path)
+                                except FileNotFoundError:
+                                    print(
+                                        f"[WARN] Image not found, skipping row {global_row_idx}: {row.image_path}",
+                                        flush=True,
+                                    )
+                                    continue
+                                except Exception as e:  # noqa: BLE001
+                                    print(
+                                        f"[WARN] Failed to load image (row {global_row_idx}) {row.image_path}: {e}",
+                                        flush=True,
+                                    )
+                                    continue
+
+                                # Set the image once for all objects (more efficient)
+                                inference_state = processor.set_image(image_pil)
+
+                                # Look up idx_in_cluster for this (image_path, description) if available.
+                                cluster_idx = cluster_index_map.get(
+                                    (row.image_path.strip(), row.description.strip()), ""
+                                )
+
+                                missing_objects: List[str] = []
+
+                                debug_boxes: List[torch.Tensor] = []
+                                debug_masks: List[torch.Tensor] = []
+                                debug_labels: List[str] = []
+
+                                # Process objects (things)
+                                for object_name in objects:
+                                    boxes, scores, masks = run_sam3_for_object(
+                                        processor=processor,
+                                        image_pil=image_pil,
+                                        inference_state=inference_state,
+                                        object_name=object_name,
+                                    )
+                                    found = len(scores) > 0
+                                    if not found:
+                                        missing_objects.append(object_name)
+                                    elif debug and len(boxes) > 0:
+                                        debug_boxes.append(boxes)
+                                        debug_masks.append(masks)
+                                        debug_labels.extend(
+                                            f"{object_name} ({float(s):.2f})" for s in scores
+                                        )
+
+                                # Process stuff (regions)
+                                for stuff_name in stuff_list:
+                                    boxes, scores, masks = run_sam3_for_object(
+                                        processor=processor,
+                                        image_pil=image_pil,
+                                        inference_state=inference_state,
+                                        object_name=stuff_name,
+                                    )
+                                    found = len(scores) > 0
+                                    if not found:
+                                        missing_objects.append(stuff_name)
+                                    elif debug and len(boxes) > 0:
+                                        debug_boxes.append(boxes)
+                                        debug_masks.append(masks)
+                                        debug_labels.extend(
+                                            f"{stuff_name} ({float(s):.2f})" for s in scores
+                                        )
+
+                                debug_image_path_str = ""
+                                if debug and debug_dir is not None and missing_objects:
+                                    if debug_boxes:
+                                        all_boxes = torch.cat(debug_boxes, dim=0)
+                                        all_masks = (
+                                            torch.cat(debug_masks, dim=0) if debug_masks else None
+                                        )
+                                        segments_image = draw_segments_only(
+                                            image_pil.copy(),
+                                            all_boxes,
+                                            debug_labels,
+                                            masks=all_masks,
+                                        )
+                                    else:
+                                        segments_image = image_pil.copy()
+
+                                    prefix = (
+                                        _debug_file_prefix(row=row, ordinal=global_row_idx)
+                                        if resume
+                                        else f"{global_row_idx:06d}_{Path(row.image_path).stem}"
+                                    )
+                                    segments_path = debug_dir / f"{prefix}_segments.jpg"
+                                    if not (resume and segments_path.exists()):
+                                        segments_image.save(segments_path)
+
+                                    if debug_labels:
+                                        color_map_image = create_color_map(debug_labels)
+                                        color_map_path = debug_dir / f"{prefix}_colormap.jpg"
+                                        if not (resume and color_map_path.exists()):
+                                            color_map_image.save(color_map_path)
+
+                                    debug_image_path_str = str(segments_path)
+
+                                objects_not_found_str = (
+                                    ". ".join(missing_objects) if missing_objects else ""
+                                )
+                                writer.writerow(
+                                    {
+                                        "image_path": row.image_path,
+                                        "idx_in_cluster": cluster_idx,
+                                        "description": row.description,
+                                        "objects": row.objects_raw,
+                                        "objects_not_found": objects_not_found_str,
+                                        "debug_image_path": debug_image_path_str,
+                                    }
+                                )
+                                f_out.flush()
+                                if resume:
+                                    processed_image_paths.add(row.image_path)
+
+                                if missing_objects and realtime_missing_writer is not None:
+                                    realtime_missing_writer.writerow(
+                                        {
+                                            "input_csv": str(input_csv),
+                                            "image_path": row.image_path,
+                                            "idx_in_cluster": cluster_idx,
+                                            "description": row.description,
+                                            "objects": row.objects_raw,
+                                            "objects_not_found": objects_not_found_str,
+                                        }
+                                    )
+                                    realtime_missing_f.flush()
+
+                                if realtime_progress_writer is not None:
+                                    duration_sec = time.perf_counter() - row_start_time
+                                    cluster_dir = ""
+                                    for parent in input_csv.parents:
+                                        name = parent.name
+                                        if name.startswith("cluster_"):
+                                            cluster_dir = name
+                                            break
+                                    if not cluster_dir:
+                                        cluster_dir = input_csv.parent.name
+                                    realtime_progress_writer.writerow(
+                                        {
+                                            "timestamp": datetime.now().isoformat(
+                                                timespec="seconds"
+                                            ),
+                                            "input_csv": str(input_csv),
+                                            "cluster_dir": cluster_dir,
+                                            "image_path": row.image_path,
+                                            "idx_in_cluster": cluster_idx,
+                                            "description": row.description,
+                                            "objects": row.objects_raw,
+                                            "objects_not_found": objects_not_found_str,
+                                            "duration_sec": f"{duration_sec:.4f}",
+                                            "status": "processed",
+                                        }
+                                    )
+                                    realtime_progress_f.flush()
+                    except FileNotFoundError:
+                        # If the upstream process hasn't created the file yet, just wait.
+                        pass
+                    except Exception as e:  # noqa: BLE001
+                        # If file is mid-write / partially written, wait and retry.
+                        print(
+                            f"[follow] Failed to read/parse input CSV (will retry): "
+                            f"{type(e).__name__}: {e}",
+                            flush=True,
+                        )
+
+                    if new_rows_seen == 0:
+                        # No new rows since last check. Use file signature to track idle time.
+                        try:
+                            st = input_csv.stat()
+                            sig: tuple[int, int] | None = (st.st_mtime_ns, st.st_size)
+                        except FileNotFoundError:
+                            sig = None
+
+                        if sig == prev_sig:
+                            idle_elapsed_s += float(effective_poll_interval)
+                            if idle_timeout_s is not None and idle_elapsed_s >= idle_timeout_s:
+                                print(
+                                    f"[follow] No input CSV changes for {effective_idle_minutes} minutes. Exiting.",
+                                    flush=True,
+                                )
+                                break
+                        else:
+                            prev_sig = sig
+                            idle_elapsed_s = 0.0
+
+                        time.sleep(float(effective_poll_interval))
+                    # Otherwise, loop again immediately (new rows may have been appended while processing).
+
+            return
+
         # Preload all rows so we can compute a deterministic progress bar
         # over the total number of samples that SAM3 will process.
         all_rows = list(parse_input_csv(input_csv, use_filtered=use_filtered))
+        last_seen_input_rows = len(all_rows)
 
         # Filter down to only rows that actually have any objects or stuff,
         # which are the ones that will result in SAM3 inference.
-        rows_to_process: List[DetectionRow] = []
-        for row in all_rows:
+        rows_with_ordinals: List[tuple[int, DetectionRow]] = []
+        for ordinal, row in enumerate(all_rows, start=1):
             objects = parse_objects_field(row.objects_raw)
             if objects or row.stuff_raw:
-                rows_to_process.append(row)
+                rows_with_ordinals.append((ordinal, row))
+
+        # If resume is requested and the output CSV already exists, skip images
+        # that were already processed (based on image_path).
+        processed_image_paths: set[str] = set()
+        if resume:
+            processed_image_paths = _load_processed_image_paths(output_csv)
+
+        rows_to_process: List[tuple[int, DetectionRow]] = []
+        if processed_image_paths:
+            for ordinal, row in rows_with_ordinals:
+                if row.image_path.strip() in processed_image_paths:
+                    continue
+                rows_to_process.append((ordinal, row))
+        else:
+            rows_to_process = rows_with_ordinals
 
         total_samples = len(rows_to_process)
 
-        with output_csv.open("w", newline="", encoding="utf-8") as f_out:
+        output_exists = output_csv.is_file()
+        output_mode = "a" if (resume and output_exists) else "w"
+        with output_csv.open(output_mode, newline="", encoding="utf-8") as f_out:
             writer = csv.DictWriter(f_out, fieldnames=fieldnames)
-            writer.writeheader()
+            if not (resume and output_exists):
+                writer.writeheader()
 
             if tqdm is not None and total_samples > 0:
                 row_iter = tqdm(
@@ -621,22 +1022,30 @@ def run(
             else:
                 row_iter = enumerate(rows_to_process, start=1)
 
-            for row_idx, row in row_iter:
+            for _local_idx, (ordinal, row) in row_iter:
                 objects = parse_objects_field(row.objects_raw)
 
                 # Measure per-image processing time (loading image + SAM3 calls).
                 row_start_time = time.perf_counter()
 
                 try:
-                    image_path = (
-                        str((images_root / row.image_path).resolve())
-                        if images_root is not None
-                        else row.image_path
-                    )
+                    # Resolve image path:
+                    # - If CSV provides an absolute path, use it as-is (ignore images_root).
+                    # - If CSV provides a relative path, optionally prepend images_root.
+                    #
+                    # This supports workflows where image_path is already a full path
+                    # (e.g. /mnt/d/... in WSL) and avoids accidental double-prefixing.
+                    row_path = Path(row.image_path)
+                    if row_path.is_absolute():
+                        image_path = str(row_path)
+                    elif images_root is not None:
+                        image_path = str((images_root / row_path).resolve())
+                    else:
+                        image_path = str(row_path)
                     image_pil = load_image(image_path)
                 except FileNotFoundError:
                     print(
-                        f"[WARN] Image not found, skipping row {row_idx}: "
+                        f"[WARN] Image not found, skipping row {ordinal}: "
                         f"{image_path}"
                     )
                     continue
@@ -717,20 +1126,23 @@ def run(
                         # No detections at all; just save the original image.
                         segments_image = image_pil.copy()
 
-                    segments_filename = (
-                        f"{row_idx:06d}_{Path(row.image_path).stem}_segments.jpg"
-                    )
+                    if resume:
+                        prefix = _debug_file_prefix(row=row, ordinal=ordinal)
+                    else:
+                        prefix = f"{_local_idx:06d}_{Path(row.image_path).stem}"
+                    segments_filename = f"{prefix}_segments.jpg"
                     segments_path = debug_dir / segments_filename
-                    segments_image.save(segments_path)
+                    # Avoid overwriting existing debug images in resume mode.
+                    if not (resume and segments_path.exists()):
+                        segments_image.save(segments_path)
 
                     # Optionally create a color map/legend image if we have any labels.
                     if debug_labels:
                         color_map_image = create_color_map(debug_labels)
-                        color_map_filename = (
-                            f"{row_idx:06d}_{Path(row.image_path).stem}_colormap.jpg"
-                        )
+                        color_map_filename = f"{prefix}_colormap.jpg"
                         color_map_path = debug_dir / color_map_filename
-                        color_map_image.save(color_map_path)
+                        if not (resume and color_map_path.exists()):
+                            color_map_image.save(color_map_path)
 
                     debug_image_path_str = str(segments_path)
 
@@ -748,6 +1160,10 @@ def run(
                         "debug_image_path": debug_image_path_str,
                     }
                 )
+                try:
+                    f_out.flush()
+                except Exception:
+                    pass
 
                 # Write to real-time missing CSV if there are missing objects.
                 if missing_objects and realtime_missing_writer is not None:
@@ -833,8 +1249,8 @@ def main() -> None:
         "--images_root",
         default=None,
         help=(
-            "Optional root directory to prepend to image_path values from the CSV "
-            "when locating image files on disk."
+            "Optional root directory to prepend to *relative* image_path values from the CSV "
+            "when locating image files on disk. If image_path is absolute, it is used as-is."
         ),
     )
     parser.add_argument(
@@ -887,6 +1303,15 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "If set, resume a previous run by appending to the output CSV (if it exists) "
+            "and skipping images already present in that output. Unlike --no_overwrite, "
+            "this does not skip the whole CSV; it continues from the remaining images."
+        ),
+    )
+    parser.add_argument(
         "--np",
         action="store_true",
         help=(
@@ -932,6 +1357,51 @@ def main() -> None:
             "in the results directory (batch mode) or next to the input CSV (single mode)."
         ),
     )
+    parser.add_argument(
+        "--follow",
+        action="store_true",
+        help=(
+            "Keep watching the input CSV for new rows being appended and process them as they appear "
+            "(similar to `tail -f`). Use Ctrl+C to stop."
+        ),
+    )
+    parser.add_argument(
+        "--poll_interval",
+        type=float,
+        default=5.0,
+        help="Seconds to wait between checks for new rows when --follow is set.",
+    )
+    parser.add_argument(
+        "--follow_idle_minutes",
+        type=int,
+        default=None,
+        help=(
+            "Optional: when --follow is set, exit automatically after this many minutes "
+            "with no detected changes to the input CSV (mtime/size unchanged). "
+            "If omitted, follow mode runs indefinitely until Ctrl+C."
+        ),
+    )
+    parser.add_argument(
+        "--watch",
+        action="store_true",
+        help=(
+            "Convenience alias for --follow with a 1-minute sampling cadence and an "
+            "idle-exit timeout. This exits when the input CSV has not changed for "
+            "a configurable amount of time."
+        ),
+    )
+    parser.add_argument(
+        "--watch_poll_sec",
+        type=int,
+        default=60,
+        help="Polling cadence in seconds for --watch (default: 60).",
+    )
+    parser.add_argument(
+        "--watch_idle_minutes",
+        type=int,
+        default=20,
+        help="Exit after this many minutes with no input CSV changes in --watch (default: 20).",
+    )
 
     args = parser.parse_args()
 
@@ -961,6 +1431,7 @@ def main() -> None:
             debug=args.debug,
             debug_root_dir=debug_root_dir,
             no_overwrite=args.no_overwrite,
+            resume=args.resume,
             use_np=args.np,
             use_llm=args.llm,
             use_filtered=args.filtered,
@@ -1010,9 +1481,22 @@ def main() -> None:
             debug=args.debug,
             debug_dir=Path(args.debug_dir).resolve() if args.debug_dir else None,
             no_overwrite=args.no_overwrite,
+            resume=args.resume,
             use_filtered=args.filtered,
             realtime_missing_csv=realtime_missing_path,
             realtime_progress_csv=realtime_progress_path,
+            follow=bool(args.follow or args.watch),
+            poll_interval=(
+                float(args.watch_poll_sec)
+                if args.watch and float(args.poll_interval) == 5.0
+                else float(args.poll_interval)
+            ),
+            follow_idle_minutes=(
+                int(args.watch_idle_minutes) if args.watch else args.follow_idle_minutes
+            ),
+            watch=bool(args.watch),
+            watch_poll_sec=int(args.watch_poll_sec),
+            watch_idle_minutes=int(args.watch_idle_minutes),
         )
 
 
@@ -1025,6 +1509,7 @@ def run_batch(
     debug: bool,
     debug_root_dir: Optional[Path],
     no_overwrite: bool = False,
+    resume: bool = False,
     use_np: bool = False,
     use_llm: bool = False,
     use_filtered: bool = False,
@@ -1217,6 +1702,7 @@ def run_batch(
                 debug=debug,
                 debug_dir=per_csv_debug_dir,
                 no_overwrite=no_overwrite,
+                resume=resume,
                 use_filtered=use_filtered,
                 realtime_missing_csv=realtime_missing_path,
                 realtime_progress_csv=realtime_progress_path,

@@ -22,6 +22,92 @@ from .llm_client import LLMClient, build_default_client
 _LLM_ERRORS_CSV = Path(__file__).resolve().parent / "outs" / "llm_request_errors.csv"
 
 
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write text to a file atomically (best-effort)."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+        tmp_path.write_text(text, encoding="utf-8")
+        tmp_path.replace(path)
+    except Exception:
+        # Best-effort; never break the main loop on logging issues.
+        return
+
+
+def _compute_realtime_stats(
+    *,
+    input_csv: Path,
+    output_csv: Path,
+    new_column: str,
+) -> dict[str, float | int | str]:
+    """Compute summary stats from the (growing) SAM3 progress CSV + our output CSV.
+
+    All values are best-effort; if parsing fails (e.g., file mid-write), return zeros.
+    """
+    total_rows = 0
+    sam3_missing_rows = 0
+
+    try:
+        with input_csv.open("r", newline="", encoding="utf-8") as f_in:
+            reader = csv.DictReader(f_in)
+            if reader.fieldnames is None:
+                raise ValueError("input CSV has no header")
+            for row in reader:
+                total_rows += 1
+                if (row.get("objects_not_found") or "").strip():
+                    sam3_missing_rows += 1
+    except Exception:
+        total_rows = 0
+        sam3_missing_rows = 0
+
+    vllm_no_rows = 0
+    vllm_processed_rows = 0
+    try:
+        if output_csv.is_file():
+            with output_csv.open("r", newline="", encoding="utf-8") as f_out:
+                reader = csv.DictReader(f_out)
+                if reader.fieldnames is None:
+                    raise ValueError("output CSV has no header")
+                for row in reader:
+                    vllm_processed_rows += 1
+                    # Count rows where vLLM rejected at least one missing object.
+                    if (row.get(new_column) or "").strip():
+                        vllm_no_rows += 1
+    except Exception:
+        vllm_no_rows = 0
+        vllm_processed_rows = 0
+
+    missing_pct = (sam3_missing_rows / total_rows * 100.0) if total_rows else 0.0
+
+    return {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "input_csv": str(input_csv),
+        "output_csv": str(output_csv),
+        "new_column": str(new_column),
+        "total_rows": int(total_rows),
+        "sam3_missing_rows": int(sam3_missing_rows),
+        "sam3_missing_pct": float(missing_pct),
+        "vllm_processed_rows": int(vllm_processed_rows),
+        "vllm_no_rows": int(vllm_no_rows),
+    }
+
+
+def _format_status_log(stats: dict[str, float | int | str]) -> str:
+    return (
+        f"timestamp: {stats.get('timestamp','')}\n"
+        f"input_csv: {stats.get('input_csv','')}\n"
+        f"output_csv: {stats.get('output_csv','')}\n"
+        f"new_column: {stats.get('new_column','')}\n"
+        "\n"
+        f"total_rows_in_input_csv: {stats.get('total_rows',0)}\n"
+        f"rows_with_sam3_missing_objects: {stats.get('sam3_missing_rows',0)}\n"
+        f"sam3_missing_percent: {float(stats.get('sam3_missing_pct',0.0)):.4f}\n"
+        "\n"
+        f"rows_processed_by_vllm_checker: {stats.get('vllm_processed_rows',0)}\n"
+        f"rows_where_vllm_said_no_to_at_least_one_missing_object: {stats.get('vllm_no_rows',0)}\n"
+    )
+
+
 def _log_llm_request_error(
     *,
     image_path: str,
@@ -126,11 +212,16 @@ def _process_row_with_llm(
         writer.writerow(row)
         return
 
-    # Build full image path using the provided root directory.
-    if images_root is not None:
-        full_image_path = str((images_root / pr.image_path).resolve())
+    # Build full image path:
+    # - If image_path is absolute, use it as-is (ignore images_root).
+    # - Otherwise, optionally prepend images_root.
+    pr_path = Path(pr.image_path)
+    if pr_path.is_absolute():
+        full_image_path = str(pr_path)
+    elif images_root is not None:
+        full_image_path = str((images_root / pr_path).resolve())
     else:
-        full_image_path = pr.image_path
+        full_image_path = str(pr_path)
 
     missing_objects = parse_objects_field(pr.objects_not_found)
     if not missing_objects:
@@ -221,8 +312,10 @@ def check_csv_with_llm(
     client: Optional[LLMClient] = None,
     new_column: str = "objects_vllm_said_no",
     llm_batch_size: int = 1,
+    resume: bool = False,
     follow: bool = False,
     poll_interval: float = 5.0,
+    follow_idle_minutes: Optional[int] = None,
 ) -> Path:
     """Run LLM-based checks over a SAM3 realtime progress CSV.
 
@@ -287,24 +380,48 @@ def check_csv_with_llm(
         except Exception:
             total_input_rows = None
 
-    # Check if output CSV already exists and count existing rows so we can resume.
+    # Resume mode: if enabled and output exists, count existing rows so we can skip them.
     processed_rows = 0
     output_exists = output_csv.is_file()
-    if output_exists:
+    output_has_header = False
+    processed_image_paths: set[str] = set()
+
+    if output_exists and resume:
         try:
             with output_csv.open("r", newline="", encoding="utf-8") as f_check:
                 reader_check = csv.DictReader(f_check)
+                # If the file is non-empty, DictReader should expose fieldnames (header).
+                output_has_header = reader_check.fieldnames is not None
+                if output_has_header and list(reader_check.fieldnames) != fieldnames:
+                    raise ValueError(
+                        "Output CSV header does not match expected columns for this run. "
+                        "Refusing to --resume to avoid corrupting the file. "
+                        f"Expected fieldnames={fieldnames} but found={list(reader_check.fieldnames)}. "
+                        "Delete the output CSV, change --new_column to match, or rerun without --resume."
+                    )
                 # Count data rows (excluding header).
-                for _ in reader_check:
+                for out_row in reader_check:
                     processed_rows += 1
+                    img = (out_row.get("image_path") or "").strip()
+                    if img:
+                        processed_image_paths.add(img)
             print(f"Output CSV already has {processed_rows} rows; resuming from there.")
+            if processed_image_paths:
+                print(
+                    f"Resume: loaded {len(processed_image_paths)} unique image_path values from output; "
+                    "will skip re-checking those images."
+                )
         except Exception:
-            # If we can't read it, start fresh.
-            processed_rows = 0
-            output_exists = False
+            # If we can't read it or the header mismatches, do not silently resume.
+            raise
 
-    # Open the output CSV: append if resuming, write if starting fresh.
-    mode = "a" if output_exists and processed_rows > 0 else "w"
+    # Open the output CSV:
+    # - default: write fresh (overwrite)
+    # - --resume: append if the output exists and has a header, otherwise write fresh
+    if resume and output_exists and output_has_header:
+        mode = "a"
+    else:
+        mode = "w"
     with output_csv.open(mode, newline="", encoding="utf-8") as f_out:
         writer = csv.DictWriter(f_out, fieldnames=fieldnames)
         
@@ -312,6 +429,38 @@ def check_csv_with_llm(
         if mode == "w":
             writer.writeheader()
         f_out.flush()
+
+        # Follow mode: optionally stop after an idle timeout (no file changes).
+        # We detect "changes" by (mtime_ns, size) signature to avoid relying
+        # solely on "new_rows == 0", since writers may touch the file.
+        idle_timeout_s: Optional[float] = None
+        if follow and follow_idle_minutes is not None:
+            if follow_idle_minutes <= 0:
+                follow_idle_minutes = 20
+            idle_timeout_s = float(follow_idle_minutes * 60)
+
+        try:
+            st0 = input_csv.stat()
+            prev_sig: tuple[int, int] | None = (st0.st_mtime_ns, st0.st_size)
+        except FileNotFoundError:
+            prev_sig = None
+
+        idle_elapsed_s = 0.0
+        if follow:
+            print(
+                f"[follow] Watching for new rows in: {input_csv}",
+                flush=True,
+            )
+            print(
+                f"[follow] Poll interval: {poll_interval:.1f}s",
+                flush=True,
+            )
+            if idle_timeout_s is not None:
+                print(
+                    f"[follow] Idle timeout: {int(idle_timeout_s // 60)} minutes "
+                    f"(exit when input CSV is unchanged for that long).",
+                    flush=True,
+                )
 
         while True:
             new_rows = 0
@@ -350,6 +499,13 @@ def check_csv_with_llm(
                 )
 
                 for row in iterable:
+                    # If resuming, never re-check an image_path that already exists in the output CSV.
+                    # This protects against accidental duplicates in the input CSV or output truncation.
+                    if resume:
+                        img = (row.get("image_path") or "").strip()
+                        if img and img in processed_image_paths:
+                            processed_rows += 1
+                            continue
                     _process_row_with_llm(
                         row=row,
                         writer=writer,
@@ -360,6 +516,10 @@ def check_csv_with_llm(
                     )
                     new_rows += 1
                     processed_rows += 1
+                    if resume:
+                        img = (row.get("image_path") or "").strip()
+                        if img:
+                            processed_image_paths.add(img)
                     f_out.flush()
                     if processed_rows > 0 and processed_rows != new_rows:
                         # Heuristic: if we're resuming, `iterable` is a plain reader.
@@ -377,7 +537,38 @@ def check_csv_with_llm(
                 break
 
             if new_rows == 0:
-                # No new rows since last check; wait a bit before trying again.
+                # No new rows since last check. Use file signature to track idle time.
+                try:
+                    st = input_csv.stat()
+                    sig: tuple[int, int] | None = (st.st_mtime_ns, st.st_size)
+                except FileNotFoundError:
+                    sig = None
+
+                if sig == prev_sig:
+                    idle_elapsed_s += float(poll_interval)
+                    if idle_timeout_s is not None:
+                        remaining = max(0.0, idle_timeout_s - idle_elapsed_s)
+                        if idle_elapsed_s >= idle_timeout_s:
+                            print(
+                                f"[follow] No input CSV changes for {follow_idle_minutes} minutes. Exiting.",
+                                flush=True,
+                            )
+                            break
+                        print(
+                            f"[follow] No change detected. Idle "
+                            f"{int(idle_elapsed_s // 60)}m{int(idle_elapsed_s % 60):02d}s / "
+                            f"{follow_idle_minutes}m (remaining {int(remaining // 60)}m{int(remaining % 60):02d}s).",
+                            flush=True,
+                        )
+                else:
+                    prev_sig = sig
+                    idle_elapsed_s = 0.0
+                    print(
+                        "[follow] Input CSV changed, but no new parseable rows detected yet; continuing.",
+                        flush=True,
+                    )
+
+                # Wait a bit before trying again.
                 time.sleep(poll_interval)
             # Otherwise, loop again immediately to see if more rows were
             # appended while we were processing.

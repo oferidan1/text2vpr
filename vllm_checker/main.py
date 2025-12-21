@@ -44,6 +44,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "If output_csv already exists, append to it and skip rows already written "
+            "(continue from where the output CSV ended). Also skips any input rows whose "
+            "image_path already appears in the existing output (so images are never re-checked). "
+            "If not set, output_csv is overwritten from scratch."
+        ),
+    )
+    parser.add_argument(
         "--images_root",
         default=None,
         help=(
@@ -84,6 +94,37 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help=(
             "Seconds to wait between checks for new rows when --follow is set."
         ),
+    )
+    parser.add_argument(
+        "--follow_idle_minutes",
+        type=int,
+        default=None,
+        help=(
+            "Optional: when --follow is set, exit automatically after this many minutes "
+            "with no detected changes to the input CSV (mtime/size unchanged). "
+            "If omitted, follow mode runs indefinitely until Ctrl+C."
+        ),
+    )
+    parser.add_argument(
+        "--watch",
+        action="store_true",
+        help=(
+            "Convenience alias for --follow with a 1-minute sampling cadence and an "
+            "idle-exit timeout. This exits when the input CSV has not changed for "
+            "a configurable amount of time."
+        ),
+    )
+    parser.add_argument(
+        "--watch_poll_sec",
+        type=int,
+        default=60,
+        help="Polling cadence in seconds for --watch (default: 60).",
+    )
+    parser.add_argument(
+        "--watch_idle_minutes",
+        type=int,
+        default=20,
+        help="Exit after this many minutes with no input CSV changes in --watch (default: 20).",
     )
     parser.add_argument(
         "--debug-image",
@@ -249,8 +290,16 @@ def main() -> None:
         images_root=images_root,
         new_column=args.new_column,
         llm_batch_size=args.llm_batch_size,
-        follow=args.follow,
-        poll_interval=args.poll_interval,
+        resume=bool(args.resume),
+        follow=bool(args.follow or args.watch),
+        poll_interval=(
+            float(args.watch_poll_sec)
+            if args.watch and float(args.poll_interval) == 5.0
+            else float(args.poll_interval)
+        ),
+        follow_idle_minutes=(
+            int(args.watch_idle_minutes) if args.watch else args.follow_idle_minutes
+        ),
         client=client,
     )
 

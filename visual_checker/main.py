@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 import argparse
 from pathlib import Path
 from functools import lru_cache
 
-from csv_parser import parse_caption_csv
-from llm_client import LLMClient, LLMConfig
+from csv_parser import parse_caption_csv, parse_caption_csv_two_columns_no_header
 
 try:
     from tqdm.auto import tqdm
@@ -178,7 +179,7 @@ def _is_valid_np_lemma(lemma: str) -> bool:
 
 def filter_objects_with_llm(
     object_list: str,
-    llm_client: LLMClient,
+    llm_client,
     filter_template: str,
 ) -> str:
     """
@@ -221,6 +222,36 @@ def filter_objects_with_llm(
             filtered_text = filtered_text[:filtered_text.find(phrase)].strip()
     
     return filtered_text
+
+
+def _build_llm_client_or_die(*, model_name: str, max_new_tokens: int | None = None, temperature: float | None = None):
+    """
+    Lazily import and build the local HF LLM client.
+
+    This keeps torch/transformers as optional runtime deps for modes that don't
+    need an LLM (e.g. --use_noun_phrase_parser).
+    """
+    try:
+        from llm_client import LLMClient, LLMConfig
+    except Exception as e:
+        raise SystemExit(
+            "Failed to import the local LLM backend (torch/transformers).\n\n"
+            f"Original error: {type(e).__name__}: {e}\n\n"
+            "Fix options:\n"
+            "  1) Bypass torch entirely by using:\n"
+            "       --use_noun_phrase_parser\n"
+            "  2) Fix your PyTorch installation in the current env.\n"
+            "     For the specific error `undefined symbol: iJIT_NotifyEvent`, install Intel ITT runtime:\n"
+            "       conda install -y -c conda-forge ittapi\n"
+            "     Or reinstall PyTorch cleanly into the env (recommended) from conda channels.\n"
+        ) from e
+
+    cfg = LLMConfig(model_name=model_name)
+    if max_new_tokens is not None:
+        cfg.max_new_tokens = int(max_new_tokens)
+    if temperature is not None:
+        cfg.temperature = float(temperature)
+    return LLMClient(cfg)
 
 
 def get_objects_from_caption_np(caption: str) -> str:
@@ -486,24 +517,21 @@ def run(
     if output_csv.exists():
         output_csv.unlink()
 
-    llm_client: LLMClient | None
-    filter_llm_client: LLMClient | None = None
+    llm_client = None
+    filter_llm_client = None
     
     if use_noun_phrase_parser:
         # LLM only needed if filtering is enabled
         if filter_with_llm:
             # Use deterministic generation for filtering
             # max_new_tokens will be calculated dynamically based on input list length
-            filter_config = LLMConfig(
+            filter_llm_client = _build_llm_client_or_die(
                 model_name=filter_model_name,
-                max_new_tokens=128,  # Default, but will be overridden dynamically per call
-                temperature=0.0,     # Deterministic output
+                max_new_tokens=128,
+                temperature=0.0,
             )
-            filter_llm_client = LLMClient(filter_config)
-        llm_client = None
     else:
-        llm_config = LLMConfig(model_name=model_name)
-        llm_client = LLMClient(llm_config)
+        llm_client = _build_llm_client_or_die(model_name=model_name)
 
     template = prompt_template or DEFAULT_PROMPT_TEMPLATE
     template_stuff = prompt_template_stuff or DEFAULT_PROMPT_TEMPLATE_STUFF
@@ -551,17 +579,17 @@ def run(
                             template_filter,
                         )
 
-                    # Persist a per-row text file for convenience / debugging
-                    txt_filename = f"objects_{method_suffix}_{row_idx:06d}.txt"
-                    txt_path = output_dir / txt_filename
-                    txt_path.write_text(objects_text, encoding="utf-8")
-
                     result_row = {
                         "image_path": row.image_path,
                         "description": row.description,
                         "objects": objects_text,
                     }
                     writer.writerow(result_row)
+                    # Ensure outputs are visible on disk after each row.
+                    try:
+                        f_out.flush()
+                    except Exception:
+                        pass
 
                     row_end_time = datetime.now()
                     if progress_writer is not None and f_progress is not None:
@@ -626,13 +654,6 @@ def run(
                         )
 
                         for (row_idx, row), merged_text in zip(batch, merged_texts):
-                            # Save merged output to a text file
-                            txt_filename = (
-                                f"objects_and_stuff_{method_suffix}_{row_idx:06d}.txt"
-                            )
-                            txt_path = output_dir / txt_filename
-                            txt_path.write_text(merged_text, encoding="utf-8")
-
                             result_row = {
                                 "image_path": row.image_path,
                                 "description": row.description,
@@ -699,11 +720,6 @@ def run(
                                 else ""
                             )
 
-                            # Persist per-row objects text file
-                            txt_filename = f"objects_{method_suffix}_{row_idx:06d}.txt"
-                            txt_path = output_dir / txt_filename
-                            txt_path.write_text(objects_text, encoding="utf-8")
-
                             result_row = {
                                 "image_path": row.image_path,
                                 "description": row.description,
@@ -718,12 +734,12 @@ def run(
                                 )
                                 result_row["stuff"] = stuff_text
 
-                                # Also save stuff to a separate file
-                                stuff_filename = f"stuff_{row_idx:06d}.txt"
-                                stuff_path = output_dir / stuff_filename
-                                stuff_path.write_text(stuff_text, encoding="utf-8")
-
                             writer.writerow(result_row)
+                            # Ensure outputs are visible on disk after each row.
+                            try:
+                                f_out.flush()
+                            except Exception:
+                                pass
 
                     batch_end_time = datetime.now()
                     progress_bar.update(len(batch))
@@ -763,6 +779,335 @@ def run(
             f_progress.close()
 
 
+def _resolve_image_path_from_dir(images_dir: Path, csv_image_path: str) -> Path:
+    """
+    Resolve an image referenced in a captions CSV to a file inside a flat directory.
+
+    The captions CSV typically contains paths like:
+      Images/London/<name>.jpg
+    but the user provides a directory containing the actual image files (often flat).
+    We therefore match by basename (and try a few common extensions).
+    """
+    images_dir = Path(images_dir)
+    raw = str(csv_image_path).strip()
+    if not raw:
+        return images_dir / ""
+
+    # 0) If CSV already contains an absolute path and it exists, use it.
+    p_raw = Path(raw)
+    if p_raw.is_absolute() and p_raw.is_file():
+        return p_raw
+
+    # 1) If CSV contains a relative path (possibly with subdirectories),
+    # try resolving it under images_dir.
+    # Example:
+    #   images_dir=/mnt/d/data/gsv_cities
+    #   csv_image_path=Images/London/foo.jpg
+    #   => /mnt/d/data/gsv_cities/Images/London/foo.jpg
+    rel_candidate = images_dir / raw.lstrip("/\\")
+    if rel_candidate.is_file():
+        return rel_candidate
+
+    # 2) Fallback: match by basename inside a flat images_dir.
+    base = p_raw.name
+    if not base:
+        return rel_candidate
+
+    candidates: list[Path] = []
+    # 1) Direct basename (keeps original extension)
+    candidates.append(images_dir / base)
+    # 2) Try common extensions by stem
+    stem = Path(base).stem
+    if stem:
+        for ext in (".jpg", ".jpeg", ".png", ".webp"):
+            candidates.append(images_dir / f"{stem}{ext}")
+
+    seen: set[str] = set()
+    for p in candidates:
+        key = str(p)
+        if key in seen:
+            continue
+        seen.add(key)
+        if p.is_file():
+            return p
+
+    # Final fallback: return the most likely path even if missing.
+    #
+    # NOTE: Callers should decide what to do when the returned path does not exist.
+    # In images-dir mode we default to skipping missing images, so we avoid emitting
+    # "made up" paths into the main output CSV.
+    return images_dir / base
+
+
+def run_images_dir_mode(
+    *,
+    images_dir: Path,
+    captions_csv: Path,
+    output_dir: Path,
+    output_csv: Path | None,
+    per_image_timing_csv: Path | None,
+    model_name: str,
+    prompt_template: str | None,
+    prompt_template_stuff: str | None,
+    prompt_template_merged: str | None,
+    use_merged_prompt: bool,
+    generate_stuff: bool,
+    use_noun_phrase_parser: bool,
+    filter_with_llm: bool,
+    filter_model_name: str,
+    filter_prompt_template: str | None,
+    skip_existing_llm: bool = False,
+    include_missing_images: bool = False,
+) -> None:
+    """
+    Work mode:
+    - user provides a directory containing images (often flat, full of .jpg)
+    - user provides a 2-column no-header CSV: <image_path>,<description>
+    Output:
+    - output CSV: full image path (resolved), description, objects (and optional stuff)
+    - timing CSV: per-row duration, status, and resolved image path
+    Both are flushed after each processed row.
+    """
+    import csv
+    import time
+    from datetime import datetime
+
+    images_dir = Path(images_dir)
+    captions_csv = Path(captions_csv)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if output_csv is None:
+        method_suffix = "np" if use_noun_phrase_parser else "llm"
+        if use_noun_phrase_parser and filter_with_llm:
+            method_suffix = "np_filtered"
+        output_csv = captions_csv.with_name(f"{captions_csv.stem}_objects_{method_suffix}_v2.csv")
+
+    if per_image_timing_csv is None:
+        per_image_timing_csv = output_csv.with_name(f"{output_csv.stem}_timings.csv")
+
+    # Optionally skip if this is an LLM run and output already exists.
+    if skip_existing_llm and (not use_noun_phrase_parser) and output_csv.exists():
+        print(f"Skipping because output already exists: {output_csv}")
+        return
+
+    # Always recreate output files to avoid mixing old/new runs.
+    if output_csv.exists():
+        output_csv.unlink()
+    if per_image_timing_csv.exists():
+        per_image_timing_csv.unlink()
+
+    llm_client = None
+    filter_llm_client = None
+
+    if use_noun_phrase_parser:
+        if filter_with_llm:
+            filter_llm_client = _build_llm_client_or_die(
+                model_name=filter_model_name,
+                max_new_tokens=128,
+                temperature=0.0,
+            )
+    else:
+        llm_client = _build_llm_client_or_die(model_name=model_name)
+
+    template = prompt_template or DEFAULT_PROMPT_TEMPLATE
+    template_stuff = prompt_template_stuff or DEFAULT_PROMPT_TEMPLATE_STUFF
+    template_merged = prompt_template_merged or DEFAULT_PROMPT_TEMPLATE_MERGED
+    template_filter = filter_prompt_template or DEFAULT_FILTER_PROMPT_TEMPLATE
+
+    if use_merged_prompt:
+        out_fieldnames = ["image_path", "description", "objects_and_stuff"]
+    else:
+        out_fieldnames = ["image_path", "description", "objects"]
+        if generate_stuff:
+            out_fieldnames.append("stuff")
+
+    timing_fieldnames = [
+        "row_index",
+        "csv_image_path",
+        "resolved_image_path",
+        "image_basename",
+        "start_time",
+        "end_time",
+        "duration_seconds",
+        "status",
+        "error",
+    ]
+
+    # Auto-detect whether captions CSV has a header ("image_path,description,...").
+    # If it does, use the robust DictReader-based parser; otherwise use the
+    # 2-column no-header parser.
+    import csv as _csv
+
+    def _has_header_two_cols(path: Path) -> bool:
+        try:
+            with path.open("r", newline="", encoding="utf-8") as f:
+                r = _csv.reader(f)
+                for row in r:
+                    if not row:
+                        continue
+                    if len(row) < 2:
+                        continue
+                    a = str(row[0]).strip().lower()
+                    b = str(row[1]).strip().lower()
+                    return a == "image_path" and b in {"description", "caption", "text"}
+        except Exception:
+            return False
+        return False
+
+    if _has_header_two_cols(captions_csv):
+        rows_iter = parse_caption_csv(captions_csv)
+    else:
+        rows_iter = parse_caption_csv_two_columns_no_header(captions_csv)
+
+    with output_csv.open("w", newline="", encoding="utf-8") as f_out, per_image_timing_csv.open(
+        "w", newline="", encoding="utf-8"
+    ) as f_time:
+        out_writer = csv.DictWriter(f_out, fieldnames=out_fieldnames)
+        out_writer.writeheader()
+        f_out.flush()
+
+        time_writer = csv.DictWriter(f_time, fieldnames=timing_fieldnames)
+        time_writer.writeheader()
+        f_time.flush()
+
+        for row_idx, row in enumerate(
+            tqdm(rows_iter, desc=f"{captions_csv.name} (images_dir mode)"), start=1
+        ):
+            resolved = _resolve_image_path_from_dir(images_dir, row.image_path)
+            status = "completed"
+            err_msg = ""
+
+            # If the captions CSV contains images from other cities/datasets,
+            # don't fabricate "resolved" paths under --images_dir.
+            if (not include_missing_images) and (not resolved.is_file()):
+                status = "missing_image"
+                time_writer.writerow(
+                    {
+                        "row_index": row_idx,
+                        "csv_image_path": row.image_path,
+                        "resolved_image_path": str(resolved),
+                        "image_basename": resolved.name,
+                        "start_time": "",
+                        "end_time": "",
+                        "duration_seconds": "0.0000",
+                        "status": status,
+                        "error": "",
+                    }
+                )
+                f_time.flush()
+                continue
+
+            start_dt = datetime.now()
+            t0 = time.perf_counter()
+
+            try:
+                if use_noun_phrase_parser:
+                    objects_text = get_objects_from_caption_np(row.description)
+                    if filter_with_llm and filter_llm_client is not None:
+                        objects_text = filter_objects_with_llm(
+                            objects_text,
+                            filter_llm_client,
+                            template_filter,
+                        )
+
+                    out_writer.writerow(
+                        {
+                            "image_path": str(resolved),
+                            "description": row.description,
+                            "objects": objects_text,
+                        }
+                    )
+                    f_out.flush()
+                else:
+                    if llm_client is None:
+                        raise RuntimeError("Internal error: LLM client not initialized.")
+
+                    if use_merged_prompt:
+                        prompt = build_prompt(row.description, template_merged)
+                        max_tokens = _estimate_max_tokens_for_caption(row.description)
+                        merged_text = llm_client.get_objects_from_caption(
+                            prompt, max_new_tokens=max_tokens
+                        )
+                        out_writer.writerow(
+                            {
+                                "image_path": str(resolved),
+                                "description": row.description,
+                                "objects_and_stuff": merged_text,
+                            }
+                        )
+                        f_out.flush()
+                    else:
+                        prompt = build_prompt(row.description, template)
+                        max_tokens = _estimate_max_tokens_for_caption(row.description)
+                        objects_text = llm_client.get_objects_from_caption(
+                            prompt, max_new_tokens=max_tokens
+                        )
+
+                        result_row: dict[str, str] = {
+                            "image_path": str(resolved),
+                            "description": row.description,
+                            "objects": objects_text,
+                        }
+
+                        if generate_stuff:
+                            prompt_s = build_prompt(row.description, template_stuff)
+                            max_tokens_s = _estimate_max_tokens_for_caption(row.description)
+                            stuff_text = llm_client.get_objects_from_caption(
+                                prompt_s, max_new_tokens=max_tokens_s
+                            )
+                            result_row["stuff"] = stuff_text
+
+                        out_writer.writerow(result_row)
+                        f_out.flush()
+
+                if not resolved.is_file():
+                    status = "missing_image"
+            except Exception as e:
+                status = "error"
+                err_msg = f"{type(e).__name__}: {e}"
+                # Still emit a row so downstream tools can keep going.
+                if use_merged_prompt:
+                    out_writer.writerow(
+                        {
+                            "image_path": str(resolved),
+                            "description": row.description,
+                            "objects_and_stuff": "",
+                        }
+                    )
+                else:
+                    fallback_row: dict[str, str] = {
+                        "image_path": str(resolved),
+                        "description": row.description,
+                        "objects": "",
+                    }
+                    if generate_stuff:
+                        fallback_row["stuff"] = ""
+                    out_writer.writerow(fallback_row)
+                f_out.flush()
+
+            end_dt = datetime.now()
+            dur = time.perf_counter() - t0
+
+            time_writer.writerow(
+                {
+                    "row_index": row_idx,
+                    "csv_image_path": row.image_path,
+                    "resolved_image_path": str(resolved),
+                    "image_basename": resolved.name,
+                    "start_time": start_dt.isoformat(timespec="seconds"),
+                    "end_time": end_dt.isoformat(timespec="seconds"),
+                    "duration_seconds": f"{dur:.4f}",
+                    "status": status,
+                    "error": (err_msg[:2000] if err_msg else ""),
+                }
+            )
+            f_time.flush()
+
+    print(f"Wrote output CSV to: {output_csv}")
+    print(f"Wrote per-image timing CSV to: {per_image_timing_csv}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Extract detectable objects and segmentable regions from image captions using an LLM."
@@ -777,6 +1122,40 @@ def main() -> None:
             "Root directory to recursively search for 'cluster_items.csv' files. "
             "For each match, the script will run on that CSV and save the output CSV "
             "next to it."
+        ),
+    )
+    parser.add_argument(
+        "--images_dir",
+        default=None,
+        help=(
+            "Images directory mode: path to a directory full of image files (often flat, e.g. many .jpg). "
+            "Used together with --captions_csv."
+        ),
+    )
+    parser.add_argument(
+        "--captions_csv",
+        default=None,
+        help=(
+            "Images directory mode: path to a NO-HEADER, 2-column CSV:\n"
+            "  <image_path>,<description>\n"
+            "The image filename is taken from the first column basename and resolved inside --images_dir."
+        ),
+    )
+    parser.add_argument(
+        "--include_missing_images",
+        action="store_true",
+        help=(
+            "Images directory mode: process rows even when the referenced image cannot be found under "
+            "--images_dir. When not set (default), missing images are skipped so the output CSV "
+            "only contains real files from --images_dir."
+        ),
+    )
+    parser.add_argument(
+        "--per_image_timing_csv",
+        default=None,
+        help=(
+            "Images directory mode: optional CSV path for per-image timing logs. "
+            "Defaults to <output_csv_stem>_timings.csv next to the output CSV."
         ),
     )
     parser.add_argument(
@@ -975,21 +1354,38 @@ def main() -> None:
             parser.error(
                 "--filter_existing_np only works with object lists from NP parsing."
             )
-    # Validate input sources
-    if (args.input_csv is None) and (args.input_dir is None):
-        parser.error("You must specify either --input_csv or --input_dir.")
-    if (args.input_csv is not None) and (args.input_dir is not None):
-        parser.error("Please specify only one of --input_csv or --input_dir, not both.")
+    # Validate input sources (3 mutually exclusive modes):
+    #   1) --input_csv (headered CSV)
+    #   2) --input_dir (directory scan for cluster_items.csv)
+    #   3) --images_dir + --captions_csv (flat images dir + no-header captions CSV)
+    images_dir_mode = (args.images_dir is not None) or (args.captions_csv is not None)
+    if images_dir_mode:
+        if args.images_dir is None or args.captions_csv is None:
+            parser.error("Images directory mode requires BOTH --images_dir and --captions_csv.")
+        if args.input_csv is not None or args.input_dir is not None:
+            parser.error(
+                "Images directory mode (--images_dir/--captions_csv) cannot be combined with "
+                "--input_csv or --input_dir."
+            )
+        if args.batch_size != 1 and not args.use_noun_phrase_parser:
+            parser.error(
+                "Images directory mode requires --batch_size=1 in LLM mode so output/log files "
+                "can be updated after every image."
+            )
+    else:
+        if (args.input_csv is None) and (args.input_dir is None):
+            parser.error("You must specify either --input_csv, --input_dir, or (--images_dir and --captions_csv).")
+        if (args.input_csv is not None) and (args.input_dir is not None):
+            parser.error("Please specify only one of --input_csv or --input_dir, not both.")
 
     # Filter existing NP CSV mode
     if args.filter_existing_np:
         # Initialize LLM for filtering
-        filter_config = LLMConfig(
+        filter_llm_client = _build_llm_client_or_die(
             model_name=args.filter_model,
             max_new_tokens=128,
             temperature=0.0,
         )
-        filter_llm_client = LLMClient(filter_config)
         template_filter = args.filter_prompt_template or DEFAULT_FILTER_PROMPT_TEMPLATE
         
         if args.input_csv is not None:
@@ -1026,6 +1422,39 @@ def main() -> None:
             print(f"✓ Processed {len(matched_files)} file(s) successfully!")
         
         return  # Exit after processing
+
+    # Images directory mode
+    if images_dir_mode:
+        images_dir = Path(args.images_dir)
+        captions_csv = Path(args.captions_csv)
+        if not images_dir.is_dir():
+            parser.error(f"--images_dir '{images_dir}' is not a directory.")
+        if not captions_csv.is_file():
+            parser.error(f"--captions_csv '{captions_csv}' is not a file.")
+
+        # Output dir defaults: next to captions CSV
+        out_dir = Path(args.output_dir) if args.output_dir is not None else (captions_csv.parent / "objects_debug")
+
+        run_images_dir_mode(
+            images_dir=images_dir,
+            captions_csv=captions_csv,
+            output_dir=out_dir,
+            output_csv=Path(args.output_csv) if args.output_csv else None,
+            per_image_timing_csv=Path(args.per_image_timing_csv) if args.per_image_timing_csv else None,
+            model_name=effective_model,
+            prompt_template=args.prompt_template,
+            prompt_template_stuff=args.prompt_template_stuff,
+            prompt_template_merged=args.prompt_template_merged,
+            use_merged_prompt=args.use_merged_prompt,
+            generate_stuff=args.generate_stuff,
+            use_noun_phrase_parser=args.use_noun_phrase_parser,
+            filter_with_llm=args.filter_with_llm,
+            filter_model_name=args.filter_model,
+            filter_prompt_template=args.filter_prompt_template,
+            skip_existing_llm=args.skip_existing_llm,
+            include_missing_images=args.include_missing_images,
+        )
+        return
 
     # Single CSV mode
     if args.input_csv is not None:
