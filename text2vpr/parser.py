@@ -20,10 +20,10 @@ def parse_arguments():
     # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/nordland/images/test/nordland_predictions.csv")
     # parser.add_argument("--image_root", type=str, default="/mnt/d/data/nordland/images/test")
     
-    # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/pitts30k/images/test/database")    
-    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/pitts30k/images/test/queries")
-    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/pitts30k/images/test/Pittsburgh30K_test_predictions.csv")
-    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/pitts30k/images/test")    
+    parser.add_argument("--database_folder", type=str, default="/mnt/d/data/pitts30k/images/test/database")    
+    parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/pitts30k/images/test/queries")
+    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/pitts30k/images/test/Pittsburgh30K_test_predictions.csv")
+    parser.add_argument("--image_root", type=str, default="/mnt/d/data/pitts30k/images/test")    
     
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/msls/val/database")    
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/msls/val/query")   
@@ -32,9 +32,9 @@ def parse_arguments():
     # #parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text_blur.csv")
     # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text_snow.csv")
 
-    parser.add_argument("--dataset_root", type=str, default="/mnt/d/data/msls_challenge")    
-    parser.add_argument("--image_root", type=str, default="/mnt/d/data/msls_challenge/test")    
-    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls_challenge/test/msls_challenge_predictions.csv")
+    # parser.add_argument("--dataset_root", type=str, default="/mnt/d/data/msls_challenge")    
+    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/msls_challenge/test")    
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls_challenge/test/msls_challenge_predictions.csv")
     
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/gsv_cities/Images")    
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/gsv_cities/Images")

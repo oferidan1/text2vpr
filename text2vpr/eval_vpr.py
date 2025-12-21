@@ -417,7 +417,7 @@ def main(args):
             if args.encode_mode == 'image':
                 all_descriptors = vision_descriptors
                 model.encoder_dim = all_descriptors.shape[1]
-            if args.fusion_type == 'cat':
+            if args.fusion_type == 'cat' or (args.is_dual_encoder and args.dual_encoder_fusion == 'cat'):
                 all_descriptors = np.concatenate((vision_descriptors, text_descriptors), axis=1)
                 model.encoder_dim = all_descriptors.shape[1]
                 logger.info(f"Concatenated descriptors dimension: {model.encoder_dim}")
@@ -467,7 +467,7 @@ def main(args):
         else:
             queries_descriptors = all_descriptors[test_ds.num_database :]
             database_descriptors = all_descriptors[: test_ds.num_database]    
-            logger.info(f"dim database descriptors: {model.encoder_dim}")
+            logger.info(f"dim database descriptors: {all_descriptors.shape[1]}")
             # get queries predictions
             scores, predictions = get_queries_predictions(model.encoder_dim, database_descriptors, all_descriptors, queries_descriptors, max_results)
         
@@ -492,7 +492,7 @@ def main(args):
                 
                 #open eval_vpr_results.csv in append mode and write the recalls
                 with open("eval_vpr_results.csv", "a") as f:
-                    f.write(f"{args.vpr_model_name},{args.fusion_type},{args.vpr_dim},{args.is_pca},{args.encode_mode},{recalls_str}\n")
+                    f.write(f"{args.vpr_model_name},{args.fusion_type},{args.is_text_pooling},{args.vpr_dim},{args.is_pca},{args.encode_mode},{recalls_str}\n")
 
     # Save visualizations of predictions
     if args.num_preds_to_save != 0:
