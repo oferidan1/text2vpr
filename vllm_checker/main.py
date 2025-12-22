@@ -1,0 +1,311 @@
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+# Support both:
+# - `python -m vllm_checker.main ...` (package execution)
+# - `python vllm_checker/main.py ...` (direct script execution)
+if __package__ in (None, ""):  # pragma: no cover
+    # Running as a script: add repo root to sys.path so we can import as a package.
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from vllm_checker.checker import check_csv_with_llm, debug_single_image
+    from vllm_checker.llm_client import build_default_client, OpenAICompatVLMClient, TextOnlyLLMClient
+else:
+    from .checker import check_csv_with_llm, debug_single_image
+    from .llm_client import build_default_client, OpenAICompatVLMClient, TextOnlyLLMClient
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Post-process a sam3_realtime_progress CSV with an LLM that "
+            "answers per-object yes/no questions and adds a new column "
+            "listing objects the LLM still considers missing."
+        )
+    )
+    parser.add_argument(
+        "--input_csv",
+        required=True,
+        help=(
+            "Path to the input sam3_realtime_progress CSV (e.g. "
+            "sam3_realtime_progress.csv)."
+        ),
+    )
+    parser.add_argument(
+        "--output_csv",
+        default=None,
+        help=(
+            "Optional path for the augmented CSV. Defaults to "
+            "<input_stem>_vllm_checked.csv next to the input file."
+        ),
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "If output_csv already exists, append to it and skip rows already written "
+            "(continue from where the output CSV ended). Also skips any input rows whose "
+            "image_path already appears in the existing output (so images are never re-checked). "
+            "If not set, output_csv is overwritten from scratch."
+        ),
+    )
+    parser.add_argument(
+        "--images_root",
+        default=None,
+        help=(
+            "Optional root directory to prepend to each image_path from "
+            "the CSV when constructing the full image path."
+        ),
+    )
+    parser.add_argument(
+        "--new_column",
+        default="objects_vllm_said_no",
+        help=(
+            "Name of the additional column to write with objects that "
+            "the LLM answered 'no' for."
+        ),
+    )
+    parser.add_argument(
+        "--llm_batch_size",
+        type=int,
+        default=1,
+        help=(
+            "Maximum number of objects to send to the LLM in a single batch. "
+            "Use a value > 1 to enable batched LLM calls."
+        ),
+    )
+    parser.add_argument(
+        "--follow",
+        action="store_true",
+        help=(
+            "Keep watching the input CSV for new rows being appended and "
+            "process them as they appear (similar to `tail -f`). Use Ctrl+C "
+            "to stop."
+        ),
+    )
+    parser.add_argument(
+        "--poll_interval",
+        type=float,
+        default=5.0,
+        help=(
+            "Seconds to wait between checks for new rows when --follow is set."
+        ),
+    )
+    parser.add_argument(
+        "--follow_idle_minutes",
+        type=int,
+        default=None,
+        help=(
+            "Optional: when --follow is set, exit automatically after this many minutes "
+            "with no detected changes to the input CSV (mtime/size unchanged). "
+            "If omitted, follow mode runs indefinitely until Ctrl+C."
+        ),
+    )
+    parser.add_argument(
+        "--watch",
+        action="store_true",
+        help=(
+            "Convenience alias for --follow with a 1-minute sampling cadence and an "
+            "idle-exit timeout. This exits when the input CSV has not changed for "
+            "a configurable amount of time."
+        ),
+    )
+    parser.add_argument(
+        "--watch_poll_sec",
+        type=int,
+        default=60,
+        help="Polling cadence in seconds for --watch (default: 60).",
+    )
+    parser.add_argument(
+        "--watch_idle_minutes",
+        type=int,
+        default=20,
+        help="Exit after this many minutes with no input CSV changes in --watch (default: 20).",
+    )
+    parser.add_argument(
+        "--debug-image",
+        default=None,
+        help=(
+            "Debug mode: process only the row with this image_path value "
+            "(as it appears in the CSV). Prints results to stdout without "
+            "creating an output CSV."
+        ),
+    )
+    parser.add_argument(
+        "--local_model",
+        default=None,
+        help=(
+            "Optional: override the local HuggingFace model to load (only applies when NOT using "
+            "--openai_base_url). Example: Qwen/Qwen2-VL-2B-Instruct"
+        ),
+    )
+    parser.add_argument(
+        "--progress",
+        action="store_true",
+        help="Print lightweight progress stages during model init/inference (sets VLLM_PROGRESS=1).",
+    )
+    parser.add_argument(
+        "--openai_base_url",
+        default=None,
+        help=(
+            "Optional: use an OpenAI-compatible HTTP VLM backend (e.g. vLLM in OpenAI mode). "
+            "Example: http://localhost:8000 . If provided, this is used instead of the local "
+            "HuggingFace backend (which requires torch/transformers)."
+        ),
+    )
+    parser.add_argument(
+        "--openai_model",
+        default=None,
+        help=(
+            "Optional model name for the OpenAI-compatible backend. "
+            "If omitted, the backend default is used (or OPENAI_MODEL env var)."
+        ),
+    )
+    parser.add_argument(
+        "--openai_api_key",
+        default=None,
+        help=(
+            "Optional API key for OpenAI-compatible backend. If omitted, OPENAI_API_KEY is used, "
+            "otherwise 'EMPTY'."
+        ),
+    )
+    parser.add_argument(
+        "--openai_timeout_s",
+        type=float,
+        default=None,
+        help=(
+            "HTTP timeout in seconds for the OpenAI-compatible backend (connect + read). "
+            "If omitted, uses the default (120s) or OPENAI_TIMEOUT_S env var."
+        ),
+    )
+    parser.add_argument(
+        "--openai_max_retries",
+        type=int,
+        default=None,
+        help=(
+            "Max retries for transient OpenAI-compatible HTTP failures. "
+            "If omitted, uses the default (2) or OPENAI_MAX_RETRIES env var."
+        ),
+    )
+    parser.add_argument(
+        "--openai_retry_backoff_s",
+        type=float,
+        default=None,
+        help=(
+            "Retry backoff base (seconds). Actual sleeps are backoff * 2^attempt. "
+            "If omitted, uses the default (1.0) or OPENAI_RETRY_BACKOFF_S env var."
+        ),
+    )
+    parser.add_argument(
+        "--log_llm_io",
+        action="store_true",
+        help=(
+            "Debug: log each VLM prompt + raw output to vllm_checker/outs/llm_io_log.csv "
+            "(enable with VLLM_LOG_IO=1 under the hood)."
+        ),
+    )
+    return parser
+
+
+def _ts() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def main() -> None:
+    parser = build_arg_parser()
+    args = parser.parse_args()
+
+    import os
+
+    if args.progress:
+        os.environ["VLLM_PROGRESS"] = "1"
+
+    if args.log_llm_io:
+        os.environ["VLLM_LOG_IO"] = "1"
+
+    if args.local_model:
+        # Used by build_default_client() for the local HF backend.
+        os.environ["VLLM_HF_MODEL"] = str(args.local_model)
+
+    # If user specified OpenAI-compatible backend via CLI args, set env vars that
+    # `build_default_client()` already respects.
+    if args.openai_base_url:
+        os.environ["OPENAI_BASE_URL"] = str(args.openai_base_url)
+        if args.openai_model:
+            os.environ["OPENAI_MODEL"] = str(args.openai_model)
+        if args.openai_api_key:
+            os.environ["OPENAI_API_KEY"] = str(args.openai_api_key)
+        if args.openai_timeout_s is not None:
+            os.environ["OPENAI_TIMEOUT_S"] = str(args.openai_timeout_s)
+        if args.openai_max_retries is not None:
+            os.environ["OPENAI_MAX_RETRIES"] = str(args.openai_max_retries)
+        if args.openai_retry_backoff_s is not None:
+            os.environ["OPENAI_RETRY_BACKOFF_S"] = str(args.openai_retry_backoff_s)
+
+    input_csv = Path(args.input_csv).resolve()
+    images_root = Path(args.images_root).resolve() if args.images_root else None
+
+    # Debug mode: process a single image and print results
+    if args.debug_image:
+        # Build client after enabling debug mode so any backend logs show up.
+        os.environ["VLLM_DEBUG"] = "1"
+        print(f"[{_ts()}] [main] Building LLM client (may load model)...", flush=True)
+        t0 = time.time()
+        client = build_default_client()
+        print(f"[{_ts()}] [main] LLM client ready (took {time.time() - t0:.1f}s)", flush=True)
+        debug_single_image(
+            input_csv=input_csv,
+            target_image_path=args.debug_image,
+            images_root=images_root,
+            client=client,
+        )
+        return
+
+    # Normal mode: process entire CSV
+    output_csv = Path(args.output_csv).resolve() if args.output_csv else None
+
+    # Build the client once (so we fail fast if the backend is unreachable) and
+    # reuse it for the full run.
+    print(f"[{_ts()}] [main] Building LLM client (may load model)...", flush=True)
+    t0 = time.time()
+    client = build_default_client()
+    print(f"[{_ts()}] [main] LLM client ready (took {time.time() - t0:.1f}s)", flush=True)
+    # Print what backend is being used + CPU/GPU if local.
+    if isinstance(client, OpenAICompatVLMClient):
+        print(f"LLM backend: openai_compat_http (base_url={client.config.base_url}, model={client.config.model})")
+    elif isinstance(client, TextOnlyLLMClient):
+        dev = getattr(client, "_device", None)
+        dev_str = str(dev) if dev is not None else "unknown"
+        accel = "GPU" if "cuda" in dev_str.lower() else "CPU"
+        print(f"LLM backend: local_hf (model={client.config.model_name}, device={dev_str} => {accel})")
+    else:
+        print(f"LLM backend: {type(client).__name__}")
+    final_path = check_csv_with_llm(
+        input_csv=input_csv,
+        output_csv=output_csv,
+        images_root=images_root,
+        new_column=args.new_column,
+        llm_batch_size=args.llm_batch_size,
+        resume=bool(args.resume),
+        follow=bool(args.follow or args.watch),
+        poll_interval=(
+            float(args.watch_poll_sec)
+            if args.watch and float(args.poll_interval) == 5.0
+            else float(args.poll_interval)
+        ),
+        follow_idle_minutes=(
+            int(args.watch_idle_minutes) if args.watch else args.follow_idle_minutes
+        ),
+        client=client,
+    )
+
+    print(f"Wrote LLM-checked CSV to: {final_path}")
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()
+
