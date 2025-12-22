@@ -33,14 +33,15 @@ def parse_arguments():
     parser.add_argument("--fusion_type", type=str, default='none', help="type of fusion to use: mlp, add, transformer, dynamic_weighting, fixed_weighting, text_adapter")
     parser.add_argument("--is_encode_image", type=int, default="1", help="encode image or not")
     parser.add_argument("--is_encode_text", type=int, default="1", help="encode text or not")
-    parser.add_argument("--is_text_pooling", type=int, default="0", help="pool text or not")
-    parser.add_argument("--is_image_pooling", type=int, default="0", help="pool image or not")
+    parser.add_argument("--is_text_pooling", type=int, default="1", help="pool text or not")
+    parser.add_argument("--is_image_pooling", type=int, default="1", help="pool image or not")
     parser.add_argument("--is_pca", type=int, default="0", help="pool image or not")
     parser.add_argument("--is_trainable_text_encoder", type=int, default="0", help="train text encoder or not")
     parser.add_argument("--batch_size", type=int, default="120", help="batch size for training")
     parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss_Sij", help="name of the loss function to use")
     #parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss", help="name of the loss function to use")
-    parser.add_argument("--cross_modal", type=int, default="2", help="cross modal 0=no/1=blip orig/2=our model")    
+    parser.add_argument("--cross_modal", type=int, default="0", help="cross modal 0=no/1=blip orig/2=our model")    
+    parser.add_argument("--is_reranking", type=int, default="0", help="reranking 0=no/1=yes")
 
     args = parser.parse_args()
     
@@ -118,6 +119,7 @@ if __name__ == '__main__':
         is_image_pooling=args.is_image_pooling,
         is_pca=args.is_pca,
         cross_modal=args.cross_modal,
+        is_reranking=args.is_reranking,
     )
     
     # if args.is_encode_image and  args.vpr_resume_model is not None:

@@ -368,7 +368,7 @@ def main(args):
     max_results = max(args.recall_values)
     query_index = 0
 
-    logger.info(f"VPR dimension: {model.vpr_encoder_dim}, text dimension: {model.text_encoder_dim}, fusion type: {args.fusion_type}")
+    logger.info(f"VPR dimension: {model.vpr_encoder_dim}, text dimension: {model.text_encoder_dim}, fusion type: {args.fusion_type}, is text pooling: {args.is_text_pooling}, is dual encoder: {args.is_dual_encoder}")
 
     with torch.inference_mode():
         logger.debug("Extracting database descriptors for evaluation/testing")

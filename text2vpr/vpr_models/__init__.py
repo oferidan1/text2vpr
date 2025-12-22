@@ -61,5 +61,9 @@ def get_model(method, backbone=None, descriptors_dimension=None):
 
     elif method == "dinomix":
         model = dinomix.get_dino_mix()
+        
+    elif method == "dinov2":
+        model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14')
+        #model = ResizingWrapper(model, resize_type=224)
 
     return model

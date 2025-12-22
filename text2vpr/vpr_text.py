@@ -59,6 +59,7 @@ class VPR_Text_Model(pl.LightningModule):
                 is_pca=False,
                 is_orig_desc_mining=False,
                 cross_modal=0,
+                is_reranking=False,
                  ):
         super().__init__()
         
@@ -87,6 +88,7 @@ class VPR_Text_Model(pl.LightningModule):
         self.is_pca = is_pca
         self.is_orig_desc_mining = is_orig_desc_mining
         self.cross_modal = cross_modal
+        self.is_reranking = is_reranking
         
         self.save_hyperparameters() # write hyperparams into a file
         
@@ -114,10 +116,10 @@ class VPR_Text_Model(pl.LightningModule):
                 self.image_pooling = CLSReweightingPooler(self.vpr_encoder_dim)
                 
             if self.cross_modal:
-                #self.vpr_proj = nn.Linear(self.vpr_encoder_dim, embeds_dim)
-                #self.text_proj = nn.Linear(text_encoder_dim, embeds_dim)                
-                self.vpr_proj = nn.Sequential(nn.Linear(self.vpr_encoder_dim, self.vpr_encoder_dim), nn.ReLU(), nn.Linear(self.vpr_encoder_dim, embeds_dim))
-                self.text_proj = nn.Sequential(nn.Linear(text_encoder_dim, text_encoder_dim), nn.ReLU(), nn.Linear(text_encoder_dim, embeds_dim))           
+                self.vpr_proj = nn.Linear(self.vpr_encoder_dim, embeds_dim)
+                self.text_proj = nn.Linear(text_encoder_dim, embeds_dim)                
+                # self.vpr_proj = nn.Sequential(nn.Linear(self.vpr_encoder_dim, self.vpr_encoder_dim), nn.ReLU(), nn.Linear(self.vpr_encoder_dim, embeds_dim))
+                # self.text_proj = nn.Sequential(nn.Linear(text_encoder_dim, text_encoder_dim), nn.ReLU(), nn.Linear(text_encoder_dim, embeds_dim))           
                 
             elif self.fusion_type == 'transformer':
                 self.vpr_adapter = nn.Linear(256, embeds_dim)  # mix vpr dim embedding
@@ -154,7 +156,7 @@ class VPR_Text_Model(pl.LightningModule):
         self.apply(self._init_weights)
         
         # initialize the vpr encoder and text encoder
-        if is_encode_image:
+        if is_encode_image:            
             if 'blip' in vpr_model_name:
                 self.vpr_encoder = BlipForImageTextRetrievalWrapper.from_pretrained(vpr_model_name)
                 self.processor = BlipProcessor.from_pretrained(vpr_model_name)
@@ -225,6 +227,10 @@ class VPR_Text_Model(pl.LightningModule):
                 if 'blip' in self.vpr_model_name:
                     img_embeds_all = self.vpr_encoder.encode_image(img)
                     img_embeds = img_embeds_all[:,0]
+                if 'dinov2' in self.vpr_model_name:
+                    vpr_ret = self.vpr_encoder(img, is_training=True)    
+                    img_embeds_all = vpr_ret['x_norm_patchtokens']
+                    img_embeds = vpr_ret['x_norm_clstoken']                             
                 else:
                     img_embeds = self.vpr_encoder(img)             
                 # if self.is_pca:
@@ -442,7 +448,7 @@ class VPR_Text_Model(pl.LightningModule):
                 miner_outputs = self.miner(orig_descriptors, labels)     
             else:
                 miner_outputs = self.miner(descriptors, labels)     
-                
+
             # if w is None:
             #     loss = self.loss_fn(descriptors, labels, miner_outputs)
             # else:
