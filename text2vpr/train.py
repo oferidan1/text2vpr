@@ -42,6 +42,7 @@ def parse_arguments():
     #parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss", help="name of the loss function to use")
     parser.add_argument("--cross_modal", type=int, default="0", help="cross modal 0=no/1=blip orig/2=our model")    
     parser.add_argument("--is_reranking", type=int, default="0", help="reranking 0=no/1=yes")
+    parser.add_argument("--is_val", type=int, default="1", help="run validation 0=no/1=yes")
 
     args = parser.parse_args()
     
@@ -58,6 +59,10 @@ if __name__ == '__main__':
     if 'blip' in args.vpr_model_name.lower():
         dataset_mean_std = BLIP_MEAN_STD
         image_size = 384
+    
+    val_set_names = []
+    if args.is_val:
+        val_set_names = ['pitts30k_val']    
         
     datamodule = GSVCitiesDataModule(
         batch_size=args.batch_size,
@@ -70,8 +75,7 @@ if __name__ == '__main__':
         show_data_stats=True,
         mean_std=dataset_mean_std,
         #val_set_names=['pitts30k_val', 'pitts30k_test', 'msls_val'], # pitts30k_val, pitts30k_test, msls_val
-        val_set_names=['pitts30k_test'],
-        #val_set_names=[],
+        val_set_names=val_set_names,
         train_image_root=args.image_root,
         train_csv=args.train_csv
     )
@@ -128,24 +132,26 @@ if __name__ == '__main__':
         
     model = model.to('cuda')
     
-    # model params saving using Pytorch Lightning
-    # we save the best 3 models accoring to Recall@1 on pittsburg val
-    checkpoint_cb = ModelCheckpoint(
-        monitor='pitts30k_test/R1',
-        filename=f'{"resnet50"}' +
-        '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_test/R1:.4f}]_R5[{pitts30k_test/R5:.4f}]',
-        auto_insert_metric_name=False,
-        save_weights_only=True,
-        save_top_k=3,
-        mode='max',)
-    # checkpoint_cb = ModelCheckpoint(        
-    #     filename=f'{"resnet50"}' +
-    #     '_epoch({epoch:02d})_step({step:04d})',
-    #     auto_insert_metric_name=False,
-    #     save_weights_only=True,
-    #     save_top_k=-1,
-    #     every_n_epochs=1,
-    #     mode='max',)
+    if args.is_val:    
+        # model params saving using Pytorch Lightning
+        # we save the best 3 models accoring to Recall@1 on pittsburg val
+        checkpoint_cb = ModelCheckpoint(
+            monitor='pitts30k_test/R1',
+            filename=f'{"resnet50"}' +
+            '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_test/R1:.4f}]_R5[{pitts30k_test/R5:.4f}]',
+            auto_insert_metric_name=False,
+            save_weights_only=True,
+            save_top_k=3,
+            mode='max',)
+    else
+        checkpoint_cb = ModelCheckpoint(        
+            filename=f'{"resnet50"}' +
+            '_epoch({epoch:02d})_step({step:04d})',
+            auto_insert_metric_name=False,
+            save_weights_only=True,
+            save_top_k=-1,
+            every_n_epochs=1,
+            mode='max',)
 
     #------------------
     # we instanciate a trainer
