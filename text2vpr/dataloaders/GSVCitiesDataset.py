@@ -19,9 +19,9 @@ TRAIN_CSV = '/mnt/d/data/gsv_cities/gsv_cities_predictions.csv'
 # BASE_PATH = 'd:/data/gsv_cities/'
 # TRAIN_CSV = 'd:/data/gsv_cities/gsv_cities_predictions.csv'
 
-if not Path(BASE_PATH).exists():
-    raise FileNotFoundError(
-        'BASE_PATH is hardcoded, please adjust to point to gsv_cities')
+# if not Path(BASE_PATH).exists():
+#     raise FileNotFoundError(
+#         'BASE_PATH is hardcoded, please adjust to point to gsv_cities')
 
 class GSVCitiesDataset(Dataset):
     def __init__(self,
