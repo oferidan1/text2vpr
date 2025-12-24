@@ -143,7 +143,7 @@ if __name__ == '__main__':
             save_weights_only=True,
             save_top_k=3,
             mode='max',)
-    else
+    else:
         checkpoint_cb = ModelCheckpoint(        
             filename=f'{"resnet50"}' +
             '_epoch({epoch:02d})_step({step:04d})',

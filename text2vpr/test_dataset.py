@@ -64,6 +64,7 @@ class TestDataset(data.Dataset):
         super().__init__()
 
         self.images_paths_csv, self.descriptions = read_csv_file(csv_path, image_root)
+        self.image_root = image_root
 
         #loop over images_paths_csv. if path contains database_folder, add to database_paths
         #self.database_paths = read_images_paths(database_folder)        

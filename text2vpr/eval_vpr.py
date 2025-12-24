@@ -100,6 +100,20 @@ def standarize_scores(text_scores, vision_scores, vpr_dim, vpr_model):
     return text_scores, vision_scores
 
 
+def rerank_predictions_by_text(vision_scores, vision_predictions, text_scores, text_predictions, max_results):
+    #get max_results of vision predictions and sort these ids by their text scores
+    top_vision_ids = vision_predictions[:, :100]
+    # filter  top_vision_ids from text predictions     
+    top_text_predictions = np.take_along_axis(text_predictions, top_vision_ids, axis=1)
+    top_text_scores = np.take_along_axis(text_scores, top_vision_ids, axis=1)
+    # #sort top_text_scores and return their indices from highest to lowest
+    text_indices = np.argsort(-top_text_scores, axis=1)
+    # #get the final predictions
+    final_predictions = np.take_along_axis(top_text_predictions, text_indices, axis=1)
+    final_scores = np.take_along_axis(top_text_scores, text_indices, axis=1)
+    return final_scores, final_predictions
+
+
 def rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, is_normalize, vision_scores_ref=None):
     # sum scores according the where vision and text predictions are the same
     combined_scores = []
@@ -445,10 +459,12 @@ def main(args):
             vision_scores, vision_predictions = get_queries_predictions(model.vpr_encoder_dim, vision_database_descriptors, vision_descriptors, vision_queries_descriptors, max_results_reranking)
             # text
             text_queries_descriptors = text_descriptors[test_ds.num_database :]
-            text_database_descriptors = text_descriptors[: test_ds.num_database]    
+            text_database_descriptors = text_descriptors[: test_ds.num_database]                
             text_scores, text_predictions = get_queries_predictions(model.text_encoder_dim, text_database_descriptors, text_descriptors, text_queries_descriptors, max_results_reranking)
+            if args.rerank_by_text:
+                scores, predictions = rerank_predictions_by_text(vision_scores, vision_predictions, text_scores, text_predictions, max_results)
             # join vision and text predictions        
-            if args.rerank_by_scores:
+            elif args.rerank_by_scores:
                 if args.is_ref_model:
                     ref_vision_queries_descriptors = ref_vision_descriptors[test_ds.num_database :]
                     ref_vision_database_descriptors = ref_vision_descriptors[: test_ds.num_database]    
