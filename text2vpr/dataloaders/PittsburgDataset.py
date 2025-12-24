@@ -20,9 +20,9 @@ root_dir = '/mnt/d/data/amstertime/test'
 images_root = '/mnt/d/data/amstertime/test'
 csv_path = '/mnt/d/data/amstertime/test/amstertime_test_predictions.csv'
 
-if not exists(root_dir):
-    raise FileNotFoundError(
-        'root_dir is hardcoded, please adjust to point to Pittsburgh dataset')
+# if not exists(root_dir):
+#     raise FileNotFoundError(
+#         'root_dir is hardcoded, please adjust to point to Pittsburgh dataset')
 
 struct_dir = join(root_dir, 'datasets/')
 queries_dir = join(root_dir, 'queries_real')
