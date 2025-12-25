@@ -25,6 +25,8 @@ def parse_arguments():
     parser.add_argument("--gpu", type=str, default='1', help="gpu id(s) to use")    
     parser.add_argument("--train_csv", type=str, default="/mnt/d/data/gsv_cities/gsv_cities_predictions.csv")    
     parser.add_argument("--image_root", type=str, default="/mnt/d/data/gsv_cities/", help="root directory for images")
+    parser.add_argument("--val_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")    
+    parser.add_argument("--val_image_root", type=str, default="/mnt/d/data/amstertime/test", help="root directory for images")
     parser.add_argument("--text_encoder", type=str, default="BAAI/bge-large-en-v1.5", help="text encoder model name")
     parser.add_argument("--is_freeze_text", type=int, default="1", help="freeze text encoder or not")
     parser.add_argument("--is_freeze_vpr", type=int, default="1", help="freeze vpr encoder or not")    
@@ -77,7 +79,9 @@ if __name__ == '__main__':
         #val_set_names=['pitts30k_val', 'pitts30k_test', 'msls_val'], # pitts30k_val, pitts30k_test, msls_val
         val_set_names=val_set_names,
         train_image_root=args.image_root,
-        train_csv=args.train_csv
+        train_csv=args.train_csv,
+        val_image_root=args.val_image_root,
+        val_csv=args.val_csv,
     )
 
     if args.fusion_type == 'text_adapter':

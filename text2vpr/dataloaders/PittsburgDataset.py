@@ -36,6 +36,9 @@ def input_transform(image_size=None):
     ])
 
 
+def get_whole_val_set_with_dir(input_transform, image_dir, csv_file):
+    structFile = join(struct_dir, 'pitts30k_val.mat')
+    return WholeDatasetFromStruct(structFile, input_transform=input_transform, image_root=image_dir, csv_path=csv_file)
 
 def get_whole_val_set(input_transform):
     structFile = join(struct_dir, 'pitts30k_val.mat')
@@ -146,7 +149,7 @@ def read_images_paths(dataset_folder):
     return images_paths
 
 class WholeDatasetFromStruct(data.Dataset):
-    def __init__(self, structFile, input_transform=None, onlyDB=False):
+    def __init__(self, structFile, input_transform=None, onlyDB=False, image_root=None, csv_path=None):
         super().__init__()
 
         self.input_transform = input_transform
@@ -165,7 +168,7 @@ class WholeDatasetFromStruct(data.Dataset):
         #copy_image_list(db)
         #copy_image_list(q)
         
-        self.image_path, self.description, self.image_path_database, self.image_path_queries = WholeDatasetFromStruct.read_csv_file(csv_path, images_root)        
+        self.image_path, self.description, self.image_path_database, self.image_path_queries = WholeDatasetFromStruct.read_csv_file(csv_path, image_root)        
         self.num_db = len(self.image_path_database)
         self.num_queries = len(self.image_path_queries)
         

@@ -61,6 +61,8 @@ class GSVCitiesDataModule(pl.LightningDataModule):
                  val_set_names=['pitts30k_val', 'msls_val'],
                  train_image_root=None,
                  train_csv=None,
+                 val_image_root=None,
+                 val_csv=None,
                  ):
         super().__init__()
         self.batch_size = batch_size
@@ -78,6 +80,8 @@ class GSVCitiesDataModule(pl.LightningDataModule):
         self.val_set_names = val_set_names
         self.train_image_root = train_image_root
         self.train_csv = train_csv
+        self.val_image_root = val_image_root
+        self.val_csv = val_csv
         self.save_hyperparameters() # save hyperparameter with Pytorch Lightening
 
         self.train_transform = T.Compose([
@@ -120,8 +124,8 @@ class GSVCitiesDataModule(pl.LightningDataModule):
                     self.val_datasets.append(PittsburgDataset.get_whole_test_set(
                         input_transform=self.valid_transform))
                 elif valid_set_name.lower() == 'pitts30k_val':
-                    self.val_datasets.append(PittsburgDataset.get_whole_val_set(
-                        input_transform=self.valid_transform))
+                    self.val_datasets.append(PittsburgDataset.get_whole_val_set_with_dir(
+                        input_transform=self.valid_transform, image_dir=self.val_image_root, csv_file=self.val_csv))
                 elif valid_set_name.lower() == 'msls_val':
                     self.val_datasets.append(MapillaryDataset.MSLS(
                         input_transform=self.valid_transform))
