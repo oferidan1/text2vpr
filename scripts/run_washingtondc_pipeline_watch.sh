@@ -37,6 +37,34 @@ DETACH="${DETACH:-0}" # if 1, start all steps and exit immediately (like running
 mkdir -p "${OUT_DIR}"
 
 ts() { date -Iseconds; }
+
+prepare_log_path() {
+  # Some Windows/WSL mounts can intermittently fail creating certain filenames.
+  # Ensure each log path is writable; if not, fall back to /tmp.
+  local label="$1"
+  local path="$2"
+  local fallback_dir="/tmp/text2vpr_pipeline_logs/${CITY}"
+  mkdir -p "${fallback_dir}" 2>/dev/null || true
+
+  if ( : > "${path}" ) 2>/dev/null; then
+    echo "${path}"
+    return 0
+  fi
+
+  local base
+  base="$(basename "${path}")"
+  local fallback_path="${fallback_dir}/${base}"
+  if ( : > "${fallback_path}" ) 2>/dev/null; then
+    echo "[pipeline] WARN: cannot write ${label} log at: ${path}" >&2
+    echo "[pipeline] WARN: using fallback log at: ${fallback_path}" >&2
+    echo "${fallback_path}"
+    return 0
+  fi
+
+  echo "[pipeline] ERROR: cannot write ${label} log at: ${path} (and fallback failed: ${fallback_path})" >&2
+  echo "[pipeline] ERROR: Check permissions/mount health for ${OUT_DIR} (WSL drvfs can be flaky); try moving outputs to the Linux filesystem." >&2
+  return 1
+}
 log_cmd() {
   # Usage: log_cmd "label" cmd arg1 arg2...
   local label="$1"
@@ -55,8 +83,13 @@ echo "[pipeline] out:  ${OUT_DIR}"
 echo "[pipeline] watch_poll_sec=${WATCH_POLL_SEC}, watch_idle_minutes=${WATCH_IDLE_MIN}"
 echo ""
 
+COMMANDS_LOG="$(prepare_log_path "commands" "${COMMANDS_LOG}")"
+STEP1_LOG="$(prepare_log_path "step1" "${STEP1_LOG}")"
+STEP2_LOG="$(prepare_log_path "step2" "${STEP2_LOG}")"
+STEP3_LOG="$(prepare_log_path "step3" "${STEP3_LOG}")"
+
 echo "[pipeline] Writing command log to: ${COMMANDS_LOG}"
-: > "${COMMANDS_LOG}"
+log_cmd "pipeline_boot" echo "logs:" "${STEP1_LOG}" "${STEP2_LOG}" "${STEP3_LOG}"
 
 echo "[pipeline] Step 1/3: visual_checker (writes objects CSV incrementally)"
 CMD_STEP1=(
