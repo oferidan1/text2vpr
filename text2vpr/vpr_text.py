@@ -444,17 +444,20 @@ class VPR_Text_Model(pl.LightningModule):
         
         # we mine the pairs/triplets if there is an online mining strategy
         if self.miner is not None:
-            # if w is None and text_embeds is not None:
-            #     miner_outputs = self.miner(descriptors, labels, ref_emb=text_embeds, ref_labels=labels)     
-            if self.is_orig_desc_mining:
-                miner_outputs = self.miner(orig_descriptors, labels)     
+            if self.cross_modal:            
+                ref_labels = labels.clone()
+                miner_outputs = self.miner(descriptors, labels, ref_emb=text_embeds, ref_labels=ref_labels)     
+                loss = self.loss_fn(descriptors, labels, indices_tuple=miner_outputs, ref_emb=text_embeds, ref_labels=ref_labels)
             else:
                 miner_outputs = self.miner(descriptors, labels)     
-
-            # if w is None:
-            #     loss = self.loss_fn(descriptors, labels, miner_outputs)
+                loss = self.loss_fn(descriptors, labels, miner_outputs, embeds2=text_embeds, w=w)
+            
+            # if self.is_orig_desc_mining:
+            #     miner_outputs = self.miner(orig_descriptors, labels)     
             # else:
-            loss = self.loss_fn(descriptors, labels, miner_outputs, embeds2=text_embeds, w=w)
+            #     miner_outputs = self.miner(descriptors, labels)     
+
+            
                 
             # if 'blip' in self.vpr_model_name:
             #     image_loss = self.mse_loss(descriptors, orig_descriptors)
