@@ -198,7 +198,7 @@ class VPR_Text_Model(pl.LightningModule):
                 self.text_encoder = get_peft_model(self.text_encoder, lora_config)
                 # self.text_adapter = nn.Linear(1024, 256)
                 # text_encoder_dim = 256
-            else:
+            elif is_freeze_text:
                 self.text_encoder.eval()        
 
 
