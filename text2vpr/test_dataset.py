@@ -63,7 +63,7 @@ class TestDataset(data.Dataset):
         """
         super().__init__()
 
-        self.images_paths_csv, self.descriptions = read_csv_file(csv_path, image_root)
+        self.images_paths_csv, self.descriptions = self.read_csv_file(csv_path, image_root)
         self.image_root = image_root
 
         #loop over images_paths_csv. if path contains database_folder, add to database_paths
@@ -152,20 +152,18 @@ class TestDataset(data.Dataset):
         return f"< #queries: {self.num_queries}; #database: {self.num_database} >"
     
     def get_positives(self):
-        return self.positives_per_query
+        return self.positives_per_query   
 
-    
-@staticmethod
-def read_csv_file(labels_file, image_root):    
-    df = pd.read_csv(labels_file, 
-        engine='python',  # Use python engine for better path handling
-        encoding='utf-8',
-        on_bad_lines='skip',
-        quotechar='"',
-        skipinitialspace=True)
-    image_path = df['image_path'].values
-    description = df['description'].values    
-    image_path = [os.path.join(image_root, p) for p in image_path]
-    return image_path, description
+    def read_csv_file(self, labels_file, image_root):    
+        df = pd.read_csv(labels_file, 
+            engine='python',  # Use python engine for better path handling
+            encoding='utf-8',
+            on_bad_lines='skip',
+            quotechar='"',
+            skipinitialspace=True)
+        image_path = df['image_path'].values
+        description = df['description'].values    
+        image_path = [os.path.join(image_root, p) for p in image_path]
+        return image_path, description
         
     
