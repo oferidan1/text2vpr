@@ -94,7 +94,7 @@ def parse_arguments():
     parser.add_argument("--vpr_model_backbone", type=str, default="ResNet50")
     parser.add_argument("--text_model_name", type=str, default="BAAI/bge-large-en-v1.5")
     parser.add_argument("--lora_path", type=str, default=None)    
-    parser.add_argument("--is_dual_encoder", type=int, default="1", help="is dual encoder")    
+    parser.add_argument("--is_dual_encoder", type=int, default="0", help="is dual encoder")    
     parser.add_argument("--dual_encoder_fusion", type=str, default="each", help="cat/each")    
     parser.add_argument("--encode_mode", type=str, default="both", help="both/image/text")   
     parser.add_argument("--fusion_type", type=str, default='none', help="type of fusion to use: mlp, add, transformer, dynamic_weighting, fixed_weighting, text_adapter")

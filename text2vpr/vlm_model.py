@@ -64,15 +64,17 @@ class VLM_Model:
                 is_text_pooling=args.is_text_pooling,
                 is_image_pooling=args.is_image_pooling,
             )
-            
-            model_state_dict = torch.load(args.model_name)['state_dict']
-            self.single_encoder.load_state_dict(model_state_dict)
+
+            if args.lora_path is not None:
+                print("loading lora from:", args.lora_path)
+                self.single_encoder.text_encoder = peft.PeftModel.from_pretrained(self.single_encoder.text_encoder, args.lora_path, is_trainable=False)            
+            else:            
+                model_state_dict = torch.load(args.model_name)['state_dict']
+                self.single_encoder.load_state_dict(model_state_dict)
             
             # #not sure why, text encoder weight are bad
             # self.single_encoder.text_encoder = AutoModel.from_pretrained(args.text_model_name)            
-            # if  args.lora_path is not None:
-            #     print("loading lora from:", args.lora_path)
-            #     self.single_encoder.text_encoder = peft.PeftModel.from_pretrained(self.single_encoder.text_encoder, args.lora_path, is_trainable=False)            
+            
             
             self.single_encoder = self.single_encoder.to(args.device)
             self.single_encoder.eval()
