@@ -144,7 +144,7 @@ def load_image(image_path: str):
 
 def load_model(
     device: str,
-    confidence_threshold: float = 0.3,
+    confidence_threshold: float = 0.2,
     verbose: bool = False,
 ) -> tuple[torch.nn.Module, "Sam3Processor"]:
     """Load a SAM3 model and processor."""
@@ -391,7 +391,7 @@ def prepare_clean_directory(dir_path: Path) -> None:
         dir_path.mkdir(parents=True, exist_ok=True)
 
 
-def wait_for_file(path: Path, timeout_sec: int = 300, poll_interval: float = 2.0) -> bool:
+def wait_for_file(path: Path, timeout_sec: int = 900, poll_interval: float = 2.0) -> bool:
     """
     Wait for a specific file to appear on disk.
 
@@ -1256,7 +1256,7 @@ def main() -> None:
     parser.add_argument(
         "--box_threshold",
         type=float,
-        default=0.4,
+        default=0.2,
         help="Confidence threshold for filtering SAM3 predictions.",
     )
     parser.add_argument(
@@ -1402,6 +1402,15 @@ def main() -> None:
         default=20,
         help="Exit after this many minutes with no input CSV changes in --watch (default: 20).",
     )
+    parser.add_argument(
+        "--input_csv_wait_seconds",
+        type=int,
+        default=900,
+        help=(
+            "If the input CSV does not exist yet, wait up to this many seconds for it to appear "
+            "before exiting (default: 900 = 15 minutes)."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -1435,6 +1444,7 @@ def main() -> None:
             use_np=args.np,
             use_llm=args.llm,
             use_filtered=args.filtered,
+            input_csv_wait_seconds=int(args.input_csv_wait_seconds),
             realtime_missing_csv=Path(args.realtime_missing_csv).resolve()
             if args.realtime_missing_csv
             else None,
@@ -1443,7 +1453,7 @@ def main() -> None:
         # Single-CSV mode: optionally wait for the input CSV to be created.
         input_csv_path = Path(args.input_csv).resolve()
         if not input_csv_path.is_file():
-            timeout_sec = 300
+            timeout_sec = int(args.input_csv_wait_seconds)
             found = wait_for_file(input_csv_path, timeout_sec=timeout_sec)
             if not found:
                 print(
@@ -1513,6 +1523,7 @@ def run_batch(
     use_np: bool = False,
     use_llm: bool = False,
     use_filtered: bool = False,
+    input_csv_wait_seconds: int = 900,
     realtime_missing_csv: Optional[Path] = None,
     realtime_progress_csv: Optional[Path] = None,
 ) -> None:
@@ -1534,12 +1545,12 @@ def run_batch(
     if debug and debug_root_dir is not None:
         debug_root_dir.mkdir(parents=True, exist_ok=True)
 
-    # Discover all relevant CSV files, waiting up to 5 minutes for them to appear.
+    # Discover all relevant CSV files, waiting up to a configurable amount of time for them to appear.
     # Patterns:
     # - '*_objects.csv' (default, standard objects CSV)
     # - '*_objects_np.csv' (noun-phrase pipeline) when --np is set
     # - '*_objects_llm_v2.csv' (LLM-expanded objects, v2 naming) when --llm is set
-    timeout_sec = 300
+    timeout_sec = int(input_csv_wait_seconds)
     poll_interval = 5.0
     start_time = time.time()
     csv_files: List[Path] = []
@@ -1651,7 +1662,7 @@ def run_batch(
                     cluster_items_name = "cluster_items_objects_llm_v2.csv"
                     cluster_items_path = cluster_dir / cluster_items_name
                     if not cluster_items_path.is_file():
-                        timeout_sec = 300
+                        timeout_sec = int(input_csv_wait_seconds)
                         poll_interval = 5.0
                         print(
                             f"[INFO] Waiting up to {timeout_sec} seconds for "

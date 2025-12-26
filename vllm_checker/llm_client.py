@@ -519,25 +519,24 @@ class TextOnlyLLMClient:
         self._model = model
         _p("[llm] Stage: client ready")
 
-    def is_object_in_image(
+    def _infer_raw_output(
         self,
         *,
         image_path: str,
         object_name: str,
         description: Optional[str] = None,
-    ) -> bool:
-        """Ask the model if an object is present in the given image."""
-
+    ) -> tuple[str, str, str]:
+        """Return (desc_for_prompt, prompt, raw_output)."""
         object_name = object_name.strip()
         if not object_name:
-            return False
+            return "", "", ""
 
         # Load image.
         try:
             image = self._Image.open(image_path).convert("RGB")
         except Exception:
-            # If we cannot open the image, be conservative and say "not present".
-            return False
+            # If we cannot open the image, be conservative and return empty output.
+            return "", _build_object_presence_prompt(object_name=object_name), ""
 
         # IMPORTANT: The VLM should receive ONLY the image + our prompt.
         # We keep `description` for logging/analysis, but we do NOT feed it to the model.
@@ -616,21 +615,86 @@ class TextOnlyLLMClient:
         # If we couldn't infer input length, fall back to decoding everything.
         to_decode = generated_ids[:, input_len:] if input_len > 0 else generated_ids
         raw = self._processor.batch_decode(to_decode, skip_special_tokens=True)[0]
+        return desc_for_prompt, prompt, raw
+
+    def is_object_in_image(
+        self,
+        *,
+        image_path: str,
+        object_name: str,
+        description: Optional[str] = None,
+    ) -> bool:
+        """Ask the model if an object is present in the given image."""
+        desc_for_prompt, prompt, raw = self._infer_raw_output(
+            image_path=image_path,
+            object_name=object_name,
+            description=description,
+        )
         _log_llm_io(
             backend="local_hf",
             model_name=self.config.model_name,
             image_path=image_path,
-            object_name=object_name,
+            object_name=object_name.strip(),
             description=desc_for_prompt,
             prompt=prompt,
             raw_output=raw,
         )
         return self._classify_raw_answer(
             image_path=image_path,
-            object_name=object_name,
+            object_name=object_name.strip(),
             description=desc_for_prompt,
             raw_output=raw,
         )
+
+    def is_object_in_image_with_raw(
+        self,
+        *,
+        image_path: str,
+        object_name: str,
+        description: Optional[str] = None,
+    ) -> tuple[bool, str]:
+        """Like `is_object_in_image`, but also returns the raw model output text."""
+        desc_for_prompt, prompt, raw = self._infer_raw_output(
+            image_path=image_path,
+            object_name=object_name,
+            description=description,
+        )
+        _log_llm_io(
+            backend="local_hf",
+            model_name=self.config.model_name,
+            image_path=image_path,
+            object_name=object_name.strip(),
+            description=desc_for_prompt,
+            prompt=prompt,
+            raw_output=raw,
+        )
+        present = self._classify_raw_answer(
+            image_path=image_path,
+            object_name=object_name.strip(),
+            description=desc_for_prompt,
+            raw_output=raw,
+        )
+        return bool(present), str(raw or "")
+
+    def is_object_in_image_batch_with_raw(
+        self,
+        queries: list[dict[str, Optional[str]]],
+    ) -> list[tuple[bool, str]]:
+        if not queries:
+            return []
+        out: list[tuple[bool, str]] = []
+        for q in queries:
+            image_path = (q.get("image_path") or "").strip()
+            object_name = (q.get("object_name") or "").strip()
+            description = q.get("description") or None
+            out.append(
+                self.is_object_in_image_with_raw(
+                    image_path=image_path,
+                    object_name=object_name,
+                    description=description,
+                )
+            )
+        return out
 
     def is_object_in_image_batch(
         self,
@@ -736,21 +800,21 @@ class OpenAICompatVLMClient:
         self._base_url = self.config.base_url.rstrip("/")
         self._endpoint = f"{self._base_url}/v1/chat/completions"
 
-    def is_object_in_image(
+    def _infer_raw_output(
         self,
         *,
         image_path: str,
         object_name: str,
         description: Optional[str] = None,
-    ) -> bool:
+    ) -> tuple[str, str, str]:
         object_name = object_name.strip()
         if not object_name:
-            return False
+            return "", "", ""
 
         try:
             img_url = _image_to_data_url(image_path)
         except Exception:
-            return False
+            return "", "", ""
 
         # IMPORTANT: The VLM should receive ONLY the image + our prompt.
         # We keep `description` for logging/analysis, but we do NOT feed it to the model.
@@ -787,23 +851,83 @@ class OpenAICompatVLMClient:
                 raw_output=f"[ERROR] {type(e).__name__}: {e}",
             )
             raise
+        return desc_for_prompt, prompt, raw
 
+    def is_object_in_image(
+        self,
+        *,
+        image_path: str,
+        object_name: str,
+        description: Optional[str] = None,
+    ) -> bool:
+        desc_for_prompt, prompt, raw = self._infer_raw_output(
+            image_path=image_path,
+            object_name=object_name,
+            description=description,
+        )
         _log_llm_io(
             backend="openai_compat_http",
             model_name=self.config.model,
             image_path=image_path,
-            object_name=object_name,
+            object_name=object_name.strip(),
             description=desc_for_prompt,
             prompt=prompt,
             raw_output=raw,
         )
         return _classify_raw_answer_static(
             image_path=image_path,
-            object_name=object_name,
+            object_name=object_name.strip(),
             description=desc_for_prompt,
             raw_output=raw,
             model_name=self.config.model,
         )
+
+    def is_object_in_image_with_raw(
+        self,
+        *,
+        image_path: str,
+        object_name: str,
+        description: Optional[str] = None,
+    ) -> tuple[bool, str]:
+        desc_for_prompt, prompt, raw = self._infer_raw_output(
+            image_path=image_path,
+            object_name=object_name,
+            description=description,
+        )
+        _log_llm_io(
+            backend="openai_compat_http",
+            model_name=self.config.model,
+            image_path=image_path,
+            object_name=object_name.strip(),
+            description=desc_for_prompt,
+            prompt=prompt,
+            raw_output=raw,
+        )
+        present = _classify_raw_answer_static(
+            image_path=image_path,
+            object_name=object_name.strip(),
+            description=desc_for_prompt,
+            raw_output=raw,
+            model_name=self.config.model,
+        )
+        return bool(present), str(raw or "")
+
+    def is_object_in_image_batch_with_raw(
+        self,
+        queries: list[dict[str, Optional[str]]],
+    ) -> list[tuple[bool, str]]:
+        if not queries:
+            return []
+        out: list[tuple[bool, str]] = []
+        for q in queries:
+            out.append(
+                self.is_object_in_image_with_raw(
+                    image_path=(q.get("image_path") or "").strip(),
+                    object_name=(q.get("object_name") or "").strip(),
+                    description=q.get("description") or None,
+                )
+            )
+        return out
 
     def is_object_in_image_batch(
         self,
@@ -909,21 +1033,21 @@ class GeminiVLMClient:
         self.config = config
         self._debug_mode = os.environ.get("VLLM_DEBUG", "0") == "1"
 
-    def is_object_in_image(
+    def _infer_raw_output(
         self,
         *,
         image_path: str,
         object_name: str,
         description: Optional[str] = None,
-    ) -> bool:
+    ) -> tuple[str, str, str]:
         object_name = object_name.strip()
         if not object_name:
-            return False
+            return "", "", ""
 
         try:
             mime, b64 = _image_to_inline_data(image_path)
         except Exception:
-            return False
+            return "", "", ""
 
         # IMPORTANT: The VLM should receive ONLY the image + our prompt.
         # We keep `description` for logging/analysis, but we do NOT feed it to the model.
@@ -960,23 +1084,83 @@ class GeminiVLMClient:
                 raw_output=f"[ERROR] {type(e).__name__}: {e}",
             )
             raise
+        return desc_for_prompt, prompt, raw
 
+    def is_object_in_image(
+        self,
+        *,
+        image_path: str,
+        object_name: str,
+        description: Optional[str] = None,
+    ) -> bool:
+        desc_for_prompt, prompt, raw = self._infer_raw_output(
+            image_path=image_path,
+            object_name=object_name,
+            description=description,
+        )
         _log_llm_io(
             backend="gemini",
             model_name=self.config.model,
             image_path=image_path,
-            object_name=object_name,
+            object_name=object_name.strip(),
             description=desc_for_prompt,
             prompt=prompt,
             raw_output=raw,
         )
         return _classify_raw_answer_static(
             image_path=image_path,
-            object_name=object_name,
+            object_name=object_name.strip(),
             description=desc_for_prompt,
             raw_output=raw,
             model_name=self.config.model,
         )
+
+    def is_object_in_image_with_raw(
+        self,
+        *,
+        image_path: str,
+        object_name: str,
+        description: Optional[str] = None,
+    ) -> tuple[bool, str]:
+        desc_for_prompt, prompt, raw = self._infer_raw_output(
+            image_path=image_path,
+            object_name=object_name,
+            description=description,
+        )
+        _log_llm_io(
+            backend="gemini",
+            model_name=self.config.model,
+            image_path=image_path,
+            object_name=object_name.strip(),
+            description=desc_for_prompt,
+            prompt=prompt,
+            raw_output=raw,
+        )
+        present = _classify_raw_answer_static(
+            image_path=image_path,
+            object_name=object_name.strip(),
+            description=desc_for_prompt,
+            raw_output=raw,
+            model_name=self.config.model,
+        )
+        return bool(present), str(raw or "")
+
+    def is_object_in_image_batch_with_raw(
+        self,
+        queries: list[dict[str, Optional[str]]],
+    ) -> list[tuple[bool, str]]:
+        if not queries:
+            return []
+        out: list[tuple[bool, str]] = []
+        for q in queries:
+            out.append(
+                self.is_object_in_image_with_raw(
+                    image_path=(q.get("image_path") or "").strip(),
+                    object_name=(q.get("object_name") or "").strip(),
+                    description=q.get("description") or None,
+                )
+            )
+        return out
 
     def is_object_in_image_batch(
         self,

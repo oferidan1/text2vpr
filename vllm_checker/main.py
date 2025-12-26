@@ -82,6 +82,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--no_only_csv",
+        default=None,
+        help=(
+            "Optional path for an additional debug CSV that contains ONLY rows where the model "
+            "said 'no' to at least one missing object. If omitted, defaults to "
+            "<output_stem>_no_only_debug.csv next to the output CSV."
+        ),
+    )
+    parser.add_argument(
+        "--no_only_raw_column",
+        default="vllm_raw_outputs_json",
+        help=(
+            "Column name to store per-object raw model outputs in the NO-only debug CSV "
+            "(default: vllm_raw_outputs_json)."
+        ),
+    )
+    parser.add_argument(
         "--resume",
         action="store_true",
         help=(
@@ -279,9 +296,30 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def _ts() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
+def _wait_for_file(path: Path, timeout_sec: int, poll_interval: float = 2.0) -> bool:
+    """
+    Wait for `path` to become an existing file, up to `timeout_sec`.
+    Returns True if the file appeared, else False.
+    """
+    start = time.time()
+    while time.time() - start < timeout_sec:
+        if path.is_file():
+            return True
+        time.sleep(poll_interval)
+    return path.is_file()
+
 
 def main() -> None:
     parser = build_arg_parser()
+    parser.add_argument(
+        "--input_csv_wait_seconds",
+        type=int,
+        default=900,
+        help=(
+            "If the input CSV does not exist yet and --follow/--watch is set, wait up to this "
+            "many seconds for it to appear before exiting (default: 900 = 15 minutes)."
+        ),
+    )
     args = parser.parse_args()
 
     import os
@@ -327,6 +365,26 @@ def main() -> None:
     input_csv = Path(args.input_csv).resolve()
     images_root = Path(args.images_root).resolve() if args.images_root else None
 
+    # In watch/follow mode, the input CSV may not exist yet (upstream step still writing it).
+    if not input_csv.is_file():
+        if args.follow or args.watch:
+            timeout_sec = int(args.input_csv_wait_seconds)
+            print(
+                f"[{_ts()}] [main] Input CSV not found yet: {input_csv}. "
+                f"Waiting up to {timeout_sec} seconds for it to appear...",
+                flush=True,
+            )
+            found = _wait_for_file(input_csv, timeout_sec=timeout_sec, poll_interval=2.0)
+            if not found:
+                print(
+                    f"[{_ts()}] [main] Input CSV still not found: {input_csv}. "
+                    f"Waited {timeout_sec} seconds; exiting.",
+                    flush=True,
+                )
+                sys.exit(1)
+        else:
+            raise FileNotFoundError(f"Input CSV not found: {input_csv}")
+
     # Debug mode: process a single image and print results
     if args.debug_image:
         # Build client after enabling debug mode so any backend logs show up.
@@ -345,6 +403,7 @@ def main() -> None:
 
     # Normal mode: process entire CSV
     output_csv = Path(args.output_csv).resolve() if args.output_csv else None
+    no_only_csv = Path(args.no_only_csv).resolve() if args.no_only_csv else None
 
     # Build the client once (so we fail fast if the backend is unreachable) and
     # reuse it for the full run.
@@ -367,6 +426,8 @@ def main() -> None:
     final_path = check_csv_with_llm(
         input_csv=input_csv,
         output_csv=output_csv,
+        no_only_csv=no_only_csv,
+        no_only_raw_column=str(args.no_only_raw_column),
         images_root=images_root,
         new_column=args.new_column,
         llm_batch_size=args.llm_batch_size,
