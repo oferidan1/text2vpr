@@ -183,11 +183,15 @@ class VPR_Text_Model(pl.LightningModule):
             # Define LoRA configuration
             # TaskType.FEATURE_EXTRACTION is appropriate for sentence embedding tasks
             if is_trainable_text_encoder:
+                r=64
                 lora_config = LoraConfig(
-                    r=8,
-                    lora_alpha=16,
+                    r=r,
+                    lora_alpha=r*2,
                     lora_dropout=0.1,
-                    target_modules=["query", "value", "qkv"],
+                    #target_modules=["query", "value", "qkv"],
+                    target_modules="all-linear",                    
+                    task_type=TaskType.SEQ_CLS,
+                    use_rslora=True,                    
                     bias="none",
                 )
                 # Get the PEFT model with LoRA adapters
