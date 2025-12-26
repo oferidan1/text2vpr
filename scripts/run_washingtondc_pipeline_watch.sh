@@ -9,6 +9,23 @@ set -euo pipefail
 # This script runs step 1, then runs steps 2 and 3 in --watch mode so they keep
 # re-reading the growing CSVs until they go idle.
 
+usage() {
+  cat <<'EOF'
+Usage:
+  run_washingtondc_pipeline_watch.sh [options]
+
+Options (Step 3: vllm_checker prompt):
+  --vllm_prompt_style <strict_yn|describe_then_yesno>
+  --vllm_prompt_examples_path <path/to/examples.txt>
+  --vllm_prompt_disable_default_examples
+
+You can also set equivalent env vars:
+  VLLM_PROMPT_STYLE
+  VLLM_PROMPT_EXAMPLES_PATH
+  VLLM_PROMPT_DISABLE_DEFAULT_EXAMPLES=1
+EOF
+}
+
 REPO_ROOT="/mnt/d/dan/git_projects/text2vpr"
 
 CITY="WashingtonDC"
@@ -33,6 +50,37 @@ WATCH_IDLE_MIN="${WATCH_IDLE_MIN:-20}"
 
 LLM_BATCH_SIZE="${LLM_BATCH_SIZE:-4}"
 DETACH="${DETACH:-0}" # if 1, start all steps and exit immediately (like running in 3 terminals)
+
+# Step 3 prompt settings (defaults preserve legacy behavior)
+VLLM_PROMPT_STYLE="${VLLM_PROMPT_STYLE:-strict_yn}"
+VLLM_PROMPT_EXAMPLES_PATH="${VLLM_PROMPT_EXAMPLES_PATH:-}"
+VLLM_PROMPT_DISABLE_DEFAULT_EXAMPLES="${VLLM_PROMPT_DISABLE_DEFAULT_EXAMPLES:-0}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --vllm_prompt_style)
+      VLLM_PROMPT_STYLE="${2:-}"
+      shift 2
+      ;;
+    --vllm_prompt_examples_path)
+      VLLM_PROMPT_EXAMPLES_PATH="${2:-}"
+      shift 2
+      ;;
+    --vllm_prompt_disable_default_examples)
+      VLLM_PROMPT_DISABLE_DEFAULT_EXAMPLES="1"
+      shift 1
+      ;;
+    *)
+      echo "[pipeline] ERROR: unknown arg: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
 
 mkdir -p "${OUT_DIR}"
 
@@ -81,6 +129,13 @@ echo "[pipeline] repo: ${REPO_ROOT}"
 echo "[pipeline] city: ${CITY}"
 echo "[pipeline] out:  ${OUT_DIR}"
 echo "[pipeline] watch_poll_sec=${WATCH_POLL_SEC}, watch_idle_minutes=${WATCH_IDLE_MIN}"
+echo "[pipeline] vllm_prompt_style=${VLLM_PROMPT_STYLE}"
+if [[ -n "${VLLM_PROMPT_EXAMPLES_PATH}" ]]; then
+  echo "[pipeline] vllm_prompt_examples_path=${VLLM_PROMPT_EXAMPLES_PATH}"
+fi
+if [[ "${VLLM_PROMPT_DISABLE_DEFAULT_EXAMPLES}" == "1" ]]; then
+  echo "[pipeline] vllm_prompt_disable_default_examples=1"
+fi
 echo ""
 
 COMMANDS_LOG="$(prepare_log_path "commands" "${COMMANDS_LOG}")"
@@ -134,10 +189,17 @@ CMD_STEP3=(
   --output_csv "${VLLM_OUT_CSV}"
   --resume
   --llm_batch_size "${LLM_BATCH_SIZE}"
+  --prompt_style "${VLLM_PROMPT_STYLE}"
   --watch
   --watch_poll_sec "${WATCH_POLL_SEC}"
   --watch_idle_minutes "${WATCH_IDLE_MIN}"
 )
+if [[ -n "${VLLM_PROMPT_EXAMPLES_PATH}" ]]; then
+  CMD_STEP3+=(--prompt_examples_path "${VLLM_PROMPT_EXAMPLES_PATH}")
+fi
+if [[ "${VLLM_PROMPT_DISABLE_DEFAULT_EXAMPLES}" == "1" ]]; then
+  CMD_STEP3+=(--prompt_disable_default_examples)
+fi
 log_cmd "step3_vllm_checker" "${CMD_STEP3[@]}"
 if [[ "${DETACH}" == "1" ]]; then
   nohup "${CMD_STEP3[@]}" > "${STEP3_LOG}" 2>&1 &

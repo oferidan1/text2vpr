@@ -13,10 +13,20 @@ if __package__ in (None, ""):  # pragma: no cover
     # Running as a script: add repo root to sys.path so we can import as a package.
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from vllm_checker.checker import check_csv_with_llm, debug_single_image
-    from vllm_checker.llm_client import build_default_client, OpenAICompatVLMClient, TextOnlyLLMClient
+    from vllm_checker.llm_client import (
+        build_default_client,
+        GeminiVLMClient,
+        OpenAICompatVLMClient,
+        TextOnlyLLMClient,
+    )
 else:
     from .checker import check_csv_with_llm, debug_single_image
-    from .llm_client import build_default_client, OpenAICompatVLMClient, TextOnlyLLMClient
+    from .llm_client import (
+        build_default_client,
+        GeminiVLMClient,
+        OpenAICompatVLMClient,
+        TextOnlyLLMClient,
+    )
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -26,6 +36,34 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "answers per-object yes/no questions and adds a new column "
             "listing objects the LLM still considers missing."
         )
+    )
+    parser.add_argument(
+        "--prompt_style",
+        default="strict_yn",
+        choices=["strict_yn", "describe_then_yesno"],
+        help=(
+            "Prompt style for the VLM.\n"
+            "  - strict_yn: legacy behavior: ask only a strict yes/no question.\n"
+            "  - describe_then_yesno: ask the model to briefly describe the image first, "
+            "then decide if the object is present, with a final yes/no answer."
+        ),
+    )
+    parser.add_argument(
+        "--prompt_examples_path",
+        default=None,
+        help=(
+            "Optional path to a text file containing few-shot examples to include in the prompt. "
+            "If provided, this text is inserted verbatim before the actual question/instructions. "
+            "Most useful with --prompt_style describe_then_yesno."
+        ),
+    )
+    parser.add_argument(
+        "--prompt_disable_default_examples",
+        action="store_true",
+        help=(
+            "Disable built-in prompt examples. If you provide --prompt_examples_path, "
+            "you usually don't need the defaults."
+        ),
     )
     parser.add_argument(
         "--input_csv",
@@ -136,6 +174,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--vlm_provider",
+        default="auto",
+        choices=["auto", "gemini", "openai_compat", "local_hf"],
+        help=(
+            "Which VLM backend to use. "
+            "auto: preserve legacy behavior (OPENAI_BASE_URL -> OpenAI-compatible HTTP, else local HF). "
+            "gemini: Google AI Studio / Gemini Developer API. "
+            "openai_compat: force OpenAI-compatible HTTP. "
+            "local_hf: force local HuggingFace backend."
+        ),
+    )
+    parser.add_argument(
         "--local_model",
         default=None,
         help=(
@@ -201,6 +251,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--gemini_model",
+        default=None,
+        help=(
+            "Optional: Gemini model name when using --vlm_provider gemini. "
+            "Defaults to GEMINI_MODEL env var or 'gemini-2.5-flash'."
+        ),
+    )
+    parser.add_argument(
+        "--gemini_api_key",
+        default=None,
+        help=(
+            "Optional: Gemini API key (Google AI Studio). If omitted, GEMINI_API_KEY (or GOOGLE_API_KEY) is used."
+        ),
+    )
+    parser.add_argument(
         "--log_llm_io",
         action="store_true",
         help=(
@@ -221,6 +286,13 @@ def main() -> None:
 
     import os
 
+    # Prompt configuration (read by vllm_checker.llm_client via env vars).
+    os.environ["VLLM_PROMPT_STYLE"] = str(args.prompt_style)
+    if args.prompt_examples_path:
+        os.environ["VLLM_PROMPT_EXAMPLES_PATH"] = str(args.prompt_examples_path)
+    if args.prompt_disable_default_examples:
+        os.environ["VLLM_PROMPT_DISABLE_DEFAULT_EXAMPLES"] = "1"
+
     if args.progress:
         os.environ["VLLM_PROGRESS"] = "1"
 
@@ -230,6 +302,12 @@ def main() -> None:
     if args.local_model:
         # Used by build_default_client() for the local HF backend.
         os.environ["VLLM_HF_MODEL"] = str(args.local_model)
+
+    # Gemini backend config via env vars (respected by build_default_client()).
+    if args.gemini_model:
+        os.environ["GEMINI_MODEL"] = str(args.gemini_model)
+    if args.gemini_api_key:
+        os.environ["GEMINI_API_KEY"] = str(args.gemini_api_key)
 
     # If user specified OpenAI-compatible backend via CLI args, set env vars that
     # `build_default_client()` already respects.
@@ -255,7 +333,7 @@ def main() -> None:
         os.environ["VLLM_DEBUG"] = "1"
         print(f"[{_ts()}] [main] Building LLM client (may load model)...", flush=True)
         t0 = time.time()
-        client = build_default_client()
+        client = build_default_client(provider=str(args.vlm_provider))
         print(f"[{_ts()}] [main] LLM client ready (took {time.time() - t0:.1f}s)", flush=True)
         debug_single_image(
             input_csv=input_csv,
@@ -272,11 +350,13 @@ def main() -> None:
     # reuse it for the full run.
     print(f"[{_ts()}] [main] Building LLM client (may load model)...", flush=True)
     t0 = time.time()
-    client = build_default_client()
+    client = build_default_client(provider=str(args.vlm_provider))
     print(f"[{_ts()}] [main] LLM client ready (took {time.time() - t0:.1f}s)", flush=True)
     # Print what backend is being used + CPU/GPU if local.
     if isinstance(client, OpenAICompatVLMClient):
         print(f"LLM backend: openai_compat_http (base_url={client.config.base_url}, model={client.config.model})")
+    elif isinstance(client, GeminiVLMClient):
+        print(f"LLM backend: gemini (model={client.config.model})")
     elif isinstance(client, TextOnlyLLMClient):
         dev = getattr(client, "_device", None)
         dev_str = str(dev) if dev is not None else "unknown"
