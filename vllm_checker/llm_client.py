@@ -126,6 +126,28 @@ def _prompt_style() -> str:
     return "strict_yn"
 
 
+def _max_output_tokens_for_style(default_tokens: int) -> int:
+    """Choose an output token budget based on prompt style.
+
+    `strict_yn` needs very few tokens; `describe_then_yesno` needs enough room to
+    emit a short description *and* a final Answer line.
+    """
+    style = _prompt_style()
+    if style == "describe_then_yesno":
+        # Allow override via env var, else use a sensible default.
+        try:
+            v = int(os.environ.get("VLLM_MAX_TOKENS_DESCRIBE_THEN_YESNO", "64"))
+            return max(8, v)
+        except Exception:
+            return 64
+    # strict_yn (and unknown) keeps the backend default unless overridden.
+    try:
+        v = int(os.environ.get("VLLM_MAX_TOKENS_STRICT_YN", str(default_tokens)))
+        return max(1, v)
+    except Exception:
+        return int(default_tokens)
+
+
 def _disable_default_examples() -> bool:
     return os.environ.get("VLLM_PROMPT_DISABLE_DEFAULT_EXAMPLES", "0") == "1"
 
@@ -588,7 +610,7 @@ class TextOnlyLLMClient:
 
         generated_ids = self._model.generate(
             **inputs,
-            max_new_tokens=self.config.max_new_tokens,
+            max_new_tokens=_max_output_tokens_for_style(self.config.max_new_tokens),
         )
 
         if self._debug_mode:
@@ -832,7 +854,7 @@ class OpenAICompatVLMClient:
                     ],
                 }
             ],
-            "max_tokens": self.config.max_tokens,
+            "max_tokens": _max_output_tokens_for_style(self.config.max_tokens),
             "temperature": self.config.temperature,
             "top_p": self.config.top_p,
         }
@@ -1067,7 +1089,7 @@ class GeminiVLMClient:
             "generationConfig": {
                 "temperature": float(self.config.temperature),
                 "topP": float(self.config.top_p),
-                "maxOutputTokens": int(self.config.max_output_tokens),
+                "maxOutputTokens": int(_max_output_tokens_for_style(self.config.max_output_tokens)),
             },
         }
 

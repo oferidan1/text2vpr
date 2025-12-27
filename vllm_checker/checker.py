@@ -270,9 +270,9 @@ def _process_row_with_llm(
                     present_flags = client.is_object_in_image_batch(queries)  # type: ignore[assignment]
                     for obj, present in zip(chunk, present_flags):
                         raw_records.append({"object_name": str(obj), "raw_output": ""})
-                    # We keep objects for which the model said "no".
-                    if not present:
-                        llm_rejected.append(obj)
+                        # We keep objects for which the model said "no".
+                        if not present:
+                            llm_rejected.append(obj)
             except Exception:
                 # If the batch call fails (e.g. transient HTTP timeout), fall back
                 # to per-object calls so a single error doesn't abort the whole run.

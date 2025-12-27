@@ -296,6 +296,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def _ts() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
+
+def _client_model_label(client: object) -> str:
+    """Best-effort label of the active backend + model for logging."""
+    try:
+        if isinstance(client, OpenAICompatVLMClient):
+            return f"openai_compat_http model={client.config.model} base_url={client.config.base_url}"
+        if isinstance(client, GeminiVLMClient):
+            return f"gemini model={client.config.model}"
+        if isinstance(client, TextOnlyLLMClient):
+            dev = getattr(client, "_device", None)
+            dev_str = str(dev) if dev is not None else "unknown"
+            accel = "GPU" if "cuda" in dev_str.lower() else "CPU"
+            return f"local_hf model={client.config.model_name} device={dev_str} ({accel})"
+        # Fallback for custom client types.
+        return type(client).__name__
+    except Exception:
+        return type(client).__name__
+
 def _wait_for_file(path: Path, timeout_sec: int, poll_interval: float = 2.0) -> bool:
     """
     Wait for `path` to become an existing file, up to `timeout_sec`.
@@ -393,6 +411,7 @@ def main() -> None:
         t0 = time.time()
         client = build_default_client(provider=str(args.vlm_provider))
         print(f"[{_ts()}] [main] LLM client ready (took {time.time() - t0:.1f}s)", flush=True)
+        print(f"[{_ts()}] [main] Using LLM: {_client_model_label(client)}", flush=True)
         debug_single_image(
             input_csv=input_csv,
             target_image_path=args.debug_image,
@@ -411,6 +430,7 @@ def main() -> None:
     t0 = time.time()
     client = build_default_client(provider=str(args.vlm_provider))
     print(f"[{_ts()}] [main] LLM client ready (took {time.time() - t0:.1f}s)", flush=True)
+    print(f"[{_ts()}] [main] Using LLM: {_client_model_label(client)}", flush=True)
     # Print what backend is being used + CPU/GPU if local.
     if isinstance(client, OpenAICompatVLMClient):
         print(f"LLM backend: openai_compat_http (base_url={client.config.base_url}, model={client.config.model})")
