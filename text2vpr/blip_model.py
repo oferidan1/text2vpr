@@ -201,8 +201,8 @@ class BlipForImageTextRetrievalWrapper(BlipPreTrainedModel):
             interpolate_pos_encoding=False
         )
         image_embeds = vision_outputs[0]
-        #image_feat = normalize(self.vision_proj(image_embeds[:, 0, :]), dim=-1)
-        image_feat = normalize(self.vision_proj(image_embeds), dim=-1)
+        image_feat = normalize(self.vision_proj(image_embeds[:, 0, :]), dim=-1)
+        #image_feat = normalize(self.vision_proj(image_embeds), dim=-1)
         return image_feat
      
     def encode_text(self, input_ids: torch.LongTensor, attention_mask: Optional[torch.LongTensor] = None):
@@ -212,8 +212,8 @@ class BlipForImageTextRetrievalWrapper(BlipPreTrainedModel):
                     return_dict=None,
                 )
         question_embeds = question_embeds[0] 
-        #text_feat = normalize(self.text_proj(question_embeds[:, 0, :]), dim=-1)
-        text_feat = normalize(self.text_proj(question_embeds), dim=-1)
+        text_feat = normalize(self.text_proj(question_embeds[:, 0, :]), dim=-1)
+        #text_feat = normalize(self.text_proj(question_embeds), dim=-1)
         return text_feat
 
 if __name__ == '__main__':

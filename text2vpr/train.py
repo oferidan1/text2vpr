@@ -42,7 +42,7 @@ def parse_arguments():
     parser.add_argument("--batch_size", type=int, default="120", help="batch size for training")
     parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss_Sij", help="name of the loss function to use")
     #parser.add_argument("--loss_name", type=str, default="MultiSimilarityLoss", help="name of the loss function to use")
-    parser.add_argument("--cross_modal", type=int, default="0", help="cross modal 0=no/1=blip orig/2=our model")    
+    parser.add_argument("--cross_modal", type=int, default="0", help="cross modal 0=no/1=blip orig/2=our model/3=with projections")    
     parser.add_argument("--is_reranking", type=int, default="0", help="reranking 0=no/1=yes")
     parser.add_argument("--is_val", type=int, default="1", help="run validation 0=no/1=yes")
 
@@ -58,9 +58,8 @@ if __name__ == '__main__':
     
     dataset_mean_std = IMAGENET_MEAN_STD
     image_size = args.image_size
-    if 'blip' in args.vpr_model_name.lower():
+    if 'blip' in args.vpr_model_name.lower() or 'clip' in args.vpr_model_name.lower():
         dataset_mean_std = BLIP_MEAN_STD
-        image_size = 384
     
     val_set_names = []
     if args.is_val:

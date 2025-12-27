@@ -16,7 +16,7 @@ from blip_model import BlipForImageTextRetrievalWrapper
 from transformers import BlipProcessor, BlipModel
 from sklearn.decomposition import PCA
 import torch.cuda.amp as amp
-
+from transformers import AutoModel, AutoProcessor
 
 class VPR_Text_Model(pl.LightningModule):
     """This is the main model for Visual Place Recognition
@@ -102,7 +102,7 @@ class VPR_Text_Model(pl.LightningModule):
         self.fusion_type = fusion_type
         self.embeds_dim = embeds_dim        
         text_encoder_dim = 1024        
-        if 'blip' in vpr_model_name:
+        if 'blip' in vpr_model_name or 'clip' in vpr_model_name:
             text_encoder_dim = vpr_encoder_dim
             
         self.mse_loss = torch.nn.MSELoss()
@@ -116,7 +116,7 @@ class VPR_Text_Model(pl.LightningModule):
             if is_image_pooling:
                 self.image_pooling = CLSReweightingPooler(self.vpr_encoder_dim)
                 
-            if self.cross_modal and 'blip' not in vpr_model_name:
+            if self.cross_modal == 3:
                 self.vpr_proj = nn.Linear(self.vpr_encoder_dim, embeds_dim)
                 self.text_proj = nn.Linear(text_encoder_dim, embeds_dim)                
                 # self.vpr_proj = nn.Sequential(nn.Linear(self.vpr_encoder_dim, self.vpr_encoder_dim), nn.ReLU(), nn.Linear(self.vpr_encoder_dim, embeds_dim))
@@ -157,7 +157,7 @@ class VPR_Text_Model(pl.LightningModule):
         self.apply(self._init_weights)
         
         # initialize the vpr encoder and text encoder
-        if is_encode_image and 'blip' not in vpr_model_name:                  
+        if is_encode_image and ('blip' not in vpr_model_name and 'clip' not in vpr_model_name):                  
             self.vpr_encoder = vpr_models.get_model(vpr_model_name, vpr_model_backbone, vpr_encoder_dim)                      
             if is_freeze_vpr:
                 # Freeze vpr encoder parameters
@@ -169,6 +169,9 @@ class VPR_Text_Model(pl.LightningModule):
             if 'blip' in vpr_model_name:
                 self.text_encoder = BlipForImageTextRetrievalWrapper.from_pretrained(vpr_model_name)
                 self.processor = BlipProcessor.from_pretrained(vpr_model_name)
+            elif 'clip' in vpr_model_name:
+                self.text_encoder = AutoModel.from_pretrained(vpr_model_name)
+                self.processor = AutoProcessor.from_pretrained(vpr_model_name)
             else:
                 self.tokenizer = AutoTokenizer.from_pretrained(text_encoder_name)  
                 self.text_encoder = AutoModel.from_pretrained(text_encoder_name, attn_implementation="sdpa")        
@@ -230,8 +233,10 @@ class VPR_Text_Model(pl.LightningModule):
 
         if self.is_encode_image:
             if 'blip' in self.vpr_model_name:
-                img_embeds_all = self.text_encoder.encode_image(img)
-                img_embeds = img_embeds_all[:,0]
+                img_embeds = self.text_encoder.encode_image(img)
+                #img_embeds = img_embeds_all[:,0]
+            elif 'clip' in self.vpr_model_name:
+                img_embeds = self.text_encoder.get_image_features(pixel_values=img)
             else:
                 with torch.no_grad():                      
                     if 'dinov2' in self.vpr_model_name:
@@ -253,8 +258,13 @@ class VPR_Text_Model(pl.LightningModule):
                 text_inputs = self.processor(text=text, return_tensors="pt", padding=True)
                 text_tokens = text_inputs.input_ids.to(img.device)
                 attention_mask = text_inputs['attention_mask'].to(img.device)                
-                text_embeds_all = self.text_encoder.encode_text(input_ids=text_tokens, attention_mask=attention_mask)
-                text_embeds = text_embeds_all[:,0]
+                text_embeds = self.text_encoder.encode_text(input_ids=text_tokens, attention_mask=attention_mask)
+                #text_embeds = text_embeds_all[:,0]
+            elif 'clip' in self.vpr_model_name:
+                text_inputs = self.processor(text=text, return_tensors="pt", padding=True, truncation=True, max_length=77)
+                text_tokens = text_inputs.input_ids.to(img.device)
+                attention_mask = text_inputs['attention_mask'].to(img.device)                
+                text_embeds = self.text_encoder.get_text_features(input_ids=text_tokens, attention_mask=attention_mask)
             else:                
                 text_tokens = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(img.device)
                 if self.is_trainable_text_encoder:
@@ -290,7 +300,7 @@ class VPR_Text_Model(pl.LightningModule):
         batch_size = img.shape[0]   
         
         if self.is_encode_image and self.is_encode_text:        
-            if self.cross_modal and 'blip' not in self.vpr_model_name:
+            if self.cross_modal == 3:
                 img_embeds = self.vpr_proj(img_embeds)
                 text_embeds = self.text_proj(text_embeds)
                 img_embeds = torch.nn.functional.normalize(img_embeds, p=2, dim=1)

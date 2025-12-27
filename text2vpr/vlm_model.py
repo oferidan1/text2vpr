@@ -12,6 +12,8 @@ from vpr_text import VPR_Text_Model
 from transformers import AutoTokenizer, AutoModel
 from blip_model import BlipForImageTextRetrievalWrapper
 from transformers import BlipProcessor, BlipModel
+from transformers import AutoModel, AutoProcessor
+
 
 
 class VLM_Model:
@@ -22,7 +24,7 @@ class VLM_Model:
         self.device = args.device
         self.text_encoder_dim = 1024
         self.vpr_encoder_dim = args.vpr_dim
-        if 'blip' in self.vpr_model_name:            
+        if 'blip' in self.vpr_model_name or 'clip' in self.vpr_model_name:
             self.text_encoder_dim = args.vpr_dim
             
         if args.fusion_type == 'text_adapter':
@@ -33,6 +35,11 @@ class VLM_Model:
                 self.vpr_encoder = BlipForImageTextRetrievalWrapper.from_pretrained(self.vpr_model_name)
                 self.processor = BlipProcessor.from_pretrained(self.vpr_model_name)
                 self.vpr_encoder = self.vpr_encoder.eval().to(args.device)
+            if 'clip' in self.vpr_model_name:
+                self.vpr_encoder = AutoModel.from_pretrained(self.vpr_model_name)
+                self.processor = AutoProcessor.from_pretrained(self.vpr_model_name)
+                self.vpr_encoder = self.vpr_encoder.eval().to(args.device)
+
             self.encoder_dim = self.vpr_encoder_dim
             
         elif args.is_dual_encoder or args.encode_mode!='both':    
@@ -109,7 +116,10 @@ class VLM_Model:
     def encode_image(self, images):
         if 'blip' in self.vpr_model_name:
             with torch.no_grad():
-                image_features = self.vpr_encoder.encode_image(images)[:,0]
+                image_features = self.vpr_encoder.encode_image(images)
+        elif 'clip' in self.vpr_model_name:
+            with torch.no_grad():               
+                image_features = self.vpr_encoder.get_image_features(pixel_values=images)
         else:
             with torch.no_grad():
                 image_features = self.vpr_encoder(images)            
@@ -119,7 +129,11 @@ class VLM_Model:
         if 'blip' in self.vpr_model_name:            
             text_inputs = self.processor(text=texts, return_tensors="pt", padding=True).input_ids.to(self.device)
             with torch.no_grad():     
-                text_features = self.vpr_encoder.encode_text(text_inputs)[:,0]
+                text_features = self.vpr_encoder.encode_text(text_inputs)
+        elif 'clip' in self.vpr_model_name:            
+            text_inputs = self.processor(text=texts, return_tensors="pt", padding=True, truncation=True, max_length=77).input_ids.to(self.device)
+            with torch.no_grad():     
+                text_features = self.vpr_encoder.get_text_features(input_ids=text_inputs)
         else:
             text_tokens = self.tokenizer(texts, padding=True, truncation=True, return_tensors='pt').to(self.device)
             with torch.no_grad():      
