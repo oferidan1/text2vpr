@@ -38,6 +38,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         )
     )
     parser.add_argument(
+        "--api_key",
+        default=None,
+        help=(
+            "Global API key for remote backends. This is a convenience flag so you don't need "
+            "provider-specific flags.\n"
+            "  - When using --vlm_provider gemini: used as GEMINI_API_KEY (if --gemini_api_key is not set)\n"
+            "  - When using --vlm_provider openai_compat or when OPENAI_BASE_URL is set: used as OPENAI_API_KEY "
+            "(if --openai_api_key is not set)\n"
+            "Also exported as VLLM_API_KEY for shared resolution in vllm_checker.llm_client."
+        ),
+    )
+    parser.add_argument(
         "--prompt_style",
         default="strict_yn",
         choices=["strict_yn", "describe_then_yesno"],
@@ -46,6 +58,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "  - strict_yn: legacy behavior: ask only a strict yes/no question.\n"
             "  - describe_then_yesno: ask the model to briefly describe the image first, "
             "then decide if the object is present, with a final yes/no answer."
+        ),
+    )
+    parser.add_argument(
+        "--max_tokens_describe_then_yesno",
+        type=int,
+        default=None,
+        help=(
+            "Token budget used when --prompt_style describe_then_yesno. "
+            "If omitted, defaults to 64 (or VLLM_MAX_TOKENS_DESCRIBE_THEN_YESNO env var)."
+        ),
+    )
+    parser.add_argument(
+        "--max_tokens_strict_yn",
+        type=int,
+        default=None,
+        help=(
+            "Token budget used when --prompt_style strict_yn. "
+            "If omitted, defaults to backend defaults (or VLLM_MAX_TOKENS_STRICT_YN env var)."
         ),
     )
     parser.add_argument(
@@ -207,7 +237,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Optional: override the local HuggingFace model to load (only applies when NOT using "
-            "--openai_base_url). Example: Qwen/Qwen2-VL-2B-Instruct"
+            "--openai_base_url).\n"
+            "Examples:\n"
+            "  - Qwen/Qwen2.5-VL-72B-Instruct\n"
+            "  - qwen2.5-vl-72b   (alias)\n"
+            "  - Qwen/Qwen2-VL-2B-Instruct"
         ),
     )
     parser.add_argument(
@@ -342,8 +376,17 @@ def main() -> None:
 
     import os
 
+    # Global API key (read by vllm_checker.llm_client via env vars).
+    # Provider-specific flags still take precedence, but this enables a single-flag UX.
+    if args.api_key:
+        os.environ["VLLM_API_KEY"] = str(args.api_key)
+
     # Prompt configuration (read by vllm_checker.llm_client via env vars).
     os.environ["VLLM_PROMPT_STYLE"] = str(args.prompt_style)
+    if args.max_tokens_describe_then_yesno is not None:
+        os.environ["VLLM_MAX_TOKENS_DESCRIBE_THEN_YESNO"] = str(int(args.max_tokens_describe_then_yesno))
+    if args.max_tokens_strict_yn is not None:
+        os.environ["VLLM_MAX_TOKENS_STRICT_YN"] = str(int(args.max_tokens_strict_yn))
     if args.prompt_examples_path:
         os.environ["VLLM_PROMPT_EXAMPLES_PATH"] = str(args.prompt_examples_path)
     if args.prompt_disable_default_examples:

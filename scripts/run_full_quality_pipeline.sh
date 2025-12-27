@@ -16,6 +16,7 @@ Usage:
 
 Options (general):
   --city <CityName>   (default: WashingtonDC)
+  --images_dir <path/to/images>  (default: /mnt/d/data/gsv_cities/Images/<CITY>)
   --input_csv_wait_seconds <seconds>  (default: 900)
 
 Options (Step 3: vllm_checker prompt):
@@ -24,6 +25,7 @@ Options (Step 3: vllm_checker prompt):
   --vllm_prompt_disable_default_examples
 
 You can also set equivalent env vars:
+  IMAGES_DIR
   VLLM_PROMPT_STYLE
   VLLM_PROMPT_EXAMPLES_PATH
   VLLM_PROMPT_DISABLE_DEFAULT_EXAMPLES=1
@@ -59,6 +61,10 @@ while [[ $# -gt 0 ]]; do
       CITY="${2:-}"
       shift 2
       ;;
+    --images_dir)
+      IMAGES_DIR="${2:-}"
+      shift 2
+      ;;
     --input_csv_wait_seconds)
       INPUT_CSV_WAIT_SECONDS="${2:-}"
       shift 2
@@ -91,6 +97,11 @@ fi
 # City-derived paths (allow env overrides if user set them explicitly)
 IMAGES_DIR="${IMAGES_DIR:-/mnt/d/data/gsv_cities/Images/${CITY}}"
 OUT_DIR="${OUT_DIR:-${REPO_ROOT}/results/debug_yesno_low_sam_conf/${CITY}}"
+
+if [[ -z "${IMAGES_DIR}" ]]; then
+  echo "[pipeline] ERROR: --images_dir is empty" >&2
+  exit 2
+fi
 
 OBJECTS_CSV="${OBJECTS_CSV:-${OUT_DIR}/${CITY}_objects.csv}"
 TIMINGS_CSV="${TIMINGS_CSV:-${OUT_DIR}/out_timings.csv}"
@@ -148,6 +159,7 @@ log_cmd() {
 
 echo "[pipeline] repo: ${REPO_ROOT}"
 echo "[pipeline] city: ${CITY}"
+echo "[pipeline] images_dir: ${IMAGES_DIR}"
 echo "[pipeline] out:  ${OUT_DIR}"
 echo "[pipeline] watch_poll_sec=${WATCH_POLL_SEC}, watch_idle_minutes=${WATCH_IDLE_MIN}"
 echo "[pipeline] input_csv_wait_seconds=${INPUT_CSV_WAIT_SECONDS}"

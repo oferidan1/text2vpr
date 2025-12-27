@@ -87,6 +87,40 @@ _UNEXPECTED_ANSWERS_CSV = (
 _LLM_IO_CSV = Path(__file__).resolve().parent / "outs" / "llm_io_log.csv"
 
 
+# ---- Model aliases / presets -------------------------------------------------
+#
+# Users often want to specify a "known" model via a short name (especially when
+# switching between local HF vs OpenAI-compatible HTTP backends).
+#
+# This resolver is intentionally lightweight: it does NOT validate that the
+# model is available locally; it only normalizes common aliases to canonical
+# HuggingFace repo ids.
+_MODEL_ALIASES: dict[str, str] = {
+    # Qwen2-VL (existing default family)
+    "qwen2-vl-2b-instruct": "Qwen/Qwen2-VL-2B-Instruct",
+    "qwen2-vl-7b-instruct": "Qwen/Qwen2-VL-7B-Instruct",
+
+    # Qwen2.5-VL family (requested)
+    "qwen2.5-vl-72b-instruct": "Qwen/Qwen2.5-VL-72B-Instruct",
+    "qwen2.5-vl-72b": "Qwen/Qwen2.5-VL-72B-Instruct",
+    "qwen2_5-vl-72b-instruct": "Qwen/Qwen2.5-VL-72B-Instruct",
+    "qwen2_5-vl-72b": "Qwen/Qwen2.5-VL-72B-Instruct",
+}
+
+
+def _normalize_model_name(model: str) -> str:
+    """Normalize a user-provided model string.
+
+    Accepts either a full HuggingFace repo id (e.g. 'Qwen/Qwen2.5-VL-72B-Instruct')
+    or a short alias (e.g. 'qwen2.5-vl-72b').
+    """
+    m = (model or "").strip()
+    if not m:
+        return m
+    key = m.strip().lower()
+    return _MODEL_ALIASES.get(key, m)
+
+
 def _progress_enabled() -> bool:
     """Enable lightweight stage prints for long-running init/inference.
 
@@ -849,8 +883,10 @@ class OpenAICompatVLMClient:
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": prompt},
+                        # Keep the same ordering as the local HF backend (image first),
+                        # which tends to be more robust across OpenAI-compatible VLM servers.
                         {"type": "image_url", "image_url": {"url": img_url}},
+                        {"type": "text", "text": prompt},
                     ],
                 }
             ],
@@ -1050,7 +1086,7 @@ class GeminiVLMClient:
         if not (config.api_key or "").strip():
             raise ValueError(
                 "Gemini API key is missing. Export GEMINI_API_KEY (or GOOGLE_API_KEY) before running, "
-                "or pass --gemini_api_key."
+                "or pass --api_key / --gemini_api_key."
             )
         self.config = config
         self._debug_mode = os.environ.get("VLLM_DEBUG", "0") == "1"
@@ -1231,8 +1267,31 @@ class GeminiVLMClient:
                 except Exception:
                     details = ""
                 code = int(getattr(e, "code", 0) or 0)
+                retry_after_s: Optional[float] = None
+                if code == 429 and details:
+                    # Gemini often includes a suggested retry delay in the JSON body:
+                    #   error.details[].@type == google.rpc.RetryInfo, retryDelay == "29s"
+                    try:
+                        parsed_details = json.loads(details)
+                        err = parsed_details.get("error") if isinstance(parsed_details, dict) else None
+                        details_list = err.get("details") if isinstance(err, dict) else None
+                        if isinstance(details_list, list):
+                            for d in details_list:
+                                if not isinstance(d, dict):
+                                    continue
+                                if str(d.get("@type") or "").endswith("google.rpc.RetryInfo"):
+                                    rd = str(d.get("retryDelay") or "").strip()
+                                    # Format examples: "29s", "0.5s"
+                                    if rd.endswith("s"):
+                                        retry_after_s = float(rd[:-1])
+                                    break
+                    except Exception:
+                        retry_after_s = None
+
                 if code in transient_http and attempt < attempts - 1:
                     sleep_s = float(self.config.retry_backoff_s) * (2**attempt)
+                    if retry_after_s is not None:
+                        sleep_s = max(sleep_s, float(retry_after_s))
                     if self._debug_mode:
                         print(f"        HTTP {code}; retrying in {sleep_s:.1f}s...")
                     time.sleep(sleep_s)
@@ -1335,6 +1394,7 @@ def build_default_client(provider: Optional[str] = None) -> LLMClient:
             os.environ.get("GEMINI_API_KEY")
             or os.environ.get("GOOGLE_API_KEY")
             or os.environ.get("GOOGLE_AI_STUDIO_API_KEY")
+            or os.environ.get("VLLM_API_KEY")
             or ""
         )
         model = os.environ.get("GEMINI_MODEL") or os.environ.get("GOOGLE_MODEL") or GeminiConfig.model
@@ -1357,12 +1417,13 @@ def build_default_client(provider: Optional[str] = None) -> LLMClient:
             raise ValueError(
                 "Requested provider=openai_compat, but OPENAI_BASE_URL (or VLLM_OPENAI_BASE_URL) is not set."
             )
-        api_key = os.environ.get("OPENAI_API_KEY") or "EMPTY"
+        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("VLLM_API_KEY") or "EMPTY"
         model = (
             os.environ.get("OPENAI_MODEL")
             or os.environ.get("VLLM_OPENAI_MODEL")
             or OpenAICompatConfig.model
         )
+        model = _normalize_model_name(str(model))
         timeout_s = float(
             os.environ.get("VLLM_OPENAI_TIMEOUT_S")
             or os.environ.get("OPENAI_TIMEOUT_S")
@@ -1396,6 +1457,7 @@ def build_default_client(provider: Optional[str] = None) -> LLMClient:
             or os.environ.get("HF_MODEL")
             or LLMConfig.model_name
         )
+        local_model = _normalize_model_name(str(local_model))
         return TextOnlyLLMClient(LLMConfig(model_name=str(local_model)))
 
     if provider not in ("auto", ""):
@@ -1405,12 +1467,13 @@ def build_default_client(provider: Optional[str] = None) -> LLMClient:
 
     base_url = os.environ.get("VLLM_OPENAI_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
     if base_url:
-        api_key = os.environ.get("OPENAI_API_KEY") or "EMPTY"
+        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("VLLM_API_KEY") or "EMPTY"
         model = (
             os.environ.get("OPENAI_MODEL")
             or os.environ.get("VLLM_OPENAI_MODEL")
             or OpenAICompatConfig.model
         )
+        model = _normalize_model_name(str(model))
         timeout_s = float(
             os.environ.get("VLLM_OPENAI_TIMEOUT_S")
             or os.environ.get("OPENAI_TIMEOUT_S")
@@ -1483,7 +1546,7 @@ def build_default_client(provider: Optional[str] = None) -> LLMClient:
                 return False
 
         if _probe_openai_compat(fallback_base_url):
-            api_key = os.environ.get("OPENAI_API_KEY") or "EMPTY"
+            api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("VLLM_API_KEY") or "EMPTY"
             model = (
                 os.environ.get("OPENAI_MODEL")
                 or os.environ.get("VLLM_OPENAI_MODEL")
@@ -1536,7 +1599,7 @@ def build_default_client(provider: Optional[str] = None) -> LLMClient:
                 return False
 
         if _probe_openai_compat(fallback_base_url):
-            api_key = os.environ.get("OPENAI_API_KEY") or "EMPTY"
+            api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("VLLM_API_KEY") or "EMPTY"
             model = (
                 os.environ.get("OPENAI_MODEL")
                 or os.environ.get("VLLM_OPENAI_MODEL")
@@ -1565,5 +1628,6 @@ def build_default_client(provider: Optional[str] = None) -> LLMClient:
         or os.environ.get("HF_MODEL")
         or LLMConfig.model_name
     )
+    local_model = _normalize_model_name(str(local_model))
     return TextOnlyLLMClient(LLMConfig(model_name=str(local_model)))
 
