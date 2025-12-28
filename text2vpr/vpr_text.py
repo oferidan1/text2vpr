@@ -190,15 +190,17 @@ class VPR_Text_Model(pl.LightningModule):
                     param.requires_grad = False                      
             
             # Define LoRA configuration
-            # TaskType.FEATURE_EXTRACTION is appropriate for sentence embedding tasks
-            target_lora = "all-linear"
-            if cross_modal == 4:
-                if 'blip' in vpr_model_name:
-                    target_lora = ["query", "value", "qkv"]
-                elif 'clip' in vpr_model_name:
-                    target_lora = ["q_proj", "v_proj"]
+            # TaskType.FEATURE_EXTRACTION is appropriate for sentence embedding tasks            
             if is_trainable_text_encoder:
                 r=64
+                target_lora = "all-linear"
+                if cross_modal == 4:
+                    r = 16
+                    if 'blip' in vpr_model_name:
+                        target_lora = ["query", "value", "qkv"]
+                    elif 'clip' in vpr_model_name:
+                        target_lora = ["q_proj", "v_proj"]
+                
                 lora_config = LoraConfig(
                     r=r,
                     lora_alpha=r*2,
