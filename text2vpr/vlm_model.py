@@ -43,9 +43,12 @@ class VLM_Model:
             self.encoder_dim = self.vpr_encoder_dim
             
         elif args.is_dual_encoder or args.encode_mode!='both':    
-            self.tokenizer = AutoTokenizer.from_pretrained(self.text_model_name)  
-            self.text_encoder = AutoModel.from_pretrained(self.text_model_name).to(args.device)
-            self.text_encoder.eval()
+            if 'modernbert' in self.text_model_name:
+                self.text_encoder = SentenceTransformer(self.text_model_name)
+            else:
+                self.tokenizer = AutoTokenizer.from_pretrained(self.text_model_name)  
+                self.text_encoder = AutoModel.from_pretrained(self.text_model_name).to(args.device)
+                self.text_encoder.eval()
             
             self.vpr_encoder = vpr_models.get_model(args.vpr_model_name.lower(), args.vpr_model_backbone, self.vpr_encoder_dim)
             self.vpr_encoder = self.vpr_encoder.eval().to(args.device)
@@ -134,7 +137,9 @@ class VLM_Model:
             text_inputs = self.processor(text=texts, return_tensors="pt", padding=True, truncation=True, max_length=77).input_ids.to(self.device)
             with torch.no_grad():     
                 text_features = self.vpr_encoder.get_text_features(input_ids=text_inputs)
-        else:
+        elif 'modernbert' in self.text_model_name:
+            text_features = self.text_encoder.encode(texts, convert_to_tensor=True)
+        else:        
             text_tokens = self.tokenizer(texts, padding=True, truncation=True, return_tensors='pt').to(self.device)
             with torch.no_grad():      
                 model_output = self.text_encoder(**text_tokens)                        
