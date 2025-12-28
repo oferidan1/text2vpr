@@ -104,6 +104,12 @@ class VPR_Text_Model(pl.LightningModule):
         text_encoder_dim = 1024        
         if 'blip' in vpr_model_name or 'clip' in vpr_model_name:
             text_encoder_dim = vpr_encoder_dim
+
+        if cross_modal == 4:
+            #self.contrastive_logit_scale = Parameter(torch.ones([]) * np.log(1 / 0.07), requires_grad=True)
+            self.contrastive_logit_scale = nn.Parameter(0.07*torch.ones([])) 
+            self.contrastive_loss = utils.losses.contrastive_loss_cross_modal
+            self.miner = None
             
         self.mse_loss = torch.nn.MSELoss()
         # if is_pca:
@@ -185,14 +191,19 @@ class VPR_Text_Model(pl.LightningModule):
             
             # Define LoRA configuration
             # TaskType.FEATURE_EXTRACTION is appropriate for sentence embedding tasks
+            target_lora = "all-linear"
+            if cross_modal == 4:
+                if 'blip' in vpr_model_name:
+                    target_lora = ["query", "value", "qkv"]
+                elif 'clip' in vpr_model_name:
+                    target_lora = ["q_proj", "v_proj"]
             if is_trainable_text_encoder:
                 r=64
                 lora_config = LoraConfig(
                     r=r,
                     lora_alpha=r*2,
                     lora_dropout=0.1,
-                    #target_modules=["query", "value", "qkv"],
-                    target_modules="all-linear",                    
+                    target_modules=target_lora,
                     task_type=TaskType.SEQ_CLS,
                     use_rslora=True,                    
                     bias="none",
@@ -404,61 +415,13 @@ class VPR_Text_Model(pl.LightningModule):
 
         optimizer.step(closure=optimizer_closure)
 
-
- #  The loss function call (this method will be called at each training iteration)
-    def loss_function_ce(self, descriptors, labels, text_embeds, w):
-        # we mine the pairs/triplets if there is an online mining strategy
-        if self.miner is not None:
-            miner_outputs = self.miner(descriptors, labels)     
-            loss = self.loss_fn(descriptors, labels, miner_outputs)
-            # loss_t = self.loss_fn(text_embeds, labels, miner_outputs)
-            ## create new labels by softmax loss_v and loss_t
-            ## concat loss_v and loss_t            
-            # loss_cat = torch.cat((loss_v.unsqueeze(0), loss_t.unsqueeze(0)), dim=0)
-            # labels_ce = F.softmax(loss_cat, dim=0)
-            # w_vec = torch.cat((w, 1-w, ), dim=0).to(self.my_device)
-            # loss = F.cross_entropy(w_vec, labels_ce)
-
-            # mining hard negatives by text embeddings
-            # miner_outputs_text = self.miner(text_embeds, labels)
-            
-            if w is not None:
-                if len(w.shape) > 1:
-                    w_i = w[:,0].mean()
-                else:
-                    w_i = w.mean()
-                self.log('w_i', w_i.item(), logger=True)
-
-            # calculate the % of trivial pairs/triplets
-            # which do not contribute in the loss value
-            nb_samples = descriptors.shape[0]
-            nb_mined = len(set(miner_outputs[0].detach().cpu().numpy()))
-            batch_acc = 1.0 - (nb_mined/nb_samples)
-
-        else: # no online mining
-            loss = self.loss_fn(descriptors, labels)
-            batch_acc = 0.0
-            if type(loss) == tuple: 
-                # somes losses do the online mining inside (they don't need a miner objet), 
-                # so they return the loss and the batch accuracy
-                # for example, if you are developping a new loss function, you might be better
-                # doing the online mining strategy inside the forward function of the loss class, 
-                # and return a tuple containing the loss value and the batch_accuracy (the % of valid pairs or triplets)
-                loss, batch_acc = loss
-
-        # keep accuracy of every batch and later reset it at epoch start
-        self.batch_acc.append(batch_acc)
-        # log it
-        self.log('b_acc', sum(self.batch_acc) /
-                len(self.batch_acc), prog_bar=True, logger=True)
-        return loss
             
     #  The loss function call (this method will be called at each training iteration)
     def loss_function(self, descriptors, labels, text_embeds, w, orig_descriptors, orig_text_embeds):
         
         # we mine the pairs/triplets if there is an online mining strategy
-        if self.miner is not None:
-            if self.cross_modal:            
+        if self.miner is not None:            
+            if self.cross_modal:
                 ref_labels = labels.clone()
                 miner_outputs = self.miner(descriptors, labels, ref_emb=text_embeds, ref_labels=ref_labels)     
                 loss = self.loss_fn(descriptors, labels, indices_tuple=miner_outputs, ref_emb=text_embeds, ref_labels=ref_labels)
@@ -469,9 +432,7 @@ class VPR_Text_Model(pl.LightningModule):
             # if self.is_orig_desc_mining:
             #     miner_outputs = self.miner(orig_descriptors, labels)     
             # else:
-            #     miner_outputs = self.miner(descriptors, labels)     
-
-            
+            #     miner_outputs = self.miner(descriptors, labels)                 
                 
             # if 'blip' in self.vpr_model_name:
             #     image_loss = self.mse_loss(descriptors, orig_descriptors)
@@ -496,7 +457,12 @@ class VPR_Text_Model(pl.LightningModule):
             batch_acc = 1.0 - (nb_mined/nb_samples)
 
         else: # no online mining
-            loss = self.loss_fn(descriptors, labels)
+            if self.cross_modal == 4: # contrastive loss
+                # contrastive loss cross modal
+                logit_scale = self.contrastive_logit_scale
+                loss = self.contrastive_loss(descriptors, text_embeds, logit_scale)                            
+            else:
+                loss = self.loss_fn(descriptors, labels)
             batch_acc = 0.0
             if type(loss) == tuple: 
                 # somes losses do the online mining inside (they don't need a miner objet), 
