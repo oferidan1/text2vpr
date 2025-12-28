@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import os
 import time
 from dataclasses import dataclass
@@ -190,6 +191,8 @@ def _process_row_with_llm(
     *,
     row: dict,
     writer: csv.DictWriter,
+    no_only_writer: Optional[csv.DictWriter],
+    no_only_raw_column: str,
     images_root: Optional[Path],
     client: LLMClient,
     new_column: str,
@@ -232,6 +235,7 @@ def _process_row_with_llm(
         return
 
     llm_rejected: List[str] = []
+    raw_records: list[dict[str, str]] = []
     num_questions = len(missing_objects)
     t0 = time.time()
 
@@ -252,22 +256,42 @@ def _process_row_with_llm(
             ]
 
             try:
-                # type: ignore[attr-defined] – guarded by hasattr above
-                present_flags = client.is_object_in_image_batch(queries)  # type: ignore[assignment]
-                for obj, present in zip(chunk, present_flags):
-                    # We keep objects for which the model said "no".
-                    if not present:
-                        llm_rejected.append(obj)
+                if hasattr(client, "is_object_in_image_batch_with_raw"):
+                    # type: ignore[attr-defined] – runtime guarded by hasattr above
+                    present_and_raw = client.is_object_in_image_batch_with_raw(queries)  # type: ignore[assignment]
+                    for obj, (present, raw) in zip(chunk, present_and_raw):
+                        raw_records.append(
+                            {"object_name": str(obj), "raw_output": str(raw or "")}
+                        )
+                        if not present:
+                            llm_rejected.append(obj)
+                else:
+                    # type: ignore[attr-defined] – guarded by hasattr above
+                    present_flags = client.is_object_in_image_batch(queries)  # type: ignore[assignment]
+                    for obj, present in zip(chunk, present_flags):
+                        raw_records.append({"object_name": str(obj), "raw_output": ""})
+                        # We keep objects for which the model said "no".
+                        if not present:
+                            llm_rejected.append(obj)
             except Exception:
                 # If the batch call fails (e.g. transient HTTP timeout), fall back
                 # to per-object calls so a single error doesn't abort the whole run.
                 for obj in chunk:
                     try:
-                        present = client.is_object_in_image(
-                            image_path=full_image_path,
-                            object_name=obj,
-                            description=pr.description,
-                        )
+                        if hasattr(client, "is_object_in_image_with_raw"):
+                            # type: ignore[attr-defined]
+                            present, raw = client.is_object_in_image_with_raw(  # type: ignore[misc]
+                                image_path=full_image_path,
+                                object_name=obj,
+                                description=pr.description,
+                            )
+                        else:
+                            present = client.is_object_in_image(
+                                image_path=full_image_path,
+                                object_name=obj,
+                                description=pr.description,
+                            )
+                            raw = ""
                     except Exception as ee:
                         _log_llm_request_error(
                             image_path=full_image_path,
@@ -276,16 +300,29 @@ def _process_row_with_llm(
                             error=ee,
                         )
                         present = False  # conservative: treat as not present
+                        raw = f"[ERROR] {type(ee).__name__}: {ee}"
+                    raw_records.append(
+                        {"object_name": str(obj), "raw_output": str(raw or "")}
+                    )
                     if not present:
                         llm_rejected.append(obj)
     else:
         for obj in missing_objects:
             try:
-                present = client.is_object_in_image(
-                    image_path=full_image_path,
-                    object_name=obj,
-                    description=pr.description,
-                )
+                if hasattr(client, "is_object_in_image_with_raw"):
+                    # type: ignore[attr-defined]
+                    present, raw = client.is_object_in_image_with_raw(  # type: ignore[misc]
+                        image_path=full_image_path,
+                        object_name=obj,
+                        description=pr.description,
+                    )
+                else:
+                    present = client.is_object_in_image(
+                        image_path=full_image_path,
+                        object_name=obj,
+                        description=pr.description,
+                    )
+                    raw = ""
             except Exception as e:
                 _log_llm_request_error(
                     image_path=full_image_path,
@@ -294,6 +331,8 @@ def _process_row_with_llm(
                     error=e,
                 )
                 present = False  # conservative: treat as not present
+                raw = f"[ERROR] {type(e).__name__}: {e}"
+            raw_records.append({"object_name": str(obj), "raw_output": str(raw or "")})
             # We keep objects for which the model said "no".
             if not present:
                 llm_rejected.append(obj)
@@ -303,11 +342,19 @@ def _process_row_with_llm(
     row["vllm_time_s"] = round(time.time() - t0, 4)
     writer.writerow(row)
 
+    # Optional: write a debug-only CSV with rows where vLLM rejected at least one object.
+    if no_only_writer is not None and llm_rejected:
+        debug_row = dict(row)
+        debug_row[no_only_raw_column] = json.dumps(raw_records, ensure_ascii=False)
+        no_only_writer.writerow(debug_row)
+
 
 def check_csv_with_llm(
     *,
     input_csv: Path,
     output_csv: Optional[Path] = None,
+    no_only_csv: Optional[Path] = None,
+    no_only_raw_column: str = "vllm_raw_outputs_json",
     images_root: Optional[Path] = None,
     client: Optional[LLMClient] = None,
     new_column: str = "objects_vllm_said_no",
@@ -335,6 +382,12 @@ def check_csv_with_llm(
         output_csv = input_csv.with_name(input_csv.stem + "_vllm_checked.csv")
     else:
         output_csv = output_csv.resolve()
+
+    if no_only_csv is None:
+        # Default debug CSV path lives next to the main output.
+        no_only_csv = output_csv.with_name(output_csv.stem + "_no_only_debug.csv")
+    else:
+        no_only_csv = no_only_csv.resolve()
 
     if images_root is not None:
         images_root = images_root.resolve()
@@ -366,6 +419,10 @@ def check_csv_with_llm(
     for extra in ("vllm_num_questions", "vllm_time_s"):
         if extra not in fieldnames:
             fieldnames.append(extra)
+
+    no_only_fieldnames: List[str] = list(fieldnames)
+    if no_only_raw_column not in no_only_fieldnames:
+        no_only_fieldnames.append(no_only_raw_column)
 
     # If we can, count total input rows once so tqdm can show real progress even
     # when resuming (otherwise it can look "stuck" with no output).
@@ -415,6 +472,24 @@ def check_csv_with_llm(
             # If we can't read it or the header mismatches, do not silently resume.
             raise
 
+    # NO-only debug CSV resume/header check (best-effort; mirrors main output behavior).
+    no_only_exists = no_only_csv.is_file()
+    no_only_has_header = False
+    if no_only_exists and resume:
+        try:
+            with no_only_csv.open("r", newline="", encoding="utf-8") as f_check_no:
+                reader_check_no = csv.DictReader(f_check_no)
+                no_only_has_header = reader_check_no.fieldnames is not None
+                if no_only_has_header and list(reader_check_no.fieldnames) != no_only_fieldnames:
+                    raise ValueError(
+                        "NO-only debug CSV header does not match expected columns for this run. "
+                        "Refusing to --resume to avoid corrupting the file. "
+                        f"Expected fieldnames={no_only_fieldnames} but found={list(reader_check_no.fieldnames)}. "
+                        "Delete the NO-only CSV, change --no_only_raw_column, or rerun without --resume."
+                    )
+        except Exception:
+            raise
+
     # Open the output CSV:
     # - default: write fresh (overwrite)
     # - --resume: append if the output exists and has a header, otherwise write fresh
@@ -422,13 +497,23 @@ def check_csv_with_llm(
         mode = "a"
     else:
         mode = "w"
-    with output_csv.open(mode, newline="", encoding="utf-8") as f_out:
+    if resume and no_only_exists and no_only_has_header:
+        no_mode = "a"
+    else:
+        no_mode = "w"
+
+    with output_csv.open(mode, newline="", encoding="utf-8") as f_out, \
+         no_only_csv.open(no_mode, newline="", encoding="utf-8") as f_no:
         writer = csv.DictWriter(f_out, fieldnames=fieldnames)
+        no_writer = csv.DictWriter(f_no, fieldnames=no_only_fieldnames)
         
         # Only write header if we're starting fresh.
         if mode == "w":
             writer.writeheader()
+        if no_mode == "w":
+            no_writer.writeheader()
         f_out.flush()
+        f_no.flush()
 
         # Follow mode: optionally stop after an idle timeout (no file changes).
         # We detect "changes" by (mtime_ns, size) signature to avoid relying
@@ -509,6 +594,8 @@ def check_csv_with_llm(
                     _process_row_with_llm(
                         row=row,
                         writer=writer,
+                        no_only_writer=no_writer,
+                        no_only_raw_column=no_only_raw_column,
                         images_root=images_root,
                         client=client,
                         new_column=new_column,

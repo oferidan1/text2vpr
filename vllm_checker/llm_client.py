@@ -3,7 +3,9 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass
 import json
+import re
 import time
+from functools import lru_cache
 from typing import Optional, Protocol
 from urllib import request as urllib_request
 from urllib.error import HTTPError, URLError
@@ -49,6 +51,20 @@ class OpenAICompatConfig:
     retry_backoff_s: float = 1.0
 
 
+@dataclass
+class GeminiConfig:
+    """Configuration for Google AI Studio (Gemini Developer API) generateContent backend."""
+
+    api_key: str
+    model: str = "gemini-2.5-flash"
+    max_output_tokens: int = 8
+    temperature: float = 0.0
+    top_p: float = 0.9
+    timeout_s: float = 120.0
+    max_retries: int = 2
+    retry_backoff_s: float = 1.0
+
+
 class LLMClient(Protocol):
     def is_object_in_image(
         self,
@@ -71,6 +87,40 @@ _UNEXPECTED_ANSWERS_CSV = (
 _LLM_IO_CSV = Path(__file__).resolve().parent / "outs" / "llm_io_log.csv"
 
 
+# ---- Model aliases / presets -------------------------------------------------
+#
+# Users often want to specify a "known" model via a short name (especially when
+# switching between local HF vs OpenAI-compatible HTTP backends).
+#
+# This resolver is intentionally lightweight: it does NOT validate that the
+# model is available locally; it only normalizes common aliases to canonical
+# HuggingFace repo ids.
+_MODEL_ALIASES: dict[str, str] = {
+    # Qwen2-VL (existing default family)
+    "qwen2-vl-2b-instruct": "Qwen/Qwen2-VL-2B-Instruct",
+    "qwen2-vl-7b-instruct": "Qwen/Qwen2-VL-7B-Instruct",
+
+    # Qwen2.5-VL family (requested)
+    "qwen2.5-vl-72b-instruct": "Qwen/Qwen2.5-VL-72B-Instruct",
+    "qwen2.5-vl-72b": "Qwen/Qwen2.5-VL-72B-Instruct",
+    "qwen2_5-vl-72b-instruct": "Qwen/Qwen2.5-VL-72B-Instruct",
+    "qwen2_5-vl-72b": "Qwen/Qwen2.5-VL-72B-Instruct",
+}
+
+
+def _normalize_model_name(model: str) -> str:
+    """Normalize a user-provided model string.
+
+    Accepts either a full HuggingFace repo id (e.g. 'Qwen/Qwen2.5-VL-72B-Instruct')
+    or a short alias (e.g. 'qwen2.5-vl-72b').
+    """
+    m = (model or "").strip()
+    if not m:
+        return m
+    key = m.strip().lower()
+    return _MODEL_ALIASES.get(key, m)
+
+
 def _progress_enabled() -> bool:
     """Enable lightweight stage prints for long-running init/inference.
 
@@ -88,6 +138,160 @@ def _p(msg: str) -> None:
         print(msg, flush=True)
     except Exception:
         return
+
+
+def _prompt_style() -> str:
+    """Return the active prompt style (normalized).
+
+    Controlled via `VLLM_PROMPT_STYLE` (set by vllm_checker/main.py flags).
+    """
+    style = (os.environ.get("VLLM_PROMPT_STYLE") or "strict_yn").strip().lower()
+    if style in {"strict_yn", "yn", "yesno", "yes_no"}:
+        return "strict_yn"
+    if style in {
+        "describe_then_yesno",
+        "describe_then_yn",
+        "describe_first",
+        "describe_first_yesno",
+        "cot",
+    }:
+        return "describe_then_yesno"
+    # Be conservative: preserve legacy behavior for unknown values.
+    return "strict_yn"
+
+
+def _max_output_tokens_for_style(default_tokens: int) -> int:
+    """Choose an output token budget based on prompt style.
+
+    `strict_yn` needs very few tokens; `describe_then_yesno` needs enough room to
+    emit a short description *and* a final Answer line.
+    """
+    style = _prompt_style()
+    if style == "describe_then_yesno":
+        # Allow override via env var, else use a sensible default.
+        try:
+            v = int(os.environ.get("VLLM_MAX_TOKENS_DESCRIBE_THEN_YESNO", "64"))
+            return max(8, v)
+        except Exception:
+            return 64
+    # strict_yn (and unknown) keeps the backend default unless overridden.
+    try:
+        v = int(os.environ.get("VLLM_MAX_TOKENS_STRICT_YN", str(default_tokens)))
+        return max(1, v)
+    except Exception:
+        return int(default_tokens)
+
+
+def _disable_default_examples() -> bool:
+    return os.environ.get("VLLM_PROMPT_DISABLE_DEFAULT_EXAMPLES", "0") == "1"
+
+
+@lru_cache(maxsize=1)
+def _load_prompt_examples_text() -> str:
+    """Load user-provided few-shot examples (verbatim) if configured.
+
+    Controlled via `VLLM_PROMPT_EXAMPLES_PATH`. Any errors are swallowed on purpose:
+    examples are optional and should never crash a run.
+    """
+    p = (os.environ.get("VLLM_PROMPT_EXAMPLES_PATH") or "").strip()
+    if not p:
+        return ""
+    try:
+        text = Path(p).expanduser().read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return ""
+    text = text.strip()
+    # Hard cap to avoid accidental huge prompts.
+    if len(text) > 8000:
+        text = text[:8000].rstrip() + "\n[...truncated examples...]"
+    return text
+
+
+def _default_describe_then_yesno_examples(object_name: str) -> str:
+    obj = object_name.strip()
+    return (
+        "Examples (format only; not related to the current image):\n"
+        f"Task: Determine if building is present.\n"
+        f"Description: Trees and foliage, partially visible building, long white fence with regularly spaced ornate white pillars and dark metal railings, paved sidewalk, red-painted curb line, asphalt road with yellow dashed lines, large white gateway structure in the distance.\n"
+        "Answer: yes\n\n"
+        f"Task: Determine if hillside is present.\n"
+        f"Description: Corrugated metal shacks on the left, dense network of overhead utility wires, narrow paved urban street, tall utility pole on the right, multi-story light-colored apartment building with grid-patterned windows on the right, sequence of multi-story buildings with commercial facades further down the street, gray concrete wall in the bottom right foreground.\n"
+        "Answer: no"
+    )
+
+
+def _build_object_presence_prompt(*, object_name: str) -> str:
+    """Build the user prompt for object presence.
+
+    IMPORTANT: This function must not use any external text fields (like row
+    descriptions). The VLM should see ONLY the image + this prompt.
+    """
+    obj = object_name.strip()
+    style = _prompt_style()
+    user_examples = _load_prompt_examples_text()
+    use_defaults = not _disable_default_examples()
+
+    prefix = (user_examples + "\n\n") if user_examples else ""
+
+    if style == "describe_then_yesno":
+        examples = ""
+        if use_defaults and not user_examples:
+            examples = _default_describe_then_yesno_examples(obj) + "\n\n"
+        return (
+            prefix
+            + examples
+            + "Describe the contents of the image briefly. Then determine if the target object is present.\n"
+            + f"Target object: '{obj}'\n\n"
+            + "Respond in exactly this format:\n"
+            + "Description: <1-3 sentences>\n"
+            + "Answer: yes|no"
+        )
+
+    # Legacy strict yes/no prompt (default).
+    base_question = f"Answer strictly with 'yes' or 'no'. Is there a '{obj}' clearly visible in this image?"
+    if not use_defaults:
+        return prefix + base_question
+    # Minimal in-prompt example to anchor strict output format.
+    return (
+        prefix
+        + "Example:\n"
+        + "Input: Answer strictly with 'yes' or 'no'. "
+        + "Is there a 'tree canopies' clearly visible in this image?\n"
+        + "Expected output: yes.\n\n"
+        + f"Input: {base_question}\n"
+        + "Expected output:"
+    )
+
+
+_ANSWER_LINE_RE = re.compile(r"(?:^|\n)\s*answer\s*[:\-]\s*(yes|no)\b", re.IGNORECASE)
+_YESNO_RE = re.compile(r"\b(yes|no)\b", re.IGNORECASE)
+
+
+def _extract_yes_no(raw_output: str) -> Optional[bool]:
+    """Extract a yes/no decision from a model output.
+
+    Supports both legacy outputs (`yes`/`no`) and "describe then answer" formats like:
+      Description: ...
+      Answer: yes
+    """
+    raw = (raw_output or "").strip().lower()
+    if not raw:
+        return None
+
+    m = _ANSWER_LINE_RE.search(raw)
+    if m:
+        return m.group(1).lower() == "yes"
+
+    matches = _YESNO_RE.findall(raw)
+    if matches:
+        return matches[-1].lower() == "yes"
+
+    first_token = raw.split()[0] if raw.split() else ""
+    if first_token.startswith("y"):
+        return True
+    if first_token.startswith("n"):
+        return False
+    return None
 
 
 def _log_llm_io(
@@ -371,44 +575,29 @@ class TextOnlyLLMClient:
         self._model = model
         _p("[llm] Stage: client ready")
 
-    def is_object_in_image(
+    def _infer_raw_output(
         self,
         *,
         image_path: str,
         object_name: str,
         description: Optional[str] = None,
-    ) -> bool:
-        """Ask the model if an object is present in the given image."""
-
+    ) -> tuple[str, str, str]:
+        """Return (desc_for_prompt, prompt, raw_output)."""
         object_name = object_name.strip()
         if not object_name:
-            return False
+            return "", "", ""
 
         # Load image.
         try:
             image = self._Image.open(image_path).convert("RGB")
         except Exception:
-            # If we cannot open the image, be conservative and say "not present".
-            return False
+            # If we cannot open the image, be conservative and return empty output.
+            return "", _build_object_presence_prompt(object_name=object_name), ""
 
-        # Build a strict yes/no prompt.
-        #
-        # IMPORTANT: The VLM should receive ONLY the image + the yes/no question.
+        # IMPORTANT: The VLM should receive ONLY the image + our prompt.
         # We keep `description` for logging/analysis, but we do NOT feed it to the model.
         desc_for_prompt = description.strip() if description else ""
-        base_question = (
-            f"Answer strictly with 'yes' or 'no'. "
-            f"Is there a '{object_name}' clearly visible in this image?"
-        )
-        # Add a minimal in-prompt example to anchor the strict output format.
-        prompt = (
-            "Example:\n"
-            "Input: Answer strictly with 'yes' or 'no'. "
-            "Is there a 'tree canopies' clearly visible in this image?\n"
-            "Expected output: yes.\n\n"
-            f"Input: {base_question}\n"
-            "Expected output:"
-        )
+        prompt = _build_object_presence_prompt(object_name=object_name)
 
         if self._debug_mode:
             print(f"        Running VLM inference...", end=" ", flush=True)
@@ -455,7 +644,7 @@ class TextOnlyLLMClient:
 
         generated_ids = self._model.generate(
             **inputs,
-            max_new_tokens=self.config.max_new_tokens,
+            max_new_tokens=_max_output_tokens_for_style(self.config.max_new_tokens),
         )
 
         if self._debug_mode:
@@ -482,21 +671,86 @@ class TextOnlyLLMClient:
         # If we couldn't infer input length, fall back to decoding everything.
         to_decode = generated_ids[:, input_len:] if input_len > 0 else generated_ids
         raw = self._processor.batch_decode(to_decode, skip_special_tokens=True)[0]
+        return desc_for_prompt, prompt, raw
+
+    def is_object_in_image(
+        self,
+        *,
+        image_path: str,
+        object_name: str,
+        description: Optional[str] = None,
+    ) -> bool:
+        """Ask the model if an object is present in the given image."""
+        desc_for_prompt, prompt, raw = self._infer_raw_output(
+            image_path=image_path,
+            object_name=object_name,
+            description=description,
+        )
         _log_llm_io(
             backend="local_hf",
             model_name=self.config.model_name,
             image_path=image_path,
-            object_name=object_name,
+            object_name=object_name.strip(),
             description=desc_for_prompt,
             prompt=prompt,
             raw_output=raw,
         )
         return self._classify_raw_answer(
             image_path=image_path,
-            object_name=object_name,
+            object_name=object_name.strip(),
             description=desc_for_prompt,
             raw_output=raw,
         )
+
+    def is_object_in_image_with_raw(
+        self,
+        *,
+        image_path: str,
+        object_name: str,
+        description: Optional[str] = None,
+    ) -> tuple[bool, str]:
+        """Like `is_object_in_image`, but also returns the raw model output text."""
+        desc_for_prompt, prompt, raw = self._infer_raw_output(
+            image_path=image_path,
+            object_name=object_name,
+            description=description,
+        )
+        _log_llm_io(
+            backend="local_hf",
+            model_name=self.config.model_name,
+            image_path=image_path,
+            object_name=object_name.strip(),
+            description=desc_for_prompt,
+            prompt=prompt,
+            raw_output=raw,
+        )
+        present = self._classify_raw_answer(
+            image_path=image_path,
+            object_name=object_name.strip(),
+            description=desc_for_prompt,
+            raw_output=raw,
+        )
+        return bool(present), str(raw or "")
+
+    def is_object_in_image_batch_with_raw(
+        self,
+        queries: list[dict[str, Optional[str]]],
+    ) -> list[tuple[bool, str]]:
+        if not queries:
+            return []
+        out: list[tuple[bool, str]] = []
+        for q in queries:
+            image_path = (q.get("image_path") or "").strip()
+            object_name = (q.get("object_name") or "").strip()
+            description = q.get("description") or None
+            out.append(
+                self.is_object_in_image_with_raw(
+                    image_path=image_path,
+                    object_name=object_name,
+                    description=description,
+                )
+            )
+        return out
 
     def is_object_in_image_batch(
         self,
@@ -542,20 +796,17 @@ class TextOnlyLLMClient:
         raw_output: str,
     ) -> bool:
         """Shared helper to interpret raw LLM output as yes/no."""
-        raw = raw_output.strip().lower()
+        raw = (raw_output or "").strip().lower()
         if not raw:
             return False
 
-        # Look at the first token/word only.
-        first_token = raw.split()[0]
-
-        if first_token.startswith("y"):
-            return True
-        if first_token.startswith("n"):
-            return False
+        parsed = _extract_yes_no(raw)
+        if parsed is not None:
+            return bool(parsed)
 
         # If the answer is neither clear "yes" nor "no", log it for inspection
         # and fall back to treating it as "no" (object not present).
+        first_token = raw.split()[0] if raw.split() else ""
         _log_unexpected_answer(
             image_path=image_path,
             object_name=object_name,
@@ -586,6 +837,14 @@ def _image_to_data_url(image_path: str) -> str:
     return f"data:{mime};base64,{b64}"
 
 
+def _image_to_inline_data(image_path: str) -> tuple[str, str]:
+    """Return (mime_type, base64_data) for Gemini `inline_data` payloads."""
+    mime = _guess_mime_type(image_path)
+    with open(image_path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("ascii")
+    return mime, b64
+
+
 class OpenAICompatVLMClient:
     """VLM client that calls an OpenAI-compatible /v1/chat/completions endpoint."""
 
@@ -597,38 +856,26 @@ class OpenAICompatVLMClient:
         self._base_url = self.config.base_url.rstrip("/")
         self._endpoint = f"{self._base_url}/v1/chat/completions"
 
-    def is_object_in_image(
+    def _infer_raw_output(
         self,
         *,
         image_path: str,
         object_name: str,
         description: Optional[str] = None,
-    ) -> bool:
+    ) -> tuple[str, str, str]:
         object_name = object_name.strip()
         if not object_name:
-            return False
+            return "", "", ""
 
         try:
             img_url = _image_to_data_url(image_path)
         except Exception:
-            return False
+            return "", "", ""
 
-        # IMPORTANT: The VLM should receive ONLY the image + the yes/no question.
+        # IMPORTANT: The VLM should receive ONLY the image + our prompt.
         # We keep `description` for logging/analysis, but we do NOT feed it to the model.
         desc_for_prompt = description.strip() if description else ""
-        base_question = (
-            "Answer strictly with 'yes' or 'no'. "
-            f"Is there a '{object_name}' clearly visible in this image?"
-        )
-        # Add a minimal in-prompt example to anchor the strict output format.
-        prompt = (
-            "Example:\n"
-            "Input: Answer strictly with 'yes' or 'no'. "
-            "Is there a 'tree canopies' clearly visible in this image?\n"
-            "Expected output: yes.\n\n"
-            f"Input: {base_question}\n"
-            "Expected output:"
-        )
+        prompt = _build_object_presence_prompt(object_name=object_name)
 
         payload = {
             "model": self.config.model,
@@ -636,12 +883,14 @@ class OpenAICompatVLMClient:
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": prompt},
+                        # Keep the same ordering as the local HF backend (image first),
+                        # which tends to be more robust across OpenAI-compatible VLM servers.
                         {"type": "image_url", "image_url": {"url": img_url}},
+                        {"type": "text", "text": prompt},
                     ],
                 }
             ],
-            "max_tokens": self.config.max_tokens,
+            "max_tokens": _max_output_tokens_for_style(self.config.max_tokens),
             "temperature": self.config.temperature,
             "top_p": self.config.top_p,
         }
@@ -660,23 +909,83 @@ class OpenAICompatVLMClient:
                 raw_output=f"[ERROR] {type(e).__name__}: {e}",
             )
             raise
+        return desc_for_prompt, prompt, raw
 
+    def is_object_in_image(
+        self,
+        *,
+        image_path: str,
+        object_name: str,
+        description: Optional[str] = None,
+    ) -> bool:
+        desc_for_prompt, prompt, raw = self._infer_raw_output(
+            image_path=image_path,
+            object_name=object_name,
+            description=description,
+        )
         _log_llm_io(
             backend="openai_compat_http",
             model_name=self.config.model,
             image_path=image_path,
-            object_name=object_name,
+            object_name=object_name.strip(),
             description=desc_for_prompt,
             prompt=prompt,
             raw_output=raw,
         )
         return _classify_raw_answer_static(
             image_path=image_path,
-            object_name=object_name,
+            object_name=object_name.strip(),
             description=desc_for_prompt,
             raw_output=raw,
             model_name=self.config.model,
         )
+
+    def is_object_in_image_with_raw(
+        self,
+        *,
+        image_path: str,
+        object_name: str,
+        description: Optional[str] = None,
+    ) -> tuple[bool, str]:
+        desc_for_prompt, prompt, raw = self._infer_raw_output(
+            image_path=image_path,
+            object_name=object_name,
+            description=description,
+        )
+        _log_llm_io(
+            backend="openai_compat_http",
+            model_name=self.config.model,
+            image_path=image_path,
+            object_name=object_name.strip(),
+            description=desc_for_prompt,
+            prompt=prompt,
+            raw_output=raw,
+        )
+        present = _classify_raw_answer_static(
+            image_path=image_path,
+            object_name=object_name.strip(),
+            description=desc_for_prompt,
+            raw_output=raw,
+            model_name=self.config.model,
+        )
+        return bool(present), str(raw or "")
+
+    def is_object_in_image_batch_with_raw(
+        self,
+        queries: list[dict[str, Optional[str]]],
+    ) -> list[tuple[bool, str]]:
+        if not queries:
+            return []
+        out: list[tuple[bool, str]] = []
+        for q in queries:
+            out.append(
+                self.is_object_in_image_with_raw(
+                    image_path=(q.get("image_path") or "").strip(),
+                    object_name=(q.get("object_name") or "").strip(),
+                    description=q.get("description") or None,
+                )
+            )
+        return out
 
     def is_object_in_image_batch(
         self,
@@ -766,6 +1075,272 @@ class OpenAICompatVLMClient:
             ) from e
 
 
+class GeminiVLMClient:
+    """VLM client that calls Google AI Studio / Gemini Developer API `generateContent`.
+
+    Endpoint format:
+      POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key=API_KEY
+    """
+
+    def __init__(self, config: GeminiConfig) -> None:
+        if not (config.api_key or "").strip():
+            raise ValueError(
+                "Gemini API key is missing. Export GEMINI_API_KEY (or GOOGLE_API_KEY) before running, "
+                "or pass --api_key / --gemini_api_key."
+            )
+        self.config = config
+        self._debug_mode = os.environ.get("VLLM_DEBUG", "0") == "1"
+
+    def _infer_raw_output(
+        self,
+        *,
+        image_path: str,
+        object_name: str,
+        description: Optional[str] = None,
+    ) -> tuple[str, str, str]:
+        object_name = object_name.strip()
+        if not object_name:
+            return "", "", ""
+
+        try:
+            mime, b64 = _image_to_inline_data(image_path)
+        except Exception:
+            return "", "", ""
+
+        # IMPORTANT: The VLM should receive ONLY the image + our prompt.
+        # We keep `description` for logging/analysis, but we do NOT feed it to the model.
+        desc_for_prompt = description.strip() if description else ""
+        prompt = _build_object_presence_prompt(object_name=object_name)
+
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {"text": prompt},
+                        {"inline_data": {"mime_type": mime, "data": b64}},
+                    ],
+                }
+            ],
+            "generationConfig": {
+                "temperature": float(self.config.temperature),
+                "topP": float(self.config.top_p),
+                "maxOutputTokens": int(_max_output_tokens_for_style(self.config.max_output_tokens)),
+            },
+        }
+
+        try:
+            raw = self._post_generate_content(payload)
+        except Exception as e:
+            _log_llm_io(
+                backend="gemini",
+                model_name=self.config.model,
+                image_path=image_path,
+                object_name=object_name,
+                description=desc_for_prompt,
+                prompt=prompt,
+                raw_output=f"[ERROR] {type(e).__name__}: {e}",
+            )
+            raise
+        return desc_for_prompt, prompt, raw
+
+    def is_object_in_image(
+        self,
+        *,
+        image_path: str,
+        object_name: str,
+        description: Optional[str] = None,
+    ) -> bool:
+        desc_for_prompt, prompt, raw = self._infer_raw_output(
+            image_path=image_path,
+            object_name=object_name,
+            description=description,
+        )
+        _log_llm_io(
+            backend="gemini",
+            model_name=self.config.model,
+            image_path=image_path,
+            object_name=object_name.strip(),
+            description=desc_for_prompt,
+            prompt=prompt,
+            raw_output=raw,
+        )
+        return _classify_raw_answer_static(
+            image_path=image_path,
+            object_name=object_name.strip(),
+            description=desc_for_prompt,
+            raw_output=raw,
+            model_name=self.config.model,
+        )
+
+    def is_object_in_image_with_raw(
+        self,
+        *,
+        image_path: str,
+        object_name: str,
+        description: Optional[str] = None,
+    ) -> tuple[bool, str]:
+        desc_for_prompt, prompt, raw = self._infer_raw_output(
+            image_path=image_path,
+            object_name=object_name,
+            description=description,
+        )
+        _log_llm_io(
+            backend="gemini",
+            model_name=self.config.model,
+            image_path=image_path,
+            object_name=object_name.strip(),
+            description=desc_for_prompt,
+            prompt=prompt,
+            raw_output=raw,
+        )
+        present = _classify_raw_answer_static(
+            image_path=image_path,
+            object_name=object_name.strip(),
+            description=desc_for_prompt,
+            raw_output=raw,
+            model_name=self.config.model,
+        )
+        return bool(present), str(raw or "")
+
+    def is_object_in_image_batch_with_raw(
+        self,
+        queries: list[dict[str, Optional[str]]],
+    ) -> list[tuple[bool, str]]:
+        if not queries:
+            return []
+        out: list[tuple[bool, str]] = []
+        for q in queries:
+            out.append(
+                self.is_object_in_image_with_raw(
+                    image_path=(q.get("image_path") or "").strip(),
+                    object_name=(q.get("object_name") or "").strip(),
+                    description=q.get("description") or None,
+                )
+            )
+        return out
+
+    def is_object_in_image_batch(
+        self,
+        queries: list[dict[str, Optional[str]]],
+    ) -> list[bool]:
+        if not queries:
+            return []
+        out: list[bool] = []
+        for q in queries:
+            out.append(
+                self.is_object_in_image(
+                    image_path=(q.get("image_path") or "").strip(),
+                    object_name=(q.get("object_name") or "").strip(),
+                    description=q.get("description") or None,
+                )
+            )
+        return out
+
+    def _post_generate_content(self, payload: dict) -> str:
+        model = (self.config.model or "").strip()
+        if not model:
+            raise ValueError("Gemini model name is empty.")
+        endpoint = (
+            "https://generativelanguage.googleapis.com/v1beta/"
+            f"models/{model}:generateContent?key={self.config.api_key}"
+        )
+        body = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        req = urllib_request.Request(endpoint, data=body, headers=headers, method="POST")
+        if self._debug_mode:
+            print(f"        POST {endpoint.split('?key=', 1)[0]} (model={model})")
+
+        transient_http = {408, 409, 425, 429, 500, 502, 503, 504}
+        last_exc: Optional[Exception] = None
+        attempts = max(0, int(self.config.max_retries)) + 1
+        for attempt in range(attempts):
+            try:
+                with urllib_request.urlopen(req, timeout=self.config.timeout_s) as resp:
+                    data = resp.read().decode("utf-8")
+                last_exc = None
+                break
+            except HTTPError as e:
+                last_exc = e
+                try:
+                    details = e.read().decode("utf-8")
+                except Exception:
+                    details = ""
+                code = int(getattr(e, "code", 0) or 0)
+                retry_after_s: Optional[float] = None
+                if code == 429 and details:
+                    # Gemini often includes a suggested retry delay in the JSON body:
+                    #   error.details[].@type == google.rpc.RetryInfo, retryDelay == "29s"
+                    try:
+                        parsed_details = json.loads(details)
+                        err = parsed_details.get("error") if isinstance(parsed_details, dict) else None
+                        details_list = err.get("details") if isinstance(err, dict) else None
+                        if isinstance(details_list, list):
+                            for d in details_list:
+                                if not isinstance(d, dict):
+                                    continue
+                                if str(d.get("@type") or "").endswith("google.rpc.RetryInfo"):
+                                    rd = str(d.get("retryDelay") or "").strip()
+                                    # Format examples: "29s", "0.5s"
+                                    if rd.endswith("s"):
+                                        retry_after_s = float(rd[:-1])
+                                    break
+                    except Exception:
+                        retry_after_s = None
+
+                if code in transient_http and attempt < attempts - 1:
+                    sleep_s = float(self.config.retry_backoff_s) * (2**attempt)
+                    if retry_after_s is not None:
+                        sleep_s = max(sleep_s, float(retry_after_s))
+                    if self._debug_mode:
+                        print(f"        HTTP {code}; retrying in {sleep_s:.1f}s...")
+                    time.sleep(sleep_s)
+                    continue
+                raise RuntimeError(
+                    f"Gemini request failed (HTTP {code}).\nResponse body: {details[:4000]}"
+                ) from e
+            except (URLError, TimeoutError) as e:
+                last_exc = e
+                if attempt < attempts - 1:
+                    sleep_s = float(self.config.retry_backoff_s) * (2**attempt)
+                    if self._debug_mode:
+                        print(f"        Network error; retrying in {sleep_s:.1f}s... ({e})")
+                    time.sleep(sleep_s)
+                    continue
+                raise RuntimeError(f"Failed to reach Gemini endpoint. Reason: {e}") from e
+
+        if last_exc is not None:  # pragma: no cover
+            raise RuntimeError(f"Failed to reach Gemini endpoint. Reason: {last_exc}") from last_exc
+
+        try:
+            parsed = json.loads(data)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to parse Gemini response as JSON.\nRaw: {data[:2000]}"
+            ) from e
+
+        if isinstance(parsed, dict) and "error" in parsed:
+            err = parsed.get("error") or {}
+            msg = (err.get("message") or str(err)) if isinstance(err, dict) else str(err)
+            raise RuntimeError(f"Gemini API error: {msg}")
+
+        try:
+            candidates = parsed.get("candidates", []) if isinstance(parsed, dict) else []
+            if not candidates:
+                return ""
+            content = (candidates[0] or {}).get("content", {}) or {}
+            parts = content.get("parts", []) or []
+            texts: list[str] = []
+            for p in parts:
+                if isinstance(p, dict) and isinstance(p.get("text"), str):
+                    texts.append(p["text"])
+            return "\n".join(texts).strip()
+        except Exception as e:
+            raise RuntimeError(
+                f"Unexpected Gemini response shape.\nRaw: {data[:2000]}"
+            ) from e
+
+
 def _classify_raw_answer_static(
     *,
     image_path: str,
@@ -778,12 +1353,11 @@ def _classify_raw_answer_static(
     if not raw:
         return False
 
-    first_token = raw.split()[0]
-    if first_token.startswith("y"):
-        return True
-    if first_token.startswith("n"):
-        return False
+    parsed = _extract_yes_no(raw)
+    if parsed is not None:
+        return bool(parsed)
 
+    first_token = raw.split()[0] if raw.split() else ""
     _log_unexpected_answer(
         image_path=image_path,
         object_name=object_name,
@@ -795,22 +1369,111 @@ def _classify_raw_answer_static(
     return False
 
 
-def build_default_client() -> LLMClient:
+def build_default_client(provider: Optional[str] = None) -> LLMClient:
     """Best-effort default client selection.
+
+    If `provider` is set (or `VLLM_PROVIDER` / `VLM_PROVIDER` env var), forces a backend:
+      - auto (default): preserve legacy behavior (prefer OPENAI_BASE_URL if set, else local_hf)
+      - gemini: Google AI Studio / Gemini Developer API
+      - openai_compat: OpenAI-compatible HTTP server (/v1/chat/completions)
+      - local_hf: local HuggingFace VLM via transformers/torch
 
     - If `OPENAI_BASE_URL` (or `VLLM_OPENAI_BASE_URL`) is set, prefer HTTP backend
       to avoid requiring local PyTorch/transformers.
     - Otherwise, use the local HuggingFace backend.
     """
 
-    base_url = os.environ.get("VLLM_OPENAI_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
-    if base_url:
-        api_key = os.environ.get("OPENAI_API_KEY") or "EMPTY"
+    provider = (
+        (provider or os.environ.get("VLLM_PROVIDER") or os.environ.get("VLM_PROVIDER") or "auto")
+        .strip()
+        .lower()
+    )
+
+    if provider == "gemini":
+        api_key = (
+            os.environ.get("GEMINI_API_KEY")
+            or os.environ.get("GOOGLE_API_KEY")
+            or os.environ.get("GOOGLE_AI_STUDIO_API_KEY")
+            or os.environ.get("VLLM_API_KEY")
+            or ""
+        )
+        model = os.environ.get("GEMINI_MODEL") or os.environ.get("GOOGLE_MODEL") or GeminiConfig.model
+        timeout_s = float(os.environ.get("GEMINI_TIMEOUT_S") or GeminiConfig.timeout_s)
+        max_retries = int(os.environ.get("GEMINI_MAX_RETRIES") or GeminiConfig.max_retries)
+        retry_backoff_s = float(os.environ.get("GEMINI_RETRY_BACKOFF_S") or GeminiConfig.retry_backoff_s)
+        return GeminiVLMClient(
+            GeminiConfig(
+                api_key=str(api_key),
+                model=str(model),
+                timeout_s=timeout_s,
+                max_retries=max_retries,
+                retry_backoff_s=retry_backoff_s,
+            )
+        )
+
+    if provider in ("openai", "openai_compat", "openai_compat_http"):
+        base_url = os.environ.get("VLLM_OPENAI_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
+        if not base_url:
+            raise ValueError(
+                "Requested provider=openai_compat, but OPENAI_BASE_URL (or VLLM_OPENAI_BASE_URL) is not set."
+            )
+        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("VLLM_API_KEY") or "EMPTY"
         model = (
             os.environ.get("OPENAI_MODEL")
             or os.environ.get("VLLM_OPENAI_MODEL")
             or OpenAICompatConfig.model
         )
+        model = _normalize_model_name(str(model))
+        timeout_s = float(
+            os.environ.get("VLLM_OPENAI_TIMEOUT_S")
+            or os.environ.get("OPENAI_TIMEOUT_S")
+            or OpenAICompatConfig.timeout_s
+        )
+        max_retries = int(
+            os.environ.get("VLLM_OPENAI_MAX_RETRIES")
+            or os.environ.get("OPENAI_MAX_RETRIES")
+            or OpenAICompatConfig.max_retries
+        )
+        retry_backoff_s = float(
+            os.environ.get("VLLM_OPENAI_RETRY_BACKOFF_S")
+            or os.environ.get("OPENAI_RETRY_BACKOFF_S")
+            or OpenAICompatConfig.retry_backoff_s
+        )
+        return OpenAICompatVLMClient(
+            OpenAICompatConfig(
+                base_url=base_url,
+                api_key=api_key,
+                model=model,
+                timeout_s=timeout_s,
+                max_retries=max_retries,
+                retry_backoff_s=retry_backoff_s,
+            )
+        )
+
+    if provider in ("local", "local_hf", "hf"):
+        local_model = (
+            os.environ.get("VLLM_HF_MODEL")
+            or os.environ.get("LOCAL_HF_MODEL")
+            or os.environ.get("HF_MODEL")
+            or LLMConfig.model_name
+        )
+        local_model = _normalize_model_name(str(local_model))
+        return TextOnlyLLMClient(LLMConfig(model_name=str(local_model)))
+
+    if provider not in ("auto", ""):
+        raise ValueError(
+            f"Unknown provider '{provider}'. Expected one of: auto, gemini, openai_compat, local_hf."
+        )
+
+    base_url = os.environ.get("VLLM_OPENAI_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
+    if base_url:
+        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("VLLM_API_KEY") or "EMPTY"
+        model = (
+            os.environ.get("OPENAI_MODEL")
+            or os.environ.get("VLLM_OPENAI_MODEL")
+            or OpenAICompatConfig.model
+        )
+        model = _normalize_model_name(str(model))
         timeout_s = float(
             os.environ.get("VLLM_OPENAI_TIMEOUT_S")
             or os.environ.get("OPENAI_TIMEOUT_S")
@@ -883,7 +1546,7 @@ def build_default_client() -> LLMClient:
                 return False
 
         if _probe_openai_compat(fallback_base_url):
-            api_key = os.environ.get("OPENAI_API_KEY") or "EMPTY"
+            api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("VLLM_API_KEY") or "EMPTY"
             model = (
                 os.environ.get("OPENAI_MODEL")
                 or os.environ.get("VLLM_OPENAI_MODEL")
@@ -936,7 +1599,7 @@ def build_default_client() -> LLMClient:
                 return False
 
         if _probe_openai_compat(fallback_base_url):
-            api_key = os.environ.get("OPENAI_API_KEY") or "EMPTY"
+            api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("VLLM_API_KEY") or "EMPTY"
             model = (
                 os.environ.get("OPENAI_MODEL")
                 or os.environ.get("VLLM_OPENAI_MODEL")
@@ -965,5 +1628,6 @@ def build_default_client() -> LLMClient:
         or os.environ.get("HF_MODEL")
         or LLMConfig.model_name
     )
+    local_model = _normalize_model_name(str(local_model))
     return TextOnlyLLMClient(LLMConfig(model_name=str(local_model)))
 
