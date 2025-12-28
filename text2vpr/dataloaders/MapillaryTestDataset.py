@@ -7,6 +7,7 @@ import numpy as np
 from PIL import Image
 from pathlib import Path
 import pandas as pd
+import posixpath
 
 GT_ROOT = './datasets/' # BECAREFUL, this is the ground truth that comes with GSV-Cities
 
@@ -77,5 +78,5 @@ def read_csv_file(labels_file, image_root):
         skipinitialspace=True)
     image_path = df['image_path'].values
     description = df['description'].values    
-    image_path = [os.path.join(image_root, p) for p in image_path]
+    image_path = [posixpath.join(image_root, p) for p in image_path]
     return image_path, description

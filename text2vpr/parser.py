@@ -10,11 +10,11 @@ def parse_arguments():
     # parser.add_argument("--vpr_dim", type=int, default=4096, help="_")
     parser.add_argument("--text_dim", type=int, default=1024, help="_")
     
-    parser.add_argument("--database_folder", type=str, default="/mnt/d/data/amstertime/test/database")    
-    parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")        
-    parser.add_argument("--image_root", type=str, default="/mnt/d/data/amstertime/test")
-    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
-    #parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_w_text.csv")    
+    # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/amstertime/test/database")    
+    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")        
+    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/amstertime/test")
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
+    #parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_w_text.csv")        
     
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/nordland/images/test/database")    
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/nordland/images/test/queries")
@@ -43,6 +43,30 @@ def parse_arguments():
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/gsv_cities/Images")
     # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/gsv_cities/gsv_cities_predictions.csv")
     # parser.add_argument("--image_root", type=str, default="/mnt/d/data/gsv_cities")
+    
+    # parser.add_argument("--database_folder", type=str, default="d:/data/amstertime/test/database")    
+    # parser.add_argument("--queries_folder", type=str, default="d:/data/amstertime/test/queries")        
+    # parser.add_argument("--image_root", type=str, default="d:/data/amstertime/test")
+    # parser.add_argument("--queries_csv", type=str, default="d:/data/amstertime/test/amstertime_test_predictions.csv")
+    #parser.add_argument("--queries_csv", type=str, default="d:/data/amstertime/test/amstertime_w_text.csv")    
+    
+    # parser.add_argument("--database_folder", type=str, default="d:/data/pitts30k/images/test/database")    
+    # parser.add_argument("--queries_folder", type=str, default="d:/data/pitts30k/images/test/queries")
+    # parser.add_argument("--queries_csv", type=str, default="d:/data/pitts30k/images/test/Pittsburgh30K_test_predictions.csv")
+    # parser.add_argument("--image_root", type=str, default="d:/data/pitts30k/images/test")    
+    
+    # parser.add_argument("--database_folder", type=str, default=None)    
+    # parser.add_argument("--queries_folder", type=str, default=None)       
+    # parser.add_argument("--dataset_root", type=str, default="d:/data/msls_challenge")    
+    # parser.add_argument("--image_root", type=str, default="d:/data/msls_challenge/test")    
+    # parser.add_argument("--queries_csv", type=str, default="d:/data/msls_challenge/test/msls_challenge_predictions.csv")
+    
+    parser.add_argument("--database_folder", type=str, default="d:/data/msls/val/database")    
+    parser.add_argument("--queries_folder", type=str, default="d:/data/msls/val/query")   
+    parser.add_argument("--image_root", type=str, default="d:/data/msls/val/")    
+    parser.add_argument("--queries_csv", type=str, default="d:/data/msls/val/msls_val_predictions.csv")
+    #parser.add_argument("--queries_csv", type=str, default="d:/data/msls/val/msls_val_w_text_blur.csv")
+    #parser.add_argument("--queries_csv", type=str, default="d:/data/msls/val/msls_val_w_text_snow.csv")
     
     parser.add_argument("--num_workers", type=int, default=4, help="_")
     parser.add_argument(
@@ -96,7 +120,7 @@ def parse_arguments():
     parser.add_argument("--lora_path", type=str, default=None)    
     parser.add_argument("--is_dual_encoder", type=int, default="0", help="is dual encoder")    
     parser.add_argument("--dual_encoder_fusion", type=str, default="each", help="cat/each")    
-    parser.add_argument("--encode_mode", type=str, default="both", help="both/image/text")   
+    parser.add_argument("--encode_mode", type=str, default="image", help="both/image/text")   
     parser.add_argument("--fusion_type", type=str, default='none', help="type of fusion to use: mlp, add, transformer, dynamic_weighting, fixed_weighting, text_adapter")
     parser.add_argument("--is_normalize", type=int, default="0", help="is normalize features")    
     parser.add_argument("--max_results_reranking", type=int, default="25000", help="max results for reranking")    

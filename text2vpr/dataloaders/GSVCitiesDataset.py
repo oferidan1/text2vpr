@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as T
 import os
+import posixpath
 
 default_transform = T.Compose([
     T.ToTensor(),
@@ -175,5 +176,5 @@ class GSVCitiesDataset(Dataset):
             skipinitialspace=True)
         image_path = df['image_path'].values
         description = df['description'].values    
-        image_path = [os.path.join(image_root, p) for p in image_path]
+        image_path = [posixpath.join(image_root, p) for p in image_path]
         return image_path, description

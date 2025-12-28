@@ -9,7 +9,7 @@ import shutil
 import pandas as pd
 import numpy as np
 from glob import glob
-
+import posixpath
 from PIL import Image
 from sklearn.neighbors import NearestNeighbors
 
@@ -239,7 +239,7 @@ class WholeDatasetFromStruct(data.Dataset):
             skipinitialspace=True)
         image_path = df['image_path'].values
         description = df['description'].values    
-        image_path = [os.path.join(image_root, p) for p in image_path]        
+        image_path = [posixpath.join(image_root, p) for p in image_path]        
         image_path_database = [item for item in image_path if 'database' in item]
         image_path_queries = [item for item in image_path if 'queries' in item]
         # index_database = np.array([i for i, text in enumerate(image_path) if 'database' in text])

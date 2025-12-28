@@ -7,6 +7,7 @@ import torch.utils.data as data
 import torchvision.transforms as transforms
 from PIL import Image
 from sklearn.neighbors import NearestNeighbors
+import posixpath
 
 
 def read_images_paths(dataset_folder):
@@ -163,7 +164,7 @@ class TestDataset(data.Dataset):
             skipinitialspace=True)
         image_path = df['image_path'].values
         description = df['description'].values    
-        image_path = [os.path.join(image_root, p) for p in image_path]
+        image_path = [posixpath.join(image_root, p) for p in image_path]
         return image_path, description
         
     
