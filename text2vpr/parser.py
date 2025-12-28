@@ -8,6 +8,7 @@ def parse_arguments():
     
     parser.add_argument("--vpr_dim", type=int, default=512, help="_")
     # parser.add_argument("--vpr_dim", type=int, default=4096, help="_")
+    parser.add_argument("--text_dim", type=int, default=1024, help="_")
     
     parser.add_argument("--database_folder", type=str, default="/mnt/d/data/amstertime/test/database")    
     parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")        
