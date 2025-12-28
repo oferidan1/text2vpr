@@ -356,6 +356,7 @@ def main(args):
         dataset_mean_std = BLIP_MEAN_STD
 
     model = VLM_Model(args)
+    logger.info(f"VLM encoder dim: {model.encoder_dim}")
     
     ref_vision_scores = None
     if args.is_ref_model:
