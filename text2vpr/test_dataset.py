@@ -50,7 +50,7 @@ def read_images_paths(dataset_folder):
 
 
 class TestDataset(data.Dataset):
-    def __init__(self, database_folder, queries_folder, csv_path, image_root, positive_dist_threshold=25, image_size=None, use_labels=True, is_sample=False):
+    def __init__(self, database_folder, queries_folder, csv_path, image_root, mean_std, positive_dist_threshold=25, image_size=None, use_labels=True, is_sample=False):
         """Dataset with images from database and queries, used for validation and test.
         Parameters
         ----------
@@ -120,11 +120,11 @@ class TestDataset(data.Dataset):
             knn.fit(self.database_utms)
             _, self.positives_per_query = knn.radius_neighbors(
                 self.queries_utms, radius=positive_dist_threshold, return_distance=True, sort_results=True
-            )
+            )        
 
         transformations = [
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            transforms.Normalize(mean=mean_std['mean'], std=mean_std['std']),
         ]
         if image_size:
             image_size=(image_size,image_size)

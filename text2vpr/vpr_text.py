@@ -233,8 +233,8 @@ class VPR_Text_Model(pl.LightningModule):
 
         if self.is_encode_image:
             if 'blip' in self.vpr_model_name:
-                img_embeds = self.text_encoder.encode_image(img)
-                #img_embeds = img_embeds_all[:,0]
+                img_embeds_all = self.text_encoder.encode_image(img)
+                img_embeds = img_embeds_all[:,0]
             elif 'clip' in self.vpr_model_name:
                 img_embeds = self.text_encoder.get_image_features(pixel_values=img)
             else:
@@ -258,8 +258,8 @@ class VPR_Text_Model(pl.LightningModule):
                 text_inputs = self.processor(text=text, return_tensors="pt", padding=True)
                 text_tokens = text_inputs.input_ids.to(img.device)
                 attention_mask = text_inputs['attention_mask'].to(img.device)                
-                text_embeds = self.text_encoder.encode_text(input_ids=text_tokens, attention_mask=attention_mask)
-                #text_embeds = text_embeds_all[:,0]
+                text_embeds_all = self.text_encoder.encode_text(input_ids=text_tokens, attention_mask=attention_mask)
+                text_embeds = text_embeds_all[:,0]
             elif 'clip' in self.vpr_model_name:
                 text_inputs = self.processor(text=text, return_tensors="pt", padding=True, truncation=True, max_length=77)
                 text_tokens = text_inputs.input_ids.to(img.device)

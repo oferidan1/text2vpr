@@ -11,12 +11,12 @@ import pandas as pd
 GT_ROOT = './datasets/' # BECAREFUL, this is the ground truth that comes with GSV-Cities
 
 class MSLSTest(Dataset):
-    def __init__(self, dataset_root, image_root, csv_path, image_size=None):
+    def __init__(self, dataset_root, image_root, csv_path, mean_std, image_size=None):
         self.dataset_root = dataset_root
         self.image_root = image_root
         transformations = [
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            transforms.Normalize(mean=mean_std['mean'], std=mean_std['std']),
         ]
         if image_size:
             image_size=(image_size,image_size)

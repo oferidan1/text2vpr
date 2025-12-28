@@ -348,6 +348,13 @@ def main(args):
     logger.info(f"Testing with {args.vpr_model_name}")
     logger.info(f"The outputs are being saved in {log_dir}")
 
+    IMAGENET_MEAN_STD = {'mean': [0.485, 0.456, 0.406], 'std': [0.229, 0.224, 0.225]}
+    BLIP_MEAN_STD = {'mean': [0.48145466, 0.4578275, 0.40821073], 'std': [0.26862954, 0.26130258, 0.27577711]}
+
+    dataset_mean_std = IMAGENET_MEAN_STD
+    if 'blip' in args.vpr_model_name.lower() or 'clip' in args.vpr_model_name.lower():
+        dataset_mean_std = BLIP_MEAN_STD
+
     model = VLM_Model(args)
     
     ref_vision_scores = None
@@ -362,7 +369,7 @@ def main(args):
 
     is_msls_challenge = False
     if 'msls_challenge' in args.image_root:        
-        test_ds = MSLSTest(dataset_root=args.dataset_root, image_root=args.image_root, csv_path=args.queries_csv, image_size=args.image_size)
+        test_ds = MSLSTest(dataset_root=args.dataset_root, image_root=args.image_root, csv_path=args.queries_csv, mean_std=dataset_mean_std, image_size=args.image_size)
         is_msls_challenge = True
     else:
         test_ds = TestDataset(
@@ -370,6 +377,7 @@ def main(args):
             args.queries_folder,
             args.queries_csv,
             args.image_root,        
+            mean_std=dataset_mean_std,
             positive_dist_threshold=args.positive_dist_threshold,
             image_size=args.image_size,
             use_labels=args.use_labels,

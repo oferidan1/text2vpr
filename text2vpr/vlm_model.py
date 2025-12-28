@@ -116,7 +116,7 @@ class VLM_Model:
     def encode_image(self, images):
         if 'blip' in self.vpr_model_name:
             with torch.no_grad():
-                image_features = self.vpr_encoder.encode_image(images)
+                image_features = self.vpr_encoder.encode_image(images)[:,0]
         elif 'clip' in self.vpr_model_name:
             with torch.no_grad():               
                 image_features = self.vpr_encoder.get_image_features(pixel_values=images)
@@ -129,7 +129,7 @@ class VLM_Model:
         if 'blip' in self.vpr_model_name:            
             text_inputs = self.processor(text=texts, return_tensors="pt", padding=True).input_ids.to(self.device)
             with torch.no_grad():     
-                text_features = self.vpr_encoder.encode_text(text_inputs)
+                text_features = self.vpr_encoder.encode_text(text_inputs)[:,0]
         elif 'clip' in self.vpr_model_name:            
             text_inputs = self.processor(text=texts, return_tensors="pt", padding=True, truncation=True, max_length=77).input_ids.to(self.device)
             with torch.no_grad():     
