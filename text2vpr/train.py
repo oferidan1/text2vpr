@@ -23,6 +23,7 @@ def parse_arguments():
     parser.add_argument("--vpr_model_backbone", type=str, default="ResNet50")
     # Other parameters
     parser.add_argument("--gpu", type=str, default='1', help="gpu id(s) to use")    
+    parser.add_argument("--epochs", type=int, default='10', help="number of epochs to train")    
     parser.add_argument("--train_csv", type=str, default="/mnt/d/data/gsv_cities/gsv_cities_predictions.csv")    
     parser.add_argument("--image_root", type=str, default="/mnt/d/data/gsv_cities/", help="root directory for images")
     parser.add_argument("--val_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")    
@@ -164,7 +165,7 @@ if __name__ == '__main__':
 
         num_sanity_val_steps=0, # runs a validation step before stating training
         precision=16, # we use half precision to reduce  memory usage
-        max_epochs=10,
+        max_epochs=args.epochs,
         check_val_every_n_epoch=1, # run validation every epoch
         callbacks=[checkpoint_cb],# we only run the checkpointing callback (you can add more)
         reload_dataloaders_every_n_epochs=1, # we reload the dataset to shuffle the order

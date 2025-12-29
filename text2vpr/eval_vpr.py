@@ -255,6 +255,7 @@ def wasserstein_transform_batch(X, target):
     return X_out
 
 def encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors, w_alpha):
+    #images = images.bfloat16()
     if args.encode_mode == 'text':
         # single vector - text
         descriptors = model.encode_text(texts)
@@ -285,6 +286,7 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
         image_features = image_features.cpu().numpy()
         vision_descriptors[indices.numpy(), :] = image_features
         text_features = text_features.cpu().numpy()
+        #text_features = text_features.to(torch.float32).cpu().numpy()
         text_descriptors[indices.numpy(), :] = text_features                    
     else:
         # single vector of both image and text

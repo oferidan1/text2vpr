@@ -52,6 +52,9 @@ class VLM_Model:
             
             self.vpr_encoder = vpr_models.get_model(args.vpr_model_name.lower(), args.vpr_model_backbone, self.vpr_encoder_dim)
             self.vpr_encoder = self.vpr_encoder.eval().to(args.device)
+
+            # self.vpr_encoder = self.vpr_encoder.bfloat16()
+            # self.text_encoder = self.text_encoder.bfloat16()
             
             self.encoder_dim = self.text_encoder_dim + self.vpr_encoder_dim
             if args.encode_mode == 'text':

@@ -25,7 +25,7 @@ python train.py --cross_modal=2 --fusion_type=none --vpr_model_name=Salesforce/b
 
 python train.py --cross_modal=2 --fusion_type=none --vpr_model_name=openai/clip-vit-base-patch32 --vpr_dim=512 --is_text_pooling=0 --is_image_pooling=0 --image_size=224 --is_trainable_text_encoder=1 --loss_name=MultiSimilarityLoss --batch_size=20
 
-python eval_vpr.py --vpr_dim=256 --image_size=384 --vpr_model_name=Salesforce/blip-itm-base-coco --fusion_type=none --cross_modal=2 --is_text_pooling=0 --is_dual_encoder=0 --pca_dim=256 --lora_path=LOGS/resnet50/blip_lora_01/
+python eval_vpr.py --vpr_dim=256 --image_size=384 --vpr_model_name=Salesforce/blip-itm-base-coco --fusion_type=none --cross_modal=2 --is_text_pooling=0 --is_dual_encoder=0 --pca_dim=256 --is_trainable_text_encoder=1 --lora_path=LOGS/resnet50/blip_lora_01/
 
 # text adapter
 python eval_vpr.py --vpr_dim=512 --vpr_model_name=mixvpr --fusion_type=text_adapter --is_dual_encoder=0
