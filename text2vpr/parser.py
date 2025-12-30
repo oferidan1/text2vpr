@@ -30,9 +30,9 @@ def parse_arguments():
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/msls/val/database")    
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/msls/val/query")   
     # parser.add_argument("--image_root", type=str, default="/mnt/d/data/msls/val/")    
-    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_predictions.csv")
-    #parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text_blur.csv")
-    #parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text_snow.csv")
+    # # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_predictions.csv")
+    # #parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text_blur.csv")
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text_snow.csv")
 
     # parser.add_argument("--database_folder", type=str, default=None)    
     # parser.add_argument("--queries_folder", type=str, default=None)       
@@ -140,6 +140,7 @@ def parse_arguments():
     parser.add_argument("--is_image_pooling", type=int, default="0", help="pool image or not")
     parser.add_argument("--cross_modal", type=int, default="0", help="cross modal 0=no/1=blip orig/2=our model")
     parser.add_argument("--rerank_by_text", type=int, default="0", help="rerank by text or not")
+    parser.add_argument("--bfloat16", type=int, default="0", help="bfloat16 or not")
 
 
     args = parser.parse_args()

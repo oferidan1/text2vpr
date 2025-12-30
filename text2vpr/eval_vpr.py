@@ -255,7 +255,8 @@ def wasserstein_transform_batch(X, target):
     return X_out
 
 def encode_batch(model, args, images, texts, indices, all_descriptors, vision_descriptors, text_descriptors, w_alpha):
-    #images = images.bfloat16()
+    if args.bfloat16:
+        images = images.bfloat16()
     if args.encode_mode == 'text':
         # single vector - text
         descriptors = model.encode_text(texts)
@@ -280,13 +281,12 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
         # cat fusion: concat text and vision vectors
         if args.dual_encoder_fusion == 'cat':
             descriptors = torch.cat((image_features, text_features), dim=1)
-            descriptors = descriptors.cpu().numpy()
+            descriptors = descriptors.to(torch.float32).cpu().numpy()
             all_descriptors[indices.numpy(), :] = descriptors
         # each fusion: save each modality
-        image_features = image_features.cpu().numpy()
-        vision_descriptors[indices.numpy(), :] = image_features
-        text_features = text_features.cpu().numpy()
-        #text_features = text_features.to(torch.float32).cpu().numpy()
+        image_features = image_features.to(torch.float32).cpu().numpy()
+        vision_descriptors[indices.numpy(), :] = image_features        
+        text_features = text_features.to(torch.float32).cpu().numpy()
         text_descriptors[indices.numpy(), :] = text_features                    
     else:
         # single vector of both image and text
