@@ -260,13 +260,13 @@ def encode_batch(model, args, images, texts, indices, all_descriptors, vision_de
     if args.encode_mode == 'text':
         # single vector - text
         descriptors = model.encode_text(texts)
-        descriptors = descriptors.cpu().numpy()
+        descriptors = descriptors.to(torch.float32).cpu().numpy()
         all_descriptors[indices.numpy(), :] = descriptors        
         text_descriptors[indices.numpy(), :] = descriptors 
     elif args.encode_mode == 'image':
         # single vector - image
         descriptors = model.encode_image(images.to(args.device))
-        descriptors = descriptors.cpu().numpy()
+        descriptors = descriptors.to(torch.float32).cpu().numpy()
         all_descriptors[indices.numpy(), :] = descriptors    
         vision_descriptors[indices.numpy(), :] = descriptors
     elif args.cross_modal==1:
