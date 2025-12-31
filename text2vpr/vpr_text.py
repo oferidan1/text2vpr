@@ -279,7 +279,9 @@ class VPR_Text_Model(pl.LightningModule):
             elif 'clip' in self.vpr_model_name or 'siglip' in self.vpr_model_name:
                 text_inputs = self.processor(text=text, return_tensors="pt", padding=True, truncation=True, max_length=self.max_text_length)
                 text_tokens = text_inputs.input_ids.to(img.device)
-                attention_mask = text_inputs['attention_mask'].to(img.device)                
+                attention_mask = None
+                if 'attention_mask' in text_inputs:
+                    attention_mask = text_inputs['attention_mask'].to(img.device)                
                 text_embeds = self.text_encoder.get_text_features(input_ids=text_tokens, attention_mask=attention_mask)
             else:                
                 text_tokens = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(img.device)
