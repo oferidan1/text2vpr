@@ -163,7 +163,7 @@ class VPR_Text_Model(pl.LightningModule):
         self.apply(self._init_weights)
         
         # initialize the vpr encoder and text encoder
-        if is_encode_image and ('blip' not in vpr_model_name and 'clip' not in vpr_model_name):                  
+        if is_encode_image and ('blip' not in vpr_model_name and 'clip' not in vpr_model_name and 'siglip' not in vpr_model_name):                  
             self.vpr_encoder = vpr_models.get_model(vpr_model_name, vpr_model_backbone, vpr_encoder_dim)                      
             if is_freeze_vpr:
                 # Freeze vpr encoder parameters
