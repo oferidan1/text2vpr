@@ -372,7 +372,7 @@ def main(args):
 
     is_msls_challenge = False
     if 'msls_challenge' in args.image_root:        
-        test_ds = MSLSTest(dataset_root=args.dataset_root, image_root=args.image_root, csv_path=args.queries_csv, mean_std=dataset_mean_std, image_size=args.image_size)
+        test_ds = MSLSTest(dataset_root=args.database_folder, image_root=args.image_root, csv_path=args.queries_csv, mean_std=dataset_mean_std, image_size=args.image_size)
         is_msls_challenge = True
     else:
         test_ds = TestDataset(
