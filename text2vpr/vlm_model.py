@@ -28,17 +28,20 @@ class VLM_Model:
             self.text_encoder_dim = args.vpr_dim
             
         if args.fusion_type == 'text_adapter':
-            args.is_text_pooling = 1
-        
+            args.is_text_pooling = 1       
+       
         if args.cross_modal==1:
+            self.max_text_length = 77
             if 'blip' in self.vpr_model_name:
                 self.vpr_encoder = BlipForImageTextRetrievalWrapper.from_pretrained(self.vpr_model_name)
                 self.processor = BlipProcessor.from_pretrained(self.vpr_model_name)
                 self.vpr_encoder = self.vpr_encoder.eval().to(args.device)
-            if 'clip' in self.vpr_model_name:
+            if 'clip' in self.vpr_model_name or 'siglip' in self.vpr_model_name:
                 self.vpr_encoder = AutoModel.from_pretrained(self.vpr_model_name)
                 self.processor = AutoProcessor.from_pretrained(self.vpr_model_name)
                 self.vpr_encoder = self.vpr_encoder.eval().to(args.device)
+            if 'siglip' in self.vpr_model_name:
+                 self.max_text_length = 64
 
             self.encoder_dim = self.vpr_encoder_dim
             
@@ -124,7 +127,7 @@ class VLM_Model:
         if 'blip' in self.vpr_model_name:
             with torch.no_grad():
                 image_features = self.vpr_encoder.encode_image(images)[:,0]
-        elif 'clip' in self.vpr_model_name:
+        elif 'clip' in self.vpr_model_name or 'siglip' in self.vpr_model_name:
             with torch.no_grad():               
                 image_features = self.vpr_encoder.get_image_features(pixel_values=images)
         else:
@@ -137,8 +140,8 @@ class VLM_Model:
             text_inputs = self.processor(text=texts, return_tensors="pt", padding=True).input_ids.to(self.device)
             with torch.no_grad():     
                 text_features = self.vpr_encoder.encode_text(text_inputs)[:,0]
-        elif 'clip' in self.vpr_model_name:            
-            text_inputs = self.processor(text=texts, return_tensors="pt", padding=True, truncation=True, max_length=77).input_ids.to(self.device)
+        elif 'clip' in self.vpr_model_name or 'siglip' in self.vpr_model_name:            
+            text_inputs = self.processor(text=texts, return_tensors="pt", padding=True, truncation=True, max_length=self.max_text_length).input_ids.to(self.device)
             with torch.no_grad():     
                 text_features = self.vpr_encoder.get_text_features(input_ids=text_inputs)
         elif 'bge' in self.text_model_name:                    

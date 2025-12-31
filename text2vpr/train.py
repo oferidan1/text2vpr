@@ -5,7 +5,7 @@ from torch.optim import lr_scheduler, optimizer
 import utils
 from torch import nn
 
-from dataloaders.GSVCitiesDataloader import GSVCitiesDataModule, IMAGENET_MEAN_STD, BLIP_MEAN_STD
+from dataloaders.GSVCitiesDataloader import GSVCitiesDataModule, IMAGENET_MEAN_STD, BLIP_MEAN_STD, SIGLIP_MEAN_STD
 from sentence_transformers import SentenceTransformer
 import os
 import argparse
@@ -61,6 +61,8 @@ if __name__ == '__main__':
     image_size = args.image_size
     if 'blip' in args.vpr_model_name.lower() or 'clip' in args.vpr_model_name.lower():
         dataset_mean_std = BLIP_MEAN_STD
+    elif 'siglip' in args.vpr_model_name.lower():
+        dataset_mean_std = SIGLIP_MEAN_STD
     
     val_set_names = []
     if args.is_val:

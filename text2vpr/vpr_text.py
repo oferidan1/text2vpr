@@ -175,7 +175,10 @@ class VPR_Text_Model(pl.LightningModule):
             if 'blip' in vpr_model_name:
                 self.text_encoder = BlipForImageTextRetrievalWrapper.from_pretrained(vpr_model_name)
                 self.processor = BlipProcessor.from_pretrained(vpr_model_name)
-            elif 'clip' in vpr_model_name:
+            elif 'clip' in vpr_model_name or 'siglip' in vpr_model_name:
+                self.max_text_length = 77
+                if 'siglip' in vpr_model_name:
+                    self.max_text_length = 64
                 self.text_encoder = AutoModel.from_pretrained(vpr_model_name)
                 self.processor = AutoProcessor.from_pretrained(vpr_model_name)
             else:
@@ -248,7 +251,7 @@ class VPR_Text_Model(pl.LightningModule):
             if 'blip' in self.vpr_model_name:
                 img_embeds_all = self.text_encoder.encode_image(img)
                 img_embeds = img_embeds_all[:,0]
-            elif 'clip' in self.vpr_model_name:
+            elif 'clip' in self.vpr_model_name or 'siglip' in self.vpr_model_name:
                 img_embeds = self.text_encoder.get_image_features(pixel_values=img)
             else:
                 with torch.no_grad():                      
@@ -273,8 +276,8 @@ class VPR_Text_Model(pl.LightningModule):
                 attention_mask = text_inputs['attention_mask'].to(img.device)                
                 text_embeds_all = self.text_encoder.encode_text(input_ids=text_tokens, attention_mask=attention_mask)
                 text_embeds = text_embeds_all[:,0]
-            elif 'clip' in self.vpr_model_name:
-                text_inputs = self.processor(text=text, return_tensors="pt", padding=True, truncation=True, max_length=77)
+            elif 'clip' in self.vpr_model_name or 'siglip' in self.vpr_model_name:
+                text_inputs = self.processor(text=text, return_tensors="pt", padding=True, truncation=True, max_length=self.max_text_length)
                 text_tokens = text_inputs.input_ids.to(img.device)
                 attention_mask = text_inputs['attention_mask'].to(img.device)                
                 text_embeds = self.text_encoder.get_text_features(input_ids=text_tokens, attention_mask=attention_mask)
