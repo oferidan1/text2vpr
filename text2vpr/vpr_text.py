@@ -259,7 +259,7 @@ class VPR_Text_Model(pl.LightningModule):
                 img_embeds = self.text_encoder.get_image_features(pixel_values=img)
             elif 'eva' in self.vpr_model_name:            
                 img_embeds = self.text_encoder.encode_image(img)
-                img_embeds /= img_embeds.norm(dim=-1, keepdim=True)
+                img_embeds = img_embeds / img_embeds.norm(dim=-1, keepdim=True)
             else:
                 with torch.no_grad():                      
                     if 'dinov2' in self.vpr_model_name:
@@ -293,7 +293,7 @@ class VPR_Text_Model(pl.LightningModule):
             elif 'eva' in self.vpr_model_name:
                 text_tokens = self.tokenizer(text).to(self.device)            
                 text_embeds = self.text_encoder.encode_text(text_tokens)    
-                text_embeds /= text_embeds.norm(dim=-1, keepdim=True)
+                text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
             else:                
                 text_tokens = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(img.device)
                 if self.is_trainable_text_encoder:
