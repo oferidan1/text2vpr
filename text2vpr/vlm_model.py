@@ -13,7 +13,7 @@ from transformers import AutoTokenizer, AutoModel
 from blip_model import BlipForImageTextRetrievalWrapper
 from transformers import BlipProcessor, BlipModel
 from transformers import AutoModel, AutoProcessor
-
+import open_clip
 
 
 class VLM_Model:
@@ -42,6 +42,10 @@ class VLM_Model:
                 self.vpr_encoder = self.vpr_encoder.eval().to(args.device)
             if 'siglip' in self.vpr_model_name:
                  self.max_text_length = 64
+            if 'eva' in self.vpr_model_name.lower():
+                self.vpr_encoder, _, self.processor = open_clip.create_model_and_transforms(self.vpr_model_name, pretrained='merged2b_s8b_b131k')#'EVA02-B-16'
+                self.tokenizer = open_clip.get_tokenizer(self.vpr_model_name)
+                self.vpr_encoder = self.vpr_encoder.eval().to(args.device)                
 
             self.encoder_dim = self.vpr_encoder_dim
             
@@ -130,6 +134,10 @@ class VLM_Model:
         elif 'clip' in self.vpr_model_name or 'siglip' in self.vpr_model_name:
             with torch.no_grad():               
                 image_features = self.vpr_encoder.get_image_features(pixel_values=images)
+        elif 'eva' in self.vpr_model_name.lower():
+            with torch.no_grad():                 
+                image_features = self.vpr_encoder.encode_image(images)
+                image_features /= image_features.norm(dim=-1, keepdim=True)
         else:
             with torch.no_grad():
                 image_features = self.vpr_encoder(images)            
@@ -144,6 +152,11 @@ class VLM_Model:
             text_inputs = self.processor(text=texts, return_tensors="pt", padding=True, truncation=True, max_length=self.max_text_length).input_ids.to(self.device)
             with torch.no_grad():     
                 text_features = self.vpr_encoder.get_text_features(input_ids=text_inputs)
+        elif 'eva' in self.vpr_model_name.lower():
+            text_tokens = self.tokenizer(texts).to(self.device)
+            with torch.no_grad():
+                text_features = self.vpr_encoder.encode_text(text_tokens)    
+            text_features /= text_features.norm(dim=-1, keepdim=True)
         elif 'bge' in self.text_model_name:                    
             text_tokens = self.tokenizer(texts, padding=True, truncation=True, return_tensors='pt').to(self.device)
             with torch.no_grad():      

@@ -355,7 +355,7 @@ def main(args):
     SIGLIP_MEAN_STD = {'mean': [0.5, 0.5, 0.5], 'std': [0.5, 0.5, 0.5]}
 
     dataset_mean_std = IMAGENET_MEAN_STD
-    if 'blip' in args.vpr_model_name.lower() or 'clip' in args.vpr_model_name.lower():
+    if 'blip' in args.vpr_model_name.lower() or 'clip' in args.vpr_model_name.lower() or 'eva' in args.vpr_model_name.lower():
         dataset_mean_std = BLIP_MEAN_STD
     elif 'siglip' in args.vpr_model_name.lower():
         dataset_mean_std = SIGLIP_MEAN_STD
