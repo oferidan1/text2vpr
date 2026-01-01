@@ -137,7 +137,7 @@ class VLM_Model:
         elif 'eva' in self.vpr_model_name.lower():
             with torch.no_grad():                 
                 image_features = self.vpr_encoder.encode_image(images)
-                image_features /= image_features.norm(dim=-1, keepdim=True)
+                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
         else:
             with torch.no_grad():
                 image_features = self.vpr_encoder(images)            
@@ -156,7 +156,7 @@ class VLM_Model:
             text_tokens = self.tokenizer(texts).to(self.device)
             with torch.no_grad():
                 text_features = self.vpr_encoder.encode_text(text_tokens)    
-            text_features /= text_features.norm(dim=-1, keepdim=True)
+            text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         elif 'bge' in self.text_model_name:                    
             text_tokens = self.tokenizer(texts, padding=True, truncation=True, return_tensors='pt').to(self.device)
             with torch.no_grad():      
