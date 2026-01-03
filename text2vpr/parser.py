@@ -14,8 +14,8 @@ def parse_arguments():
     parser.add_argument("--database_folder", type=str, default="/mnt/d/data/amstertime/test/database")    
     parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/amstertime/test/queries")        
     parser.add_argument("--image_root", type=str, default="/mnt/d/data/amstertime/test")
-    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
-    #parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_w_text.csv")        
+    #parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_test_predictions.csv")
+    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/amstertime/test/amstertime_w_text.csv")        
     
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/nordland/images/test/database")    
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/nordland/images/test/queries")
@@ -26,11 +26,17 @@ def parse_arguments():
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/pitts30k/images/test/queries")
     # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/pitts30k/images/test/Pittsburgh30K_test_predictions.csv")
     # parser.add_argument("--image_root", type=str, default="/mnt/d/data/pitts30k/images/test")    
+
+    # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/pitts30k/images/val/database")    
+    # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/pitts30k/images/val/queries")    
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/pitts30k/images/val/pitts30k_val_descriptions.csv")
+    # parser.add_argument("--image_root", type=str, default="/mnt/d/data/pitts30k/images/val")    
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/pitts30k/images/val/pitts30k_val_800_queries.csv")
     
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/msls/val/database")    
     # parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/msls/val/query")   
     # parser.add_argument("--image_root", type=str, default="/mnt/d/data/msls/val/")    
-    # # # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_predictions.csv")
+    # #parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_predictions.csv")
     # #parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text_blur.csv")
     # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text_snow.csv")
 
@@ -120,7 +126,7 @@ def parse_arguments():
     #parser.add_argument("--text_model_name", type=str, default="lightonai/modernbert-embed-large")    
     parser.add_argument("--lora_path", type=str, default=None)    
     parser.add_argument("--is_dual_encoder", type=int, default="1", help="is dual encoder")    
-    parser.add_argument("--dual_encoder_fusion", type=str, default="cat", help="cat/each")    
+    parser.add_argument("--dual_encoder_fusion", type=str, default="each", help="cat/each")    
     parser.add_argument("--encode_mode", type=str, default="both", help="both/image/text")   
     parser.add_argument("--fusion_type", type=str, default='none', help="type of fusion to use: mlp, add, transformer, dynamic_weighting, fixed_weighting, text_adapter")
     parser.add_argument("--is_normalize", type=int, default="0", help="is normalize features")    
@@ -139,6 +145,8 @@ def parse_arguments():
     parser.add_argument("--cross_modal", type=int, default="0", help="cross modal 0=no/1=blip orig/2=our model")
     parser.add_argument("--rerank_by_text", type=int, default="0", help="rerank by text or not")
     parser.add_argument("--bfloat16", type=int, default="0", help="bfloat16 or not")
+    parser.add_argument("--rerank_by_matching", type=int, default="1", help="rerank_by_matching or not")    
+    parser.add_argument("--max_rerank", type=int, default="32", help="max_rerank")    
 
 
     args = parser.parse_args()

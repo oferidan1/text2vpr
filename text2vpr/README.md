@@ -24,7 +24,6 @@ python eval_vpr.py --vpr_dim=768 --vpr_model_name=google/siglip2-base-patch16-22
 
 python eval_vpr.py --vpr_dim=512 --vpr_model_name=EVA02-B-16 --is_dual_encoder=0 --fusion_type=none --cross_modal=1 --image_size=224 --text_dim=512
 
-
 python train.py --cross_modal=3 --fusion_type=none --vpr_model_name=dinov2 --vpr_dim=768 --is_text_pooling=1 --is_image_pooling=1 --image_size=224
 
 python train.py --cross_modal=2 --fusion_type=none --vpr_model_name=Salesforce/blip-itm-base-coco --vpr_dim=256 --is_text_pooling=0 --is_image_pooling=0 --image_size=384 --loss_name=MultiSimilarityLoss --is_trainable_text_encoder=1 --batch_size=20

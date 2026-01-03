@@ -23,6 +23,88 @@ from scipy.stats import norm
 from typing import Tuple, List
 from scipy.interpolate import interp1d
 from scipy.stats import ecdf
+import pandas as pd
+import cv2
+import kornia as K
+import kornia.feature as KF
+
+def get_alpha_vision_batches(matcher, query_path, database_paths, preds, device='cuda'):
+    # 1. Helper to load and preprocess a single image path to a tensor
+    def load_image_tensor(path):
+        # Load as RGB32 (0-1 float)
+        img = K.io.load_image(path, K.io.ImageLoadType.RGB32, device=device)[None, ...]
+        # Resize to your desired dimensions
+        img = K.geometry.resize(img, (600, 375), antialias=True)
+        # Convert to grayscale
+        return K.color.rgb_to_grayscale(img)
+
+    # 2. Prepare Query Tensor [1, 1, 600, 375]
+    # We load it once and move to device
+    query_tensor = load_image_tensor(query_path)
+    
+    # 3. Prepare Database Batch [B, 1, 600, 375]
+    # We load all paths in 'database_paths' and stack them
+    db_tensors = torch.cat([load_image_tensor(p) for p in database_paths], dim=0)
+    
+    batch_size = db_tensors.shape[0]
+
+    # Efficiently expand query to match the database batch size
+    query_expanded = query_tensor.expand(batch_size, -1, -1, -1)
+
+    input_dict = {
+        "image0": query_expanded.bfloat16(), 
+        "image1": db_tensors.bfloat16()
+    }
+
+    # 4. Inference on batch
+    with torch.inference_mode():
+        correspondences = matcher(input_dict)
+
+    # 5. Process results
+    batch_idx = correspondences["batch_indexes"].to(torch.long).cpu().numpy()
+    mkpts0 = correspondences["keypoints0"].to(torch.float32).cpu().numpy()
+    mkpts1 = correspondences["keypoints1"].to(torch.float32).cpu().numpy()
+    
+    alphas = {}
+    for i in range(batch_size):
+        mask = (batch_idx == i)
+        pts0 = mkpts0[mask]
+        pts1 = mkpts1[mask]
+
+        if len(pts0) < 8:
+            alphas[preds[i]] = 0.0
+            continue
+
+        # Fast RANSAC
+        _, inliers = cv2.findFundamentalMat(pts0, pts1, cv2.USAC_MAGSAC, 0.5, 0.999, 1000)
+        alphas[preds[i]] = (np.sum(inliers) / len(inliers) if inliers is not None else 0.0)
+
+    return alphas
+
+def get_alpha_vision_by_image_matching(matcher, query_image_path, database_image_path):
+    img1 = K.io.load_image(query_image_path, K.io.ImageLoadType.RGB32)[None, ...]
+    img2 = K.io.load_image(database_image_path, K.io.ImageLoadType.RGB32)[None, ...]
+
+    img1 = K.geometry.resize(img1, (600, 375), antialias=True)
+    img2 = K.geometry.resize(img2, (600, 375), antialias=True)    
+
+    input_dict = {
+        "image0": K.color.rgb_to_grayscale(img1),  # LofTR works on grayscale images only
+        "image1": K.color.rgb_to_grayscale(img2),
+    }
+
+    with torch.inference_mode():
+        correspondences = matcher(input_dict)
+
+    mkpts0 = correspondences["keypoints0"].cpu().numpy()
+    mkpts1 = correspondences["keypoints1"].cpu().numpy()
+    Fm, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, 0.5, 0.999, 100000)
+    inliers = inliers > 0
+
+    vision_alpha = np.sum(inliers)/len(inliers)
+
+    return vision_alpha
+
 
 def standarize_scores(text_scores, vision_scores, vpr_dim, vpr_model):
      # pre-computed mu and std for normalization over GSV
@@ -114,7 +196,7 @@ def rerank_predictions_by_text(vision_scores, vision_predictions, text_scores, t
     return final_scores, final_predictions
 
 
-def rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, is_normalize, vision_scores_ref=None):
+def rerank_predictions_by_scores(test_ds, vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, is_normalize, rerank_by_matching, max_rerank, vision_scores_ref=None):
     # sum scores according the where vision and text predictions are the same
     combined_scores = []
     combined_predictions = []
@@ -127,22 +209,46 @@ def rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores,
 
     logger.info(f"mean w_alpha vision: {w_alpha[:,0].mean()}, {w_alpha[:,0].std()}")
     logger.info(f"mean w_alpha text: {w_alpha[:,1].mean()}, {w_alpha[:,1].std()}")
+    
+    if rerank_by_matching:
+        matcher = KF.LoFTR(pretrained="outdoor").to('cuda').bfloat16()
    
     try:    
         for v_scores, v_preds, t_scores, t_preds in zip(vision_scores, vision_predictions, text_scores, text_predictions):
-            score_dict = {}      
-            w_query_v = w_alpha[query_index][0]
-            for score, pred in zip(v_scores, v_preds):
+            score_dict = {}                  
+            query_image_path = test_ds.images_paths[query_index]            
+            alpha_vision_dict = {}
+            w_query_v = w_alpha[query_index][0]         
+            if rerank_by_matching:
+                selected_paths = [test_ds.images_paths[i] for i in v_preds]
+                selected_paths = selected_paths[:max_rerank]
+                alpha_vision_dict = get_alpha_vision_batches(matcher, query_image_path, selected_paths, v_preds)
+            for score, pred in zip(v_scores, v_preds):                
                 if pred not in score_dict:
                     score_dict[pred] = 0
+                if rerank_by_matching:
+                    # database_image_path = test_ds.images_paths[pred]
+                    # alpha_vision = get_alpha_vision_by_image_matching(matcher, query_image_path, database_image_path)
+                    # alpha_vision_list[pred] = alpha_vision
+                    if pred in alpha_vision_dict:
+                        alpha_vision = alpha_vision_dict[pred]
+                else:
+                    alpha_vision = (w_alpha[pred][0]+w_query_v)/2                
                 #score_dict[pred] += w_alpha[pred][0] * score 
-                score_dict[pred] += (w_alpha[pred][0]+w_query_v)/2 * score 
+                score_dict[pred] += alpha_vision * score 
             w_query_t = w_alpha[query_index][1]
             for score, pred in zip(t_scores, t_preds):
+                if rerank_by_matching:
+                    if pred in alpha_vision_dict:
+                        alpha_text = 1-alpha_vision_dict[pred] 
+                    else:
+                        continue
+                else:
+                    alpha_text = (w_alpha[pred][1]+w_query_t)/2                
                 if pred not in score_dict:
                     score_dict[pred] = 0            
                 #score_dict[pred] += w_alpha[pred][1] * score 
-                score_dict[pred] += (w_alpha[pred][1]+w_query_t)/2 * score 
+                score_dict[pred] += alpha_text * score 
             # sort by score
             sorted_items = sorted(score_dict.items(), key=lambda x: x[1], reverse=True)
             preds_sorted = [item[0] for item in sorted_items][:max_results]
@@ -333,6 +439,43 @@ def do_pca(descriptors, pca_dim):
     descriptors = pca.transform(descriptors)
     return descriptors
 
+def save_worst_queries(test_ds, predictions, args, K):
+    query_results = []
+    positives_per_query = test_ds.get_positives()
+
+    # recall_values usually looks like [1, 5, 10, 20]
+    # We'll use the largest N to define "worst" (e.g., Recall@20)
+    max_n_index = -1 
+    max_n = args.recall_values[max_n_index]
+    k = 5
+
+    for query_index, preds in enumerate(predictions):
+        # Calculate recall for this specific query across all N values        
+        bFound = 0
+        if np.any(np.in1d(preds[:k], positives_per_query[query_index])):
+            bFound = 1
+        image_path = test_ds.queries_paths[query_index]
+        desc_index = test_ds.images_paths_csv.index(image_path)
+        description = test_ds.descriptions[desc_index]
+        
+        # 2. Store the metadata and the target recall metric
+        query_results.append({            
+            'image_path': image_path,
+            'description': description,
+            'query_index': query_index,
+            'recall_at_max': bFound,            
+        })
+
+    # 3. Create DataFrame and sort to find the "worst"
+    df_results = pd.DataFrame(query_results)
+
+    # Sort by recall (ascending) so the 0s and lowest values are at the top
+    df_worst = df_results.sort_values(by='recall_at_max', ascending=True).head(K)
+
+    # 4. Save to CSV
+    df_worst.to_csv('top_worst_queries.csv', index=False)
+    print(f"Saved the 50 worst queries to top_worst_queries.csv")
+
 def main(args):
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     os.environ["TOKENIZERS_PARALLELISM"] = "False"
@@ -454,7 +597,7 @@ def main(args):
     max_results_reranking = test_ds.num_database
     #alpha = w_alpha
     # Get queries predictions with alpha between 0.6 to 0.9 with jumps of 0.1
-    #for alpha in [0.6, 0.7, 0.8, 0.9]:
+    #for alpha in [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
     #for alpha in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
     if 1:
         # w_alpha[:,0] = alpha
@@ -490,7 +633,7 @@ def main(args):
                     ref_vision_scores = np.clip(ref_vision_scores, a_min=-1.0, a_max=1.0)
                     ref_vision_scores  = (ref_vision_scores - mu_img) / std_img
                     ref_vision_scores  = ((ref_vision_scores - min_img) / (max_img - min_img))*2-1     
-                scores, predictions = rerank_predictions_by_scores(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, args.is_normalize, ref_vision_scores)
+                scores, predictions = rerank_predictions_by_scores(test_ds, vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, args.is_normalize, args.rerank_by_matching, args.max_rerank, ref_vision_scores)
             else:
                 scores, predictions = rerank_predictions_by_rank(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index)
                 
@@ -522,8 +665,11 @@ def main(args):
                 
                 #open eval_vpr_results.csv in append mode and write the recalls
                 with open("eval_vpr_results.csv", "a") as f:
-                    f.write(f"{args.vpr_model_name},{args.fusion_type},{args.is_text_pooling},{args.vpr_dim},{args.is_pca},{args.encode_mode},{recalls_str}\n")
+                    f.write(f"{args.vpr_model_name},{w_alpha[0,0]},{args.fusion_type},{args.is_text_pooling},{args.vpr_dim},{args.is_pca},{args.encode_mode},{recalls_str}\n")
 
+                
+                #save_worst_queries(test_ds, predictions, args, 800)
+                
     # Save visualizations of predictions
     if args.num_preds_to_save != 0:
         logger.info("Saving final predictions")

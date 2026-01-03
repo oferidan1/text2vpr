@@ -59,6 +59,7 @@ def create_gcs_json(local_folder, gcs_bucket, gcs_prefix, output_file):
     
     print('create_gcs_json..')
     
+    i = 0
     with open(output_file, 'w') as f:
         for image_path in local_path.rglob("*"):
             if image_path.suffix.lower() in image_extensions and image_path.is_file():
@@ -67,8 +68,10 @@ def create_gcs_json(local_folder, gcs_bucket, gcs_prefix, output_file):
                 folder = os.path.basename(str(image_path.parent))
                 #gcs_uri = f"gs://{gcs_bucket}/{gcs_prefix}{folder}/{image_path.name}"
                 gcs_uri = f"gs://{gcs_bucket}/{gcs_prefix}{relative_path}"
-                json_line = f'{{"request":{{"contents":[{{"role":"user","parts":[{{"file_data":{{"file_uri":"{gcs_uri}","mime_type":"image/jpeg"}}}},{{"text":"{prompt}"}}]}}]}}}}\n'
+                #json_line = f'{"custom_id": "request-"{i},{"request":{{"contents":[{{"role":"user","parts":[{{"file_data":{{"file_uri":"{gcs_uri}","mime_type":"image/jpeg"}}}},{{"text":"{prompt}"}}]}}]}}}}\n'
+                json_line = f'{{"custom_id": "request-{i}", "request": {{"contents": [{{"role": "user", "parts": [{{"file_data": {{"file_uri": "{gcs_uri}", "mime_type": "image/jpeg"}}}}, {{"text": "{prompt}"}}]}}]}} }} \n'
                 f.write(json_line)
+                i+=1
                 #print(f"Added entry for '{image_path.name}' to '{output_file}'.")
 
 def prediction_to_csv(BUCKET_NAME, GCS_DESTINATION, pred_json):
@@ -111,7 +114,7 @@ if __name__ == "__main__":
     gcs_file = "input_gcs.jsonl"
     #create_gcs_json(LOCAL_FOLDER, BUCKET_NAME, GCS_DESTINATION, gcs_file)
     
-    pred_json = '/mnt/d/ofer/localization/text2vpr/dataset_builder/predictions/msls_chal_predictions.jsonl'
+    pred_json = '/mnt/d/ofer/localization/text2vpr/dataset_builder/predictions/pitts30k_val_predictions.jsonl'
     prediction_to_csv(BUCKET_NAME, GCS_DESTINATION, pred_json)
 
     
