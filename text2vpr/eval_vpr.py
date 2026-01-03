@@ -77,7 +77,7 @@ def get_alpha_vision_batches(matcher, query_path, database_paths, preds, device=
 
         # Fast RANSAC
         _, inliers = cv2.findFundamentalMat(pts0, pts1, cv2.USAC_MAGSAC, 0.5, 0.999, 1000)
-        alphas[preds[i]] = (np.sum(inliers) / len(inliers) if inliers is not None else 0.0)
+        alphas[preds[i]] = min((np.sum(inliers) / len(inliers) if inliers is not None else 0.0)*1.5, 1)
 
     return alphas
 
