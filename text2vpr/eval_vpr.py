@@ -223,17 +223,19 @@ def rerank_predictions_by_scores(test_ds, vision_scores, vision_predictions, tex
                 selected_paths = [test_ds.images_paths[i] for i in v_preds]
                 selected_paths = selected_paths[:max_rerank]
                 alpha_vision_dict = get_alpha_vision_batches(matcher, query_image_path, selected_paths, v_preds)
-            for score, pred in zip(v_scores, v_preds):                
-                if pred not in score_dict:
-                    score_dict[pred] = 0
+            for score, pred in zip(v_scores, v_preds):                               
                 if rerank_by_matching:
                     # database_image_path = test_ds.images_paths[pred]
                     # alpha_vision = get_alpha_vision_by_image_matching(matcher, query_image_path, database_image_path)
                     # alpha_vision_list[pred] = alpha_vision
                     if pred in alpha_vision_dict:
                         alpha_vision = alpha_vision_dict[pred]
+                    else:
+                        continue
                 else:
                     alpha_vision = (w_alpha[pred][0]+w_query_v)/2                
+                if pred not in score_dict:
+                    score_dict[pred] = 0
                 #score_dict[pred] += w_alpha[pred][0] * score 
                 score_dict[pred] += alpha_vision * score 
             w_query_t = w_alpha[query_index][1]
