@@ -46,6 +46,9 @@ def parse_arguments():
     parser.add_argument("--cross_modal", type=int, default="0", help="cross modal 0=no/1=blip orig/2=our model/3=with projections")    
     parser.add_argument("--is_reranking", type=int, default="0", help="reranking 0=no/1=yes")
     parser.add_argument("--is_val", type=int, default="1", help="run validation 0=no/1=yes")
+    parser.add_argument("--lora_all_linear", type=int, default="0", help="lora all linear 0=no/1=yes")
+    parser.add_argument("--lora_target_modules", nargs='+', default=["query", "value", "qkv"], help="when not lora_all_linear, lora target modules")    
+    parser.add_argument("--lora_r", type=int, default="16", help="lora_all_linear 0=no/1=yes")     
 
     args = parser.parse_args()
     
@@ -130,6 +133,9 @@ if __name__ == '__main__':
         is_pca=args.is_pca,
         cross_modal=args.cross_modal,
         is_reranking=args.is_reranking,
+        lora_all_linear=args.lora_all_linear,
+        lora_target_modules=args.lora_target_modules,
+        lora_r=args.lora_r,
     )
     
     # if args.is_encode_image and  args.vpr_resume_model is not None:

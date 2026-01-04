@@ -61,6 +61,9 @@ class VPR_Text_Model(pl.LightningModule):
                 is_orig_desc_mining=False,
                 cross_modal=0,
                 is_reranking=False,
+                lora_all_linear=False,
+                lora_target_modules=None,
+                lora_r=64,
                  ):
         super().__init__()
         
@@ -91,6 +94,9 @@ class VPR_Text_Model(pl.LightningModule):
         self.is_orig_desc_mining = is_orig_desc_mining
         self.cross_modal = cross_modal
         self.is_reranking = is_reranking
+        self.lora_all_linear = lora_all_linear
+        self.lora_target_modules = lora_target_modules
+        self.lora_r = lora_r
         
         self.save_hyperparameters() # write hyperparams into a file
         
@@ -199,20 +205,24 @@ class VPR_Text_Model(pl.LightningModule):
             # Define LoRA configuration
             # TaskType.FEATURE_EXTRACTION is appropriate for sentence embedding tasks            
             if is_trainable_text_encoder:
-                r=64
-                target_lora = "all-linear"
-                if cross_modal == 4:
-                    r = 16
-                    if 'blip' in vpr_model_name:
-                        target_lora = ["query", "value", "qkv"]
-                    elif 'clip' in vpr_model_name:
-                        target_lora = ["q_proj", "v_proj"]
+                # r=64
+                # target_lora = "all-linear"
+                # if cross_modal == 4:
+                #     r = 16
+                #     if 'blip' in vpr_model_name:
+                #         target_lora = ["query", "value", "qkv"]
+                #     elif 'clip' in vpr_model_name:
+                #         target_lora = ["q_proj", "v_proj"]
+                
+                lora_targets = lora_target_modules
+                if lora_all_linear:
+                    lora_targets = "all-linear"                    
                 
                 lora_config = LoraConfig(
-                    r=r,
-                    lora_alpha=r*2,
+                    r=lora_r,
+                    lora_alpha=lora_r*2,
                     lora_dropout=0.1,
-                    target_modules=target_lora,
+                    target_modules=lora_targets,
                     task_type=TaskType.SEQ_CLS,
                     use_rslora=True,                    
                     bias="none",
