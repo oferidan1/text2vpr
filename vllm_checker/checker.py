@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 try:
     # Optional: only used for a nice progress bar on the initial pass.
@@ -40,7 +40,7 @@ def _compute_realtime_stats(
     input_csv: Path,
     output_csv: Path,
     new_column: str,
-) -> dict[str, float | int | str]:
+) -> Dict[str, Union[float, int, str]]:
     """Compute summary stats from the (growing) SAM3 progress CSV + our output CSV.
 
     All values are best-effort; if parsing fails (e.g., file mid-write), return zeros.
@@ -93,7 +93,7 @@ def _compute_realtime_stats(
     }
 
 
-def _format_status_log(stats: dict[str, float | int | str]) -> str:
+def _format_status_log(stats: Dict[str, Union[float, int, str]]) -> str:
     return (
         f"timestamp: {stats.get('timestamp','')}\n"
         f"input_csv: {stats.get('input_csv','')}\n"
@@ -526,7 +526,7 @@ def check_csv_with_llm(
 
         try:
             st0 = input_csv.stat()
-            prev_sig: tuple[int, int] | None = (st0.st_mtime_ns, st0.st_size)
+            prev_sig: Optional[Tuple[int, int]] = (st0.st_mtime_ns, st0.st_size)
         except FileNotFoundError:
             prev_sig = None
 
@@ -627,7 +627,7 @@ def check_csv_with_llm(
                 # No new rows since last check. Use file signature to track idle time.
                 try:
                     st = input_csv.stat()
-                    sig: tuple[int, int] | None = (st.st_mtime_ns, st.st_size)
+                    sig: Optional[Tuple[int, int]] = (st.st_mtime_ns, st.st_size)
                 except FileNotFoundError:
                     sig = None
 

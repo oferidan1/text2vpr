@@ -1,7 +1,7 @@
 import csv
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Iterable, Iterator, Union
 
 
 CSV_REQUIRED_COLUMNS = ["image_path", "description"]
@@ -18,7 +18,7 @@ def _normalize_header(name: str) -> str:
     return name.strip()
 
 
-def parse_caption_csv(csv_path: str | Path) -> Iterator[CaptionRow]:
+def parse_caption_csv(csv_path: Union[str, Path]) -> Iterator[CaptionRow]:
     """
     Parse a clustered CSV and yield CaptionRow objects.
 
@@ -57,7 +57,7 @@ def parse_caption_csv(csv_path: str | Path) -> Iterator[CaptionRow]:
             )
 
 
-def parse_caption_csv_two_columns_no_header(csv_path: str | Path) -> Iterator[CaptionRow]:
+def parse_caption_csv_two_columns_no_header(csv_path: Union[str, Path]) -> Iterator[CaptionRow]:
     """
     Parse a simple 2-column CSV with NO header:
 

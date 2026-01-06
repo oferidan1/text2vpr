@@ -3,6 +3,7 @@ import csv
 from dataclasses import dataclass
 from datetime import datetime
 import hashlib
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterator, List, Optional, Any
 import os
@@ -15,6 +16,8 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
+from file_lock import FileLock
+
 try:
     from tqdm import tqdm
 except Exception:  # pragma: no cover - tqdm is optional
@@ -23,6 +26,56 @@ except Exception:  # pragma: no cover - tqdm is optional
 if TYPE_CHECKING:  # pragma: no cover
     # Only for type hints; actual imports are done lazily in load_model().
     from sam3.model.sam3_image_processor import Sam3Processor  # noqa: F401
+
+
+_CLIP_BPE_DEFAULT_URL = "https://openaipublic.azureedge.net/clip/bpe_simple_vocab_16e6.txt.gz"
+
+
+def _resolve_sam3_bpe_path() -> Path:
+    """
+    Resolve a readable path to the CLIP BPE vocab required by the SAM3 text encoder.
+
+    We prefer an explicit env var if the user has one, otherwise use a cache
+    location under ~/.cache so we don't need to write into site-packages.
+    """
+    # 1) Explicit override via env var(s)
+    for k in ("SAM3_BPE_PATH", "CLIP_BPE_PATH", "BPE_PATH"):
+        v = (os.environ.get(k) or "").strip()
+        if v:
+            p = Path(v).expanduser()
+            if p.is_file():
+                return p
+
+    # 2) Default cache location
+    return Path.home() / ".cache" / "sam3" / "assets" / "bpe_simple_vocab_16e6.txt.gz"
+
+
+def _ensure_clip_bpe_file(path: Path) -> None:
+    """
+    Best-effort: download the CLIP BPE vocab file if it does not exist.
+
+    This avoids fragile behavior when the installed `sam3` package does not ship
+    the expected `assets/bpe_simple_vocab_16e6.txt.gz` file.
+    """
+    if path.is_file():
+        return
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+
+    # Stream download to avoid holding the whole file in memory.
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(_CLIP_BPE_DEFAULT_URL, timeout=30) as r, tmp.open("wb") as f:
+            shutil.copyfileobj(r, f)
+        tmp.replace(path)
+    finally:
+        try:
+            if tmp.exists() and not path.exists():
+                tmp.unlink()
+        except Exception:
+            pass
 
 
 @dataclass
@@ -145,6 +198,7 @@ def load_image(image_path: str):
 def load_model(
     device: str,
     confidence_threshold: float = 0.2,
+    checkpoint_path: Optional[str] = None,
     verbose: bool = False,
 ) -> tuple[torch.nn.Module, "Sam3Processor"]:
     """Load a SAM3 model and processor."""
@@ -171,7 +225,44 @@ def load_model(
         from sam3.model_builder import build_sam3_image_model  # type: ignore
         from sam3.model.sam3_image_processor import Sam3Processor  # type: ignore
 
-    model = build_sam3_image_model(device=device, eval_mode=True)
+    # SAM3 needs a CLIP BPE vocab file. Some `sam3` installations do not package
+    # it under site-packages/assets, so we resolve (and if needed download) a copy.
+    bpe_path = _resolve_sam3_bpe_path()
+    try:
+        _ensure_clip_bpe_file(bpe_path)
+    except Exception as e:
+        raise SystemExit(
+            "SAM3 failed to locate the required tokenizer vocab file:\n"
+            f"  expected/using: {bpe_path}\n\n"
+            "Fix options:\n"
+            "  1) Set SAM3_BPE_PATH to an existing bpe_simple_vocab_16e6.txt.gz\n"
+            f"  2) Ensure this URL is reachable so it can auto-download:\n"
+            f"       {_CLIP_BPE_DEFAULT_URL}\n\n"
+            f"Original error: {type(e).__name__}: {e}"
+        ) from e
+
+    try:
+        model = build_sam3_image_model(
+            device=device,
+            eval_mode=True,
+            bpe_path=str(bpe_path),
+            checkpoint_path=checkpoint_path,
+        )
+    except Exception as e:
+        raise SystemExit(
+            "Failed to build/load the SAM3 model.\n\n"
+            "Common causes:\n"
+            "  - The Hugging Face repo 'facebook/sam3' is gated and requires authentication.\n"
+            "    Fix: request access on Hugging Face, then run `huggingface-cli login` (or set HF_TOKEN).\n"
+            "  - No internet access / proxy issues.\n"
+            "    Fix: download the checkpoint once on a machine with access and pass --checkpoint_path.\n\n"
+            "Fix options:\n"
+            "  1) Provide a local checkpoint:\n"
+            "       --checkpoint_path /path/to/sam3.pt\n"
+            "  2) Authenticate to HF (if you have access):\n"
+            "       huggingface-cli login\n\n"
+            f"Original error: {type(e).__name__}: {e}"
+        ) from e
     processor = Sam3Processor(
         model=model, device=device, confidence_threshold=confidence_threshold
     )
@@ -475,12 +566,63 @@ def _debug_file_prefix(row: DetectionRow, ordinal: int) -> str:
     return f"{ordinal:06d}_{stem}_{h}"
 
 
+def _stable_image_id(image_path: str) -> str:
+    """
+    Stable id for an image_path to use in filenames (independent of row ordering).
+    """
+    stem = Path(image_path).stem or "image"
+    h = hashlib.sha1(image_path.encode("utf-8", errors="ignore")).hexdigest()[:12]
+    return f"{stem}_{h}"
+
+
+def _write_sam3_debug_txt(
+    *,
+    base_dir: Path,
+    cluster_dir: str,
+    image_path: str,
+    description: str,
+    objects_raw: str,
+    objects_not_found: list[str],
+    detected_objects: list[str],
+    detected_confidences: list[float],
+    extra_lines: Optional[list[str]] = None,
+) -> str:
+    """
+    Write a small per-row debug text file capturing SAM3 results so we can visualize later.
+
+    Returns the path (as a string) to the written .txt file.
+    """
+    safe_cluster = (cluster_dir or "unknown_cluster").strip() or "unknown_cluster"
+    out_dir = (base_dir / "sam3_text_outputs" / safe_cluster)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    out_path = out_dir / f"{_stable_image_id(image_path)}.txt"
+    lines: list[str] = [
+        f"timestamp: {datetime.now().isoformat(timespec='seconds')}",
+        f"image_path: {image_path}",
+        f"description: {description}",
+        f"objects_raw: {objects_raw}",
+        "",
+        "detected_objects_json: " + json.dumps(detected_objects, ensure_ascii=False),
+        "detected_confidences_json: "
+        + json.dumps([round(float(x), 6) for x in detected_confidences], ensure_ascii=False),
+        "objects_not_found_json: " + json.dumps(objects_not_found, ensure_ascii=False),
+    ]
+    if extra_lines:
+        lines.append("")
+        lines.extend(extra_lines)
+
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return str(out_path)
+
+
 def run(
     input_csv: Path,
     output_csv: Optional[Path],
     images_root: Optional[Path],
     box_threshold: float,
     cpu_only: bool,
+    checkpoint_path: Optional[Path],
     debug: bool,
     debug_dir: Optional[Path],
     no_overwrite: bool = False,
@@ -579,6 +721,7 @@ def run(
     model, processor = load_model(
         device=device,
         confidence_threshold=box_threshold,
+        checkpoint_path=str(checkpoint_path) if checkpoint_path else None,
         verbose=False,
     )
 
@@ -592,6 +735,9 @@ def run(
         "description",
         "objects",
         "objects_not_found",
+        "detected_objects",
+        "detected_confidences",
+        "sam3_debug_txt_path",
         "debug_image_path",
     ]
 
@@ -631,6 +777,9 @@ def run(
             "description",
             "objects",
             "objects_not_found",
+            "detected_objects",
+            "detected_confidences",
+            "sam3_debug_txt_path",
             "duration_sec",
             "status",
         ]
@@ -682,7 +831,7 @@ def run(
 
             try:
                 st0 = input_csv.stat()
-                prev_sig: tuple[int, int] | None = (st0.st_mtime_ns, st0.st_size)
+                prev_sig: Optional[tuple[int, int]] = (st0.st_mtime_ns, st0.st_size)
             except FileNotFoundError:
                 prev_sig = None
 
@@ -808,6 +957,8 @@ def run(
                                 )
 
                                 missing_objects: List[str] = []
+                                detected_objects: List[str] = []
+                                detected_confidences: List[float] = []
 
                                 debug_boxes: List[torch.Tensor] = []
                                 debug_masks: List[torch.Tensor] = []
@@ -824,7 +975,16 @@ def run(
                                     found = len(scores) > 0
                                     if not found:
                                         missing_objects.append(object_name)
-                                    elif debug and len(boxes) > 0:
+                                    else:
+                                        # Record a per-object confidence for downstream analysis.
+                                        try:
+                                            conf = float(max(scores)) if len(scores) else 0.0
+                                        except Exception:
+                                            conf = 0.0
+                                        detected_objects.append(object_name)
+                                        detected_confidences.append(conf)
+
+                                    if found and debug and len(boxes) > 0:
                                         debug_boxes.append(boxes)
                                         debug_masks.append(masks)
                                         debug_labels.extend(
@@ -842,7 +1002,15 @@ def run(
                                     found = len(scores) > 0
                                     if not found:
                                         missing_objects.append(stuff_name)
-                                    elif debug and len(boxes) > 0:
+                                    else:
+                                        try:
+                                            conf = float(max(scores)) if len(scores) else 0.0
+                                        except Exception:
+                                            conf = 0.0
+                                        detected_objects.append(stuff_name)
+                                        detected_confidences.append(conf)
+
+                                    if found and debug and len(boxes) > 0:
                                         debug_boxes.append(boxes)
                                         debug_masks.append(masks)
                                         debug_labels.extend(
@@ -885,6 +1053,40 @@ def run(
                                 objects_not_found_str = (
                                     ". ".join(missing_objects) if missing_objects else ""
                                 )
+
+                                # Persist a per-row debug text artifact next to the outputs directory.
+                                # This is cheap and makes later visualization/debugging easier.
+                                # We always write it (even if nothing is missing) so downstream tools
+                                # can rely on the column existing.
+                                cluster_dir_for_txt = ""
+                                for parent in input_csv.parents:
+                                    name = parent.name
+                                    if name.startswith("cluster_"):
+                                        cluster_dir_for_txt = name
+                                        break
+                                if not cluster_dir_for_txt:
+                                    cluster_dir_for_txt = input_csv.parent.name
+
+                                sam3_debug_txt_path = _write_sam3_debug_txt(
+                                    base_dir=realtime_progress_csv.parent
+                                    if realtime_progress_csv is not None
+                                    else output_csv.parent,
+                                    cluster_dir=cluster_dir_for_txt,
+                                    image_path=row.image_path,
+                                    description=row.description,
+                                    objects_raw=row.objects_raw,
+                                    objects_not_found=missing_objects,
+                                    detected_objects=detected_objects,
+                                    detected_confidences=detected_confidences,
+                                )
+
+                                detected_objects_json = json.dumps(
+                                    detected_objects, ensure_ascii=False
+                                )
+                                detected_confidences_json = json.dumps(
+                                    [round(float(x), 6) for x in detected_confidences],
+                                    ensure_ascii=False,
+                                )
                                 writer.writerow(
                                     {
                                         "image_path": row.image_path,
@@ -892,6 +1094,9 @@ def run(
                                         "description": row.description,
                                         "objects": row.objects_raw,
                                         "objects_not_found": objects_not_found_str,
+                                        "detected_objects": detected_objects_json,
+                                        "detected_confidences": detected_confidences_json,
+                                        "sam3_debug_txt_path": sam3_debug_txt_path,
                                         "debug_image_path": debug_image_path_str,
                                     }
                                 )
@@ -934,6 +1139,9 @@ def run(
                                             "description": row.description,
                                             "objects": row.objects_raw,
                                             "objects_not_found": objects_not_found_str,
+                            "detected_objects": detected_objects_json,
+                            "detected_confidences": detected_confidences_json,
+                            "sam3_debug_txt_path": sam3_debug_txt_path,
                                             "duration_sec": f"{duration_sec:.4f}",
                                             "status": "processed",
                                         }
@@ -954,7 +1162,7 @@ def run(
                         # No new rows since last check. Use file signature to track idle time.
                         try:
                             st = input_csv.stat()
-                            sig: tuple[int, int] | None = (st.st_mtime_ns, st.st_size)
+                            sig: Optional[tuple[int, int]] = (st.st_mtime_ns, st.st_size)
                         except FileNotFoundError:
                             sig = None
 
@@ -1260,6 +1468,15 @@ def main() -> None:
         help="Confidence threshold for filtering SAM3 predictions.",
     )
     parser.add_argument(
+        "--checkpoint_path",
+        default=None,
+        help=(
+            "Optional local path to the SAM3 checkpoint (.pt). "
+            "If not provided, the SAM3 package will attempt to download from Hugging Face "
+            "(repo 'facebook/sam3', which may be gated / require login)."
+        ),
+    )
+    parser.add_argument(
         "--cpu_only",
         action="store_true",
         help="Force computation on CPU even if CUDA is available.",
@@ -1437,6 +1654,9 @@ def main() -> None:
             images_root=images_root,
             box_threshold=args.box_threshold,
             cpu_only=args.cpu_only,
+            checkpoint_path=Path(args.checkpoint_path).resolve()
+            if args.checkpoint_path
+            else None,
             debug=args.debug,
             debug_root_dir=debug_root_dir,
             no_overwrite=args.no_overwrite,
@@ -1480,34 +1700,40 @@ def main() -> None:
                 f"sam3_realtime_progress{suffix}.csv"
             )
 
-        run(
-            input_csv=input_csv_path,
-            output_csv=Path(args.output_csv).resolve() if args.output_csv else None,
-            images_root=Path(args.images_root).resolve()
-            if args.images_root
-            else None,
-            box_threshold=args.box_threshold,
-            cpu_only=args.cpu_only,
-            debug=args.debug,
-            debug_dir=Path(args.debug_dir).resolve() if args.debug_dir else None,
-            no_overwrite=args.no_overwrite,
-            resume=args.resume,
-            use_filtered=args.filtered,
-            realtime_missing_csv=realtime_missing_path,
-            realtime_progress_csv=realtime_progress_path,
-            follow=bool(args.follow or args.watch),
-            poll_interval=(
-                float(args.watch_poll_sec)
-                if args.watch and float(args.poll_interval) == 5.0
-                else float(args.poll_interval)
-            ),
-            follow_idle_minutes=(
-                int(args.watch_idle_minutes) if args.watch else args.follow_idle_minutes
-            ),
-            watch=bool(args.watch),
-            watch_poll_sec=int(args.watch_poll_sec),
-            watch_idle_minutes=int(args.watch_idle_minutes),
-        )
+        # Prevent concurrent runs from writing the same realtime progress CSV.
+        # This is the most common cause of "exactly doubled" line counts.
+        with FileLock(realtime_progress_path):
+            run(
+                input_csv=input_csv_path,
+                output_csv=Path(args.output_csv).resolve() if args.output_csv else None,
+                images_root=Path(args.images_root).resolve()
+                if args.images_root
+                else None,
+                box_threshold=args.box_threshold,
+                cpu_only=args.cpu_only,
+                checkpoint_path=Path(args.checkpoint_path).resolve()
+                if args.checkpoint_path
+                else None,
+                debug=args.debug,
+                debug_dir=Path(args.debug_dir).resolve() if args.debug_dir else None,
+                no_overwrite=args.no_overwrite,
+                resume=args.resume,
+                use_filtered=args.filtered,
+                realtime_missing_csv=realtime_missing_path,
+                realtime_progress_csv=realtime_progress_path,
+                follow=bool(args.follow or args.watch),
+                poll_interval=(
+                    float(args.watch_poll_sec)
+                    if args.watch and float(args.poll_interval) == 5.0
+                    else float(args.poll_interval)
+                ),
+                follow_idle_minutes=(
+                    int(args.watch_idle_minutes) if args.watch else args.follow_idle_minutes
+                ),
+                watch=bool(args.watch),
+                watch_poll_sec=int(args.watch_poll_sec),
+                watch_idle_minutes=int(args.watch_idle_minutes),
+            )
 
 
 def run_batch(
@@ -1516,6 +1742,7 @@ def run_batch(
     images_root: Optional[Path],
     box_threshold: float,
     cpu_only: bool,
+    checkpoint_path: Optional[Path],
     debug: bool,
     debug_root_dir: Optional[Path],
     no_overwrite: bool = False,
@@ -1710,6 +1937,7 @@ def run_batch(
                 images_root=images_root,
                 box_threshold=box_threshold,
                 cpu_only=cpu_only,
+                checkpoint_path=checkpoint_path,
                 debug=debug,
                 debug_dir=per_csv_debug_dir,
                 no_overwrite=no_overwrite,

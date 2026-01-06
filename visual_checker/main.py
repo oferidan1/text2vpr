@@ -3,8 +3,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from functools import lru_cache
+from typing import Optional, Set, Tuple
 
 from csv_parser import parse_caption_csv, parse_caption_csv_two_columns_no_header
+from file_lock import FileLock
 
 try:
     from tqdm.auto import tqdm
@@ -224,7 +226,12 @@ def filter_objects_with_llm(
     return filtered_text
 
 
-def _build_llm_client_or_die(*, model_name: str, max_new_tokens: int | None = None, temperature: float | None = None):
+def _build_llm_client_or_die(
+    *,
+    model_name: str,
+    max_new_tokens: Optional[int] = None,
+    temperature: Optional[float] = None,
+):
     """
     Lazily import and build the local HF LLM client.
 
@@ -420,20 +427,21 @@ def _batched_enumerate(iterable, batch_size: int):
 def run(
     input_csv: Path,
     output_dir: Path,
-    output_csv: Path | None,
+    output_csv: Optional[Path],
     model_name: str,
-    prompt_template: str | None,
-    prompt_template_stuff: str | None,
-    prompt_template_merged: str | None,
+    prompt_template: Optional[str],
+    prompt_template_stuff: Optional[str],
+    prompt_template_merged: Optional[str],
     use_merged_prompt: bool,
     generate_stuff: bool,
     use_noun_phrase_parser: bool,
     filter_with_llm: bool,
     filter_model_name: str,
-    filter_prompt_template: str | None,
+    filter_prompt_template: Optional[str],
     batch_size: int = 1,
-    realtime_progress_csv: Path | None = None,
+    realtime_progress_csv: Optional[Path] = None,
     skip_existing_llm: bool = False,
+    resume: bool = False,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -512,10 +520,11 @@ def run(
 
         return
 
-    # Always recreate the output CSV on each run so reruns don't
-    # accidentally reuse previous results.
-    if output_csv.exists():
-        output_csv.unlink()
+    # Resume support for single-CSV mode:
+    # - if --resume and output CSV exists (and is non-empty), append new rows
+    # - skip already-processed image_path values present in the output CSV
+    # Without --resume we keep legacy behavior: delete and regenerate outputs.
+    processed_image_paths: set[str] = set()
 
     llm_client = None
     filter_llm_client = None
@@ -546,13 +555,67 @@ def run(
         if generate_stuff:
             fieldnames.append("stuff")
 
+    def _load_processed_image_paths_single_csv(out_csv: Path, expected_fieldnames: list[str]) -> set[str]:
+        """
+        Load processed image_path values from an existing output CSV.
+
+        This is used for --resume in --input_csv mode to avoid re-processing and,
+        critically, to avoid truncating/deleting an existing output CSV at startup.
+        """
+        import csv as _csv
+
+        processed: set[str] = set()
+        if not out_csv.is_file():
+            return processed
+
+        with out_csv.open("r", newline="", encoding="utf-8") as f_in:
+            r = _csv.DictReader(f_in)
+            if r.fieldnames is None:
+                # Empty file: treat as fresh run.
+                return processed
+            if list(r.fieldnames) != list(expected_fieldnames):
+                raise ValueError(
+                    "Output CSV header does not match expected columns for this run. "
+                    "Refusing to --resume to avoid corrupting the file. "
+                    f"Expected fieldnames={list(expected_fieldnames)} but found={list(r.fieldnames)}. "
+                    "Delete the output CSV or rerun without --resume."
+                )
+            for row in r:
+                p = (row.get("image_path") or "").strip()
+                if p:
+                    processed.add(p)
+        return processed
+
     try:
         # Load all rows once so we can report a proper tqdm over the total.
         rows = list(parse_caption_csv(input_csv))
 
-        with output_csv.open("w", newline="", encoding="utf-8") as f_out:
+        out_mode = "w"
+        output_exists = output_csv.exists()
+        output_nonempty = output_exists and (output_csv.stat().st_size > 0)
+
+        if resume and output_nonempty:
+            processed_image_paths = _load_processed_image_paths_single_csv(output_csv, fieldnames)
+            out_mode = "a"
+            if processed_image_paths:
+                print(
+                    f"[resume] Loaded {len(processed_image_paths)} existing image_path values from {output_csv}; "
+                    "will skip re-processing those images.",
+                    flush=True,
+                )
+        else:
+            # Legacy behavior: regenerate outputs when not resuming (or when file is empty).
+            if output_exists and not resume:
+                output_csv.unlink()
+            # If resume was requested but the existing file is empty, we treat it like a fresh run
+            # (write mode + header) without attempting to append.
+            out_mode = "w"
+
+        with output_csv.open(out_mode, newline="", encoding="utf-8") as f_out:
             writer = csv.DictWriter(f_out, fieldnames=fieldnames)
-            writer.writeheader()
+            if out_mode == "w":
+                writer.writeheader()
+                f_out.flush()
 
             if use_noun_phrase_parser:
                 # Noun-phrase parser path (optionally with LLM filtering).
@@ -566,6 +629,8 @@ def run(
                     start=1,
                 ):
                     rows_processed = row_idx
+                    if resume and processed_image_paths and row.image_path in processed_image_paths:
+                        continue
 
                     row_start_time = datetime.now()
 
@@ -623,6 +688,17 @@ def run(
                 )
 
                 for batch in _batched_enumerate(rows, batch_size):
+                    # Filter out already-processed rows in resume mode (best-effort).
+                    batch_to_process = (
+                        [
+                            (row_idx, row)
+                            for (row_idx, row) in batch
+                            if not (resume and processed_image_paths and row.image_path in processed_image_paths)
+                        ]
+                        if (resume and processed_image_paths)
+                        else list(batch)
+                    )
+
                     batch_start_time = datetime.now()
 
                     # Prepare prompts and max token estimates for this batch
@@ -630,7 +706,7 @@ def run(
                         merged_prompts: list[str] = []
                         merged_max_tokens_list: list[int] = []
 
-                        for row_idx, row in batch:
+                        for row_idx, row in batch_to_process:
                             rows_processed = row_idx
                             prompt = build_prompt(row.description, template_merged)
                             merged_prompts.append(prompt)
@@ -648,18 +724,24 @@ def run(
                             if merged_max_tokens_list
                             else None
                         )
-                        merged_texts = llm_client.get_objects_from_captions_batch(
-                            merged_prompts,
-                            max_new_tokens=batch_max_tokens,
-                        )
+                        if batch_to_process:
+                            merged_texts = llm_client.get_objects_from_captions_batch(
+                                merged_prompts,
+                                max_new_tokens=batch_max_tokens,
+                            )
 
-                        for (row_idx, row), merged_text in zip(batch, merged_texts):
-                            result_row = {
-                                "image_path": row.image_path,
-                                "description": row.description,
-                                "objects_and_stuff": merged_text,
-                            }
-                            writer.writerow(result_row)
+                            for (row_idx, row), merged_text in zip(batch_to_process, merged_texts):
+                                result_row = {
+                                    "image_path": row.image_path,
+                                    "description": row.description,
+                                    "objects_and_stuff": merged_text,
+                                }
+                                writer.writerow(result_row)
+                                # Ensure outputs are visible on disk after each row.
+                                try:
+                                    f_out.flush()
+                                except Exception:
+                                    pass
                     else:
                         # Separate objects (and optional stuff) prompts
                         object_prompts: list[str] = []
@@ -667,7 +749,7 @@ def run(
                         stuff_prompts: list[str] = []
                         stuff_max_tokens_list: list[int] = []
 
-                        for row_idx, row in batch:
+                        for row_idx, row in batch_to_process:
                             rows_processed = row_idx
 
                             prompt = build_prompt(row.description, template)
@@ -695,10 +777,12 @@ def run(
                             if object_max_tokens_list
                             else None
                         )
-                        objects_texts = llm_client.get_objects_from_captions_batch(
-                            object_prompts,
-                            max_new_tokens=objects_batch_max,
-                        )
+                        objects_texts = []
+                        if batch_to_process:
+                            objects_texts = llm_client.get_objects_from_captions_batch(
+                                object_prompts,
+                                max_new_tokens=objects_batch_max,
+                            )
 
                         if generate_stuff:
                             stuff_batch_max = (
@@ -706,14 +790,16 @@ def run(
                                 if stuff_max_tokens_list
                                 else None
                             )
-                            stuff_texts = llm_client.get_objects_from_captions_batch(
-                                stuff_prompts,
-                                max_new_tokens=stuff_batch_max,
-                            )
+                            stuff_texts = []
+                            if batch_to_process:
+                                stuff_texts = llm_client.get_objects_from_captions_batch(
+                                    stuff_prompts,
+                                    max_new_tokens=stuff_batch_max,
+                                )
                         else:
                             stuff_texts = []
 
-                        for batch_index, (row_idx, row) in enumerate(batch):
+                        for batch_index, (row_idx, row) in enumerate(batch_to_process):
                             objects_text = (
                                 objects_texts[batch_index]
                                 if batch_index < len(objects_texts)
@@ -844,19 +930,20 @@ def run_images_dir_mode(
     images_dir: Path,
     captions_csv: Path,
     output_dir: Path,
-    output_csv: Path | None,
-    per_image_timing_csv: Path | None,
+    output_csv: Optional[Path],
+    per_image_timing_csv: Optional[Path],
     model_name: str,
-    prompt_template: str | None,
-    prompt_template_stuff: str | None,
-    prompt_template_merged: str | None,
+    prompt_template: Optional[str],
+    prompt_template_stuff: Optional[str],
+    prompt_template_merged: Optional[str],
     use_merged_prompt: bool,
     generate_stuff: bool,
     use_noun_phrase_parser: bool,
     filter_with_llm: bool,
     filter_model_name: str,
-    filter_prompt_template: str | None,
+    filter_prompt_template: Optional[str],
     skip_existing_llm: bool = False,
+    resume: bool = False,
     include_missing_images: bool = False,
 ) -> None:
     """
@@ -891,11 +978,69 @@ def run_images_dir_mode(
         print(f"Skipping because output already exists: {output_csv}")
         return
 
-    # Always recreate output files to avoid mixing old/new runs.
-    if output_csv.exists():
-        output_csv.unlink()
-    if per_image_timing_csv.exists():
-        per_image_timing_csv.unlink()
+    # Resume mode: append and skip already-processed rows/images.
+    # Default behavior remains: recreate outputs.
+    def _load_resume_state(
+        *,
+        out_csv: Path,
+        timing_csv: Path,
+        expected_out_fieldnames: list,
+        expected_timing_fieldnames: list,
+    ) -> Tuple[int, Set[str]]:
+        """
+        Returns (max_row_index_seen, processed_image_paths).
+
+        - max_row_index_seen is used to fast-skip the first N rows of the captions CSV
+          so we truly "continue where we stopped" (best-effort).
+        - processed_image_paths ensures we don't re-run the same image twice even if
+          the timing CSV is incomplete or was truncated.
+        """
+        import csv as _csv
+
+        max_row_idx = 0
+        processed_paths: Set[str] = set()
+
+        # 1) Load processed image_path values from the output CSV.
+        if out_csv.is_file():
+            with out_csv.open("r", newline="", encoding="utf-8") as f:
+                r = _csv.DictReader(f)
+                if r.fieldnames is None:
+                    raise ValueError(f"Output CSV has no header: {out_csv}")
+                if list(r.fieldnames) != list(expected_out_fieldnames):
+                    raise ValueError(
+                        "Output CSV header does not match expected columns for this run. "
+                        "Refusing to --resume to avoid corrupting the file. "
+                        f"Expected fieldnames={list(expected_out_fieldnames)} but found={list(r.fieldnames)}. "
+                        "Delete the output CSV or rerun without --resume."
+                    )
+                for row in r:
+                    p = (row.get("image_path") or "").strip()
+                    if p:
+                        processed_paths.add(p)
+
+        # 2) Load max row_index from timing CSV (best-effort).
+        if timing_csv.is_file():
+            with timing_csv.open("r", newline="", encoding="utf-8") as f:
+                r = _csv.DictReader(f)
+                if r.fieldnames is None:
+                    raise ValueError(f"Timing CSV has no header: {timing_csv}")
+                if list(r.fieldnames) != list(expected_timing_fieldnames):
+                    raise ValueError(
+                        "Timing CSV header does not match expected columns for this run. "
+                        "Refusing to --resume to avoid corrupting the file. "
+                        f"Expected fieldnames={list(expected_timing_fieldnames)} but found={list(r.fieldnames)}. "
+                        "Delete the timing CSV or rerun without --resume."
+                    )
+                for row in r:
+                    v = (row.get("row_index") or "").strip()
+                    if not v:
+                        continue
+                    try:
+                        max_row_idx = max(max_row_idx, int(v))
+                    except Exception:
+                        continue
+
+        return max_row_idx, processed_paths
 
     llm_client = None
     filter_llm_client = None
@@ -960,21 +1105,63 @@ def run_images_dir_mode(
     else:
         rows_iter = parse_caption_csv_two_columns_no_header(captions_csv)
 
-    with output_csv.open("w", newline="", encoding="utf-8") as f_out, per_image_timing_csv.open(
-        "w", newline="", encoding="utf-8"
+    processed_image_paths: Set[str] = set()
+    resume_skip_rows = 0
+    out_mode = "w"
+    time_mode = "w"
+
+    if resume and (output_csv.exists() or per_image_timing_csv.exists()):
+        resume_skip_rows, processed_image_paths = _load_resume_state(
+            out_csv=output_csv,
+            timing_csv=per_image_timing_csv,
+            expected_out_fieldnames=out_fieldnames,
+            expected_timing_fieldnames=timing_fieldnames,
+        )
+        out_mode = "a" if output_csv.exists() else "w"
+        time_mode = "a" if per_image_timing_csv.exists() else "w"
+        if processed_image_paths:
+            print(
+                f"[resume] Loaded {len(processed_image_paths)} existing image_path values from {output_csv}; "
+                "will skip re-processing those images.",
+                flush=True,
+            )
+        if resume_skip_rows > 0:
+            print(
+                f"[resume] Will fast-skip the first {resume_skip_rows} rows based on {per_image_timing_csv}.",
+                flush=True,
+            )
+    else:
+        # Always recreate output files to avoid mixing old/new runs.
+        if output_csv.exists():
+            output_csv.unlink()
+        if per_image_timing_csv.exists():
+            per_image_timing_csv.unlink()
+
+    with output_csv.open(out_mode, newline="", encoding="utf-8") as f_out, per_image_timing_csv.open(
+        time_mode, newline="", encoding="utf-8"
     ) as f_time:
         out_writer = csv.DictWriter(f_out, fieldnames=out_fieldnames)
-        out_writer.writeheader()
-        f_out.flush()
+        if out_mode == "w":
+            out_writer.writeheader()
+            f_out.flush()
 
         time_writer = csv.DictWriter(f_time, fieldnames=timing_fieldnames)
-        time_writer.writeheader()
-        f_time.flush()
+        if time_mode == "w":
+            time_writer.writeheader()
+            f_time.flush()
 
         for row_idx, row in enumerate(
             tqdm(rows_iter, desc=f"{captions_csv.name} (images_dir mode)"), start=1
         ):
+            if resume_skip_rows and row_idx <= resume_skip_rows:
+                continue
+
             resolved = _resolve_image_path_from_dir(images_dir, row.image_path)
+            # If resuming, never re-process an image_path already present in the output CSV.
+            if resume and processed_image_paths:
+                resolved_key = str(resolved)
+                if resolved_key and resolved_key in processed_image_paths:
+                    continue
             status = "completed"
             err_msg = ""
 
@@ -1088,6 +1275,10 @@ def run_images_dir_mode(
 
             end_dt = datetime.now()
             dur = time.perf_counter() - t0
+            # Track progress for this run so we don't re-process duplicates even within
+            # the same invocation (best-effort).
+            if resume:
+                processed_image_paths.add(str(resolved))
 
             time_writer.writerow(
                 {
@@ -1156,6 +1347,15 @@ def main() -> None:
         help=(
             "Images directory mode: optional CSV path for per-image timing logs. "
             "Defaults to <output_csv_stem>_timings.csv next to the output CSV."
+        ),
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "Resume mode: if the output CSV already exists, append new rows and skip "
+            "already-processed image_path values. This lets you rerun after interruption "
+            "without duplicating work or truncating existing outputs."
         ),
     )
     parser.add_argument(
@@ -1452,6 +1652,7 @@ def main() -> None:
             filter_model_name=args.filter_model,
             filter_prompt_template=args.filter_prompt_template,
             skip_existing_llm=args.skip_existing_llm,
+            resume=args.resume,
             include_missing_images=args.include_missing_images,
         )
         return
@@ -1470,24 +1671,52 @@ def main() -> None:
         else:
             realtime_progress_path = input_csv_path.with_name("objects_realtime_progress.csv")
 
-        run(
-            input_csv=input_csv_path,
-            output_dir=Path(args.output_dir),
-            output_csv=Path(args.output_csv) if args.output_csv else None,
-            model_name=effective_model,
-            prompt_template=args.prompt_template,
-            prompt_template_stuff=args.prompt_template_stuff,
-            prompt_template_merged=args.prompt_template_merged,
-            use_merged_prompt=args.use_merged_prompt,
-            generate_stuff=args.generate_stuff,
-            use_noun_phrase_parser=args.use_noun_phrase_parser,
-            filter_with_llm=args.filter_with_llm,
-            filter_model_name=args.filter_model,
-            filter_prompt_template=args.filter_prompt_template,
-            batch_size=args.batch_size,
-            realtime_progress_csv=realtime_progress_path,
-            skip_existing_llm=args.skip_existing_llm,
-        )
+        # Prevent two concurrent runs from writing the same output CSV (which can
+        # otherwise create duplicated/interleaved rows).
+        #
+        # In the full pipeline we always pass --output_csv explicitly, so we lock on that.
+        out_csv_for_lock = Path(args.output_csv).resolve() if args.output_csv else None
+        if out_csv_for_lock is not None:
+            with FileLock(out_csv_for_lock):
+                run(
+                    input_csv=input_csv_path,
+                    output_dir=Path(args.output_dir),
+                    output_csv=Path(args.output_csv) if args.output_csv else None,
+                    model_name=effective_model,
+                    prompt_template=args.prompt_template,
+                    prompt_template_stuff=args.prompt_template_stuff,
+                    prompt_template_merged=args.prompt_template_merged,
+                    use_merged_prompt=args.use_merged_prompt,
+                    generate_stuff=args.generate_stuff,
+                    use_noun_phrase_parser=args.use_noun_phrase_parser,
+                    filter_with_llm=args.filter_with_llm,
+                    filter_model_name=args.filter_model,
+                    filter_prompt_template=args.filter_prompt_template,
+                    batch_size=args.batch_size,
+                    realtime_progress_csv=realtime_progress_path,
+                    skip_existing_llm=args.skip_existing_llm,
+                    resume=args.resume,
+                )
+        else:
+            run(
+                input_csv=input_csv_path,
+                output_dir=Path(args.output_dir),
+                output_csv=Path(args.output_csv) if args.output_csv else None,
+                model_name=effective_model,
+                prompt_template=args.prompt_template,
+                prompt_template_stuff=args.prompt_template_stuff,
+                prompt_template_merged=args.prompt_template_merged,
+                use_merged_prompt=args.use_merged_prompt,
+                generate_stuff=args.generate_stuff,
+                use_noun_phrase_parser=args.use_noun_phrase_parser,
+                filter_with_llm=args.filter_with_llm,
+                filter_model_name=args.filter_model,
+                filter_prompt_template=args.filter_prompt_template,
+                batch_size=args.batch_size,
+                realtime_progress_csv=realtime_progress_path,
+                skip_existing_llm=args.skip_existing_llm,
+                resume=args.resume,
+            )
         return
 
     # Directory scan mode
