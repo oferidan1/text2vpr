@@ -618,11 +618,17 @@ def main(args):
             scores, predictions = get_queries_predictions(model.encoder_dim, vision_database_descriptors, all_descriptors, text_queries_descriptors, max_results)
             
         elif (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting' or args.fusion_type=='text_adapter' or args.fusion_type == 'transformer' or is_score_fusion: 
-            # vision
-            vision_queries_descriptors = vision_descriptors[test_ds.num_database :]
-            vision_database_descriptors = vision_descriptors[: test_ds.num_database]    
             
-            vision_scores, vision_predictions = get_queries_predictions(model.vpr_encoder_dim, vision_database_descriptors, vision_descriptors, vision_queries_descriptors, max_results_reranking)
+            if is_score_fusion and (args.is_dual_encoder and args.dual_encoder_fusion=='cat'):
+                # cat
+                queries_descriptors = all_descriptors[test_ds.num_database :]
+                database_descriptors = all_descriptors[: test_ds.num_database]                
+                vision_scores, vision_predictions = get_queries_predictions(model.encoder_dim, database_descriptors, all_descriptors, queries_descriptors, max_results_reranking)
+            else:    
+                # vision
+                vision_queries_descriptors = vision_descriptors[test_ds.num_database :]
+                vision_database_descriptors = vision_descriptors[: test_ds.num_database]                    
+                vision_scores, vision_predictions = get_queries_predictions(model.vpr_encoder_dim, vision_database_descriptors, vision_descriptors, vision_queries_descriptors, max_results_reranking)
             # text
             text_queries_descriptors = text_descriptors[test_ds.num_database :]
             text_database_descriptors = text_descriptors[: test_ds.num_database]                
