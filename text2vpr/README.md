@@ -3,10 +3,10 @@
 
 # evaluation
 # image only
-python eval_vpr.py --vpr_dim=512 --vpr_model_name=mixvpr --encode_mode=image --fusion_type=none --is_dual_encoder=0
+python eval_vpr.py --vpr_dim=512 --vpr_model_name=mixvpr --encode_mode=image --is_encode_text=0 --fusion_type=none --is_dual_encoder=0
 
 # text only
-python eval_vpr.py --vpr_dim=512 --vpr_model_name=mixvpr --encode_mode=text --fusion_type=none --is_dual_encoder=0
+python eval_vpr.py --vpr_dim=512 --vpr_model_name=mixvpr --encode_mode=text --is_encode_image=0 --fusion_type=none --is_dual_encoder=0
 
 # concat
 python eval_vpr.py --vpr_dim=512 --vpr_model_name=mixvpr --is_dual_encoder=1 --dual_encoder_fusion=cat --fusion_type=none
@@ -30,7 +30,7 @@ python train.py --cross_modal=2 --fusion_type=none --vpr_model_name=Salesforce/b
 
 python train.py --cross_modal=2 --fusion_type=none --vpr_model_name=openai/clip-vit-base-patch32 --vpr_dim=512 --is_text_pooling=0 --is_image_pooling=0 --image_size=224 --is_trainable_text_encoder=1 --loss_name=MultiSimilarityLossCM --batch_size=20
 
-python eval_vpr.py --vpr_dim=256 --image_size=384 --vpr_model_name=Salesforce/blip-itm-base-coco --fusion_type=none --cross_modal=2 --is_text_pooling=0 --is_dual_encoder=0 --pca_dim=256 --text_dim=512 --is_trainable_text_encoder=1 --lora_path=LOGS/resnet50/blip_lora_01/
+python eval_vpr.py --vpr_dim=256 --image_size=384 --vpr_model_name=Salesforce/blip-itm-base-coco --fusion_type=none --cross_modal=2 --is_text_pooling=0 --is_dual_encoder=0 --pca_dim=256 --text_dim=256 --is_trainable_text_encoder=0 --lora_path=LOGS/resnet50/blip_lora_r16_qkv/
 
 python eval_vpr.py --vpr_dim=512 --image_size=224 --vpr_model_name=openai/clip-vit-base-patch32 --fusion_type=none --cross_modal=4 --is_text_pooling=0 --is_dual_encoder=0 --pca_dim=512 --is_trainable_text_encoder=1 --lora_path=LOGS/resnet50/clip_lora_03/
 
