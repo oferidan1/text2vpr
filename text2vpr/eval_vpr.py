@@ -79,7 +79,7 @@ def get_alpha_vision_batches(matcher, query_path, database_paths, preds, device=
         # Fast RANSAC
         _, inliers = cv2.findFundamentalMat(pts0, pts1, cv2.USAC_MAGSAC, 0.5, 0.999, 1000)
         alphas_dict[preds[i]] = min((np.sum(inliers) / len(inliers) if inliers is not None else 0.0), 1)
-        inliers_dict[preds[i]] = inliers
+        inliers_dict[preds[i]] = np.sum(inliers)
 
     return alphas_dict, inliers_dict
 
@@ -198,7 +198,7 @@ def rerank_predictions_by_text(vision_scores, vision_predictions, text_scores, t
     return final_scores, final_predictions
 
 
-def rerank_predictions_by_scores(test_ds, vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, is_normalize, rerank_by_matching, max_rerank, vision_scores_ref=None, is_score_fusion=True):
+def rerank_predictions_by_scores(test_ds, vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, is_normalize, rerank_by_matching, max_rerank, vision_scores_ref, image_only_rank_matching):
     # sum scores according the where vision and text predictions are the same
     combined_scores = []
     combined_predictions = []
@@ -217,11 +217,11 @@ def rerank_predictions_by_scores(test_ds, vision_scores, vision_predictions, tex
    
     try:    
         for v_scores, v_preds, t_scores, t_preds in zip(vision_scores, vision_predictions, text_scores, text_predictions):
-            score_dict = {}                  
-            query_image_path = test_ds.images_paths[query_index]            
+            score_dict = {}                              
             alpha_vision_dict = {}
             w_query_v = w_alpha[query_index][0]         
             if rerank_by_matching:
+                query_image_path = test_ds.images_paths[query_index]            
                 selected_paths = [test_ds.images_paths[i] for i in v_preds]
                 selected_paths = selected_paths[:max_rerank]
                 alpha_vision_dict, inliers_dict = get_alpha_vision_batches(matcher, query_image_path, selected_paths, v_preds)
@@ -239,11 +239,12 @@ def rerank_predictions_by_scores(test_ds, vision_scores, vision_predictions, tex
                 if pred not in score_dict:
                     score_dict[pred] = 0
                 #score_dict[pred] += w_alpha[pred][0] * score 
-                if is_score_fusion:
-                    score_dict[pred] += alpha_vision * score 
+                if image_only_rank_matching:
+                    score_dict[pred] += inliers_dict[pred]                     
                 else:
-                    score_dict[pred] += inliers_dict[pred] 
-            if is_score_fusion:
+                    score_dict[pred] += alpha_vision * score 
+                    
+            if not image_only_rank_matching:
                 w_query_t = w_alpha[query_index][1]
                 for score, pred in zip(t_scores, t_preds):
                     if rerank_by_matching:
@@ -603,7 +604,7 @@ def main(args):
    
     alpha = args.alpha_vision
     max_results_reranking = test_ds.num_database
-    is_score_fusion = args.rerank_by_matching and (args.encode_mode=='image' or args.dual_encoder_fusion=='cat')
+    image_only_rank_matching = args.rerank_by_matching and (args.encode_mode=='image' or (args.is_dual_encoder and args.dual_encoder_fusion=='cat'))
     #alpha = w_alpha
     # Get queries predictions with alpha between 0.6 to 0.9 with jumps of 0.1
     #for alpha in [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
@@ -617,9 +618,9 @@ def main(args):
             text_queries_descriptors = text_descriptors[test_ds.num_database :]
             scores, predictions = get_queries_predictions(model.encoder_dim, vision_database_descriptors, all_descriptors, text_queries_descriptors, max_results)
             
-        elif (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting' or args.fusion_type=='text_adapter' or args.fusion_type == 'transformer' or is_score_fusion: 
+        elif (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting' or args.fusion_type=='text_adapter' or args.fusion_type == 'transformer' or image_only_rank_matching: 
             
-            if is_score_fusion and (args.is_dual_encoder and args.dual_encoder_fusion=='cat'):
+            if image_only_rank_matching and (args.is_dual_encoder and args.dual_encoder_fusion=='cat'):
                 # cat
                 queries_descriptors = all_descriptors[test_ds.num_database :]
                 database_descriptors = all_descriptors[: test_ds.num_database]                
@@ -648,7 +649,7 @@ def main(args):
                     ref_vision_scores = np.clip(ref_vision_scores, a_min=-1.0, a_max=1.0)
                     ref_vision_scores  = (ref_vision_scores - mu_img) / std_img
                     ref_vision_scores  = ((ref_vision_scores - min_img) / (max_img - min_img))*2-1     
-                scores, predictions = rerank_predictions_by_scores(test_ds, vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, args.is_normalize, args.rerank_by_matching, args.max_rerank, ref_vision_scores, is_score_fusion)
+                scores, predictions = rerank_predictions_by_scores(test_ds, vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index, args.is_normalize, args.rerank_by_matching, args.max_rerank, ref_vision_scores, image_only_rank_matching)
             else:
                 scores, predictions = rerank_predictions_by_rank(vision_scores, vision_predictions, text_scores, text_predictions, w_alpha, max_results, query_index)
                 
