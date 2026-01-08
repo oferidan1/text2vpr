@@ -14,6 +14,10 @@ python eval_vpr.py --vpr_dim=512 --vpr_model_name=mixvpr --is_dual_encoder=1 --d
 # each modality seperately
 python eval_vpr.py --vpr_dim=512 --vpr_model_name=mixvpr --fusion_type=none --is_dual_encoder=1 --dual_encoder_fusion=each
 
+## rerank by text or image
+python eval_vpr.py --vpr_dim=512 --vpr_model_name=mixvpr --fusion_type=none --is_dual_encoder=1 --dual_encoder_fusion=each --rerank_by_text_or_image=2 --max
+_rerank=100
+
 # cross modal
 python eval_vpr.py --vpr_dim=256 --image_size=384 --vpr_model_name=Salesforce/blip-itm-base-coco --is_dual_encoder=0 --fusion_type=none --cross_modal=1 --text_dim=256
 

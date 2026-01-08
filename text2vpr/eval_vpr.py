@@ -275,16 +275,16 @@ def rerank_predictions_by_VLLM(test_ds, predictions, query_index, max_rerank=5):
     return final_predictions
 
 
-def rerank_predictions_by_text(vision_scores, vision_predictions, text_scores, text_predictions, max_results):
+def rerank_predictions_by_text_or_image(vision_scores, vision_predictions, text_scores, text_predictions, max_results):
     #get max_results of vision predictions and sort these ids by their text scores
     top_vision_ids = vision_predictions[:, :max_results]
-    # filter  top_vision_ids from text predictions     
-    #top_text_predictions = np.take_along_axis(text_predictions, top_vision_ids, axis=1)
+    # filter  top_vision_ids from text predictions         
     top_text_scores = np.take_along_axis(text_scores, top_vision_ids, axis=1)
+    top_texts_ids =  np.take_along_axis(text_predictions, top_vision_ids, axis=1)
     # #sort top_text_scores and return their indices from highest to lowest
-    text_indices = np.argsort(-top_text_scores, axis=1)
+    text_indices = np.flip(np.argsort(top_text_scores, axis=1), axis=1)
     # #get the final predictions
-    final_predictions = np.take_along_axis(top_vision_ids, text_indices, axis=1)
+    final_predictions = np.take_along_axis(top_texts_ids, text_indices, axis=1)
     final_scores = np.take_along_axis(top_text_scores, text_indices, axis=1)
     return final_scores, final_predictions
 
@@ -709,7 +709,7 @@ def main(args):
             text_queries_descriptors = text_descriptors[test_ds.num_database :]
             scores, predictions = get_queries_predictions(model.encoder_dim, vision_database_descriptors, all_descriptors, text_queries_descriptors, max_results)
             
-        elif (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting' or args.fusion_type=='text_adapter' or args.fusion_type=='transformer' or image_only_rank_matching or args.rerank_by_text: 
+        elif (args.is_dual_encoder and args.dual_encoder_fusion=='each') or args.fusion_type=='dynamic_weighting' or args.fusion_type=='fixed_weighting' or args.fusion_type=='text_adapter' or args.fusion_type=='transformer' or image_only_rank_matching or args.rerank_by_text_or_image: 
             
             if image_only_rank_matching and (args.is_dual_encoder and args.dual_encoder_fusion=='cat'):
                 # cat
@@ -725,8 +725,10 @@ def main(args):
             text_queries_descriptors = text_descriptors[test_ds.num_database :]
             text_database_descriptors = text_descriptors[: test_ds.num_database]                
             text_scores, text_predictions = get_queries_predictions(model.text_encoder_dim, text_database_descriptors, text_descriptors, text_queries_descriptors, max_results_reranking)
-            if args.rerank_by_text:
-                scores, predictions = rerank_predictions_by_text(vision_scores, vision_predictions, text_scores, text_predictions, max_results)
+            if args.rerank_by_text_or_image == 1: # rerank by text
+                scores, predictions = rerank_predictions_by_text_or_image(vision_scores, vision_predictions, text_scores, text_predictions, args.max_rerank)
+            elif args.rerank_by_text_or_image == 2: # rerank by image
+                scores, predictions = rerank_predictions_by_text_or_image(text_scores, text_predictions, vision_scores, vision_predictions, args.max_rerank)
             # join vision and text predictions        
             elif args.rerank_by_scores:
                 if args.is_ref_model:
