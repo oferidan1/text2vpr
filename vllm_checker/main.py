@@ -13,6 +13,7 @@ if __package__ in (None, ""):  # pragma: no cover
     # Running as a script: add repo root to sys.path so we can import as a package.
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from vllm_checker.checker import check_csv_with_llm, debug_single_image
+    from vllm_checker.file_lock import FileLock
     from vllm_checker.llm_client import (
         build_default_client,
         GeminiVLMClient,
@@ -21,6 +22,7 @@ if __package__ in (None, ""):  # pragma: no cover
     )
 else:
     from .checker import check_csv_with_llm, debug_single_image
+    from .file_lock import FileLock
     from .llm_client import (
         build_default_client,
         GeminiVLMClient,
@@ -486,26 +488,51 @@ def main() -> None:
         print(f"LLM backend: local_hf (model={client.config.model_name}, device={dev_str} => {accel})")
     else:
         print(f"LLM backend: {type(client).__name__}")
-    final_path = check_csv_with_llm(
-        input_csv=input_csv,
-        output_csv=output_csv,
-        no_only_csv=no_only_csv,
-        no_only_raw_column=str(args.no_only_raw_column),
-        images_root=images_root,
-        new_column=args.new_column,
-        llm_batch_size=args.llm_batch_size,
-        resume=bool(args.resume),
-        follow=bool(args.follow or args.watch),
-        poll_interval=(
-            float(args.watch_poll_sec)
-            if args.watch and float(args.poll_interval) == 5.0
-            else float(args.poll_interval)
-        ),
-        follow_idle_minutes=(
-            int(args.watch_idle_minutes) if args.watch else args.follow_idle_minutes
-        ),
-        client=client,
-    )
+    # Prevent two concurrent vllm_checker runs from writing the same output CSV.
+    # In the full pipeline we always pass --output_csv explicitly.
+    if output_csv is not None:
+        with FileLock(output_csv):
+            final_path = check_csv_with_llm(
+                input_csv=input_csv,
+                output_csv=output_csv,
+                no_only_csv=no_only_csv,
+                no_only_raw_column=str(args.no_only_raw_column),
+                images_root=images_root,
+                new_column=args.new_column,
+                llm_batch_size=args.llm_batch_size,
+                resume=bool(args.resume),
+                follow=bool(args.follow or args.watch),
+                poll_interval=(
+                    float(args.watch_poll_sec)
+                    if args.watch and float(args.poll_interval) == 5.0
+                    else float(args.poll_interval)
+                ),
+                follow_idle_minutes=(
+                    int(args.watch_idle_minutes) if args.watch else args.follow_idle_minutes
+                ),
+                client=client,
+            )
+    else:
+        final_path = check_csv_with_llm(
+            input_csv=input_csv,
+            output_csv=output_csv,
+            no_only_csv=no_only_csv,
+            no_only_raw_column=str(args.no_only_raw_column),
+            images_root=images_root,
+            new_column=args.new_column,
+            llm_batch_size=args.llm_batch_size,
+            resume=bool(args.resume),
+            follow=bool(args.follow or args.watch),
+            poll_interval=(
+                float(args.watch_poll_sec)
+                if args.watch and float(args.poll_interval) == 5.0
+                else float(args.poll_interval)
+            ),
+            follow_idle_minutes=(
+                int(args.watch_idle_minutes) if args.watch else args.follow_idle_minutes
+            ),
+            client=client,
+        )
 
     print(f"Wrote LLM-checked CSV to: {final_path}")
 
