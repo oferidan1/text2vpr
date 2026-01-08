@@ -27,6 +27,9 @@ import pandas as pd
 import cv2
 import kornia as K
 import kornia.feature as KF
+from PIL import Image
+from transformers import AutoModelForCausalLM, AutoProcessor
+import re
 
 def get_alpha_vision_batches(matcher, query_path, database_paths, preds, device='cuda'):
     # 1. Helper to load and preprocess a single image path to a tensor
@@ -82,31 +85,6 @@ def get_alpha_vision_batches(matcher, query_path, database_paths, preds, device=
         inliers_dict[preds[i]] = np.sum(inliers)
 
     return alphas_dict, inliers_dict
-
-def get_alpha_vision_by_image_matching(matcher, query_image_path, database_image_path):
-    img1 = K.io.load_image(query_image_path, K.io.ImageLoadType.RGB32)[None, ...]
-    img2 = K.io.load_image(database_image_path, K.io.ImageLoadType.RGB32)[None, ...]
-
-    img1 = K.geometry.resize(img1, (600, 375), antialias=True)
-    img2 = K.geometry.resize(img2, (600, 375), antialias=True)    
-
-    input_dict = {
-        "image0": K.color.rgb_to_grayscale(img1),  # LofTR works on grayscale images only
-        "image1": K.color.rgb_to_grayscale(img2),
-    }
-
-    with torch.inference_mode():
-        correspondences = matcher(input_dict)
-
-    mkpts0 = correspondences["keypoints0"].cpu().numpy()
-    mkpts1 = correspondences["keypoints1"].cpu().numpy()
-    Fm, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, 0.5, 0.999, 100000)
-    inliers = inliers > 0
-
-    vision_alpha = np.sum(inliers)/len(inliers)
-
-    return vision_alpha, inliers
-
 
 def standarize_scores(text_scores, vision_scores, vpr_dim, vpr_model):
      # pre-computed mu and std for normalization over GSV
@@ -182,6 +160,119 @@ def standarize_scores(text_scores, vision_scores, vpr_dim, vpr_model):
     vision_scores  = ((vision_scores - min_img) / (max_img - min_img))*2-1        
    
     return text_scores, vision_scores
+
+
+def rerank_predictions_by_VLLM(test_ds, predictions, query_index, max_rerank=5):    
+    final_predictions = []
+
+    model_id = "microsoft/phi-4-multimodal-instruct"
+
+    # 1. Load Processor
+    processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+
+    # 2. Load Model with BF16 and Flash Attention 2
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, 
+        device_map="auto", 
+        trust_remote_code=True,
+        torch_dtype=torch.bfloat16,           # Optimal for Ampere+ GPUs
+        attn_implementation="flash_attention_2" # Dramatically speeds up image token processing
+    )
+
+    # 3. Patch the architectural quirk for generation
+    if not hasattr(model, 'prepare_inputs_for_generation'):
+        model.prepare_inputs_for_generation = model.model.prepare_inputs_for_generation
+
+    # 5. Format prompt for multi-image processing
+    # The sequence of <|image_N|> tokens is vital for the model to map vision features
+    prompt_template = (
+        "<|user|>\n"
+        "query image:<|image_1|>\n, query image description: <text_1> "
+        "db1 image:<|image_2|>\n, db1 image description: <text_2> "
+        "db2 image:<|image_3|>\n, db2 image description: <text_3> "
+        "db3 image:<|image_4|>\n, db3 image description: <text_4> "
+        "db4 image:<|image_5|>\n, db4 image description: <text_5> "
+        "db5 image:<|image_6|>\n, db5 image description: <text_6> "
+        "Given query image and 5 db images plus their text descriptions, which db image best match the location of query image. pay attention to signage text? rank the images by their similarity to the query image (1 most similar, 10 less similar).\n"
+        "format is: [rank],[image name],[explanation why this rank chosen] ."
+        "Answer: \n"
+        "<|end|>\n<|assistant|>\n"
+    )
+    
+    db_targets = ["db1 image", "db2 image", "db3 image", "db4 image", "db5 image"]
+    
+    cnt = 0
+    for preds in predictions:     
+        texts = []
+        query_image_path = test_ds.images_paths[query_index]            
+        selected_paths = [test_ds.images_paths[i] for i in preds]
+        selected_paths = selected_paths[:max_rerank]        
+        
+        #concat query_image_path with list selected_paths
+        image_files = [query_image_path] + selected_paths
+        images = [Image.open(f).convert("RGB") for f in image_files]
+         
+        desc_index = test_ds.images_paths_csv.index(query_image_path)        
+        description = test_ds.descriptions[desc_index]     
+        texts.append(description)
+        
+        for i in range(len(selected_paths)):
+            file_name = selected_paths[i]
+            desc_index = test_ds.images_paths_csv.index(file_name)        
+            description = test_ds.descriptions[desc_index][:256]
+            texts.append(description)
+            
+        prompt = prompt_template
+            
+        for i in range(len(texts)):
+            name = "<text_" + str(i+1) + ">"
+            prompt = prompt.replace(name, texts[i])
+            
+        inputs = processor(text=prompt, images=images, return_tensors="pt").to("cuda")
+
+        inputs = {
+            k: v.to(torch.bfloat16) if (v is not None and hasattr(v, 'dtype') and v.dtype == torch.float32) 
+            else v 
+            for k, v in inputs.items()
+        }
+
+        # Also ensure the tensors themselves are moved to the correct device
+        inputs = {k: v.to("cuda") if v is not None else v for k, v in inputs.items()}
+
+        with torch.no_grad():
+            generate_ids = model.generate(
+                **inputs, 
+                max_new_tokens=2000,
+                do_sample=False
+            )
+
+        llm_output = processor.batch_decode(generate_ids, skip_special_tokens=True)[0]
+        
+        pattern = r"\[(\d+),\s*([^\]]+)\]\s*,\s*([^\[]+)"
+
+        # findall returns a list of tuples: [(rank, name, explanation), ...]
+        parsed_list = re.findall(pattern, llm_output)
+
+        db_ranked_paths = []
+        for r, n, e in parsed_list:
+            db_ranked_paths.append(n)
+            
+        # Returns the first index found for each selected path
+        #indices = [selected_paths.index(path) for path in db_ranked_paths]        
+        indices = []
+        for name in db_ranked_paths:
+            if name in db_targets:
+                indices.append(db_targets.index(name))        
+        
+        final_predictions.append(preds[indices])
+        
+        query_index += 1
+        
+        if (cnt % 10)==0:
+            print('query: '+ str(cnt))        
+        cnt += 1
+    
+    return final_predictions
 
 
 def rerank_predictions_by_text(vision_scores, vision_predictions, text_scores, text_predictions, max_results):
@@ -659,6 +750,9 @@ def main(args):
             logger.info(f"dim database descriptors: {all_descriptors.shape[1]}")
             # get queries predictions
             scores, predictions = get_queries_predictions(model.encoder_dim, database_descriptors, all_descriptors, queries_descriptors, max_results)
+            
+            if args.rerank_by_vllm:
+                predictions = rerank_predictions_by_VLLM(test_ds, predictions, query_index)
         
         if is_msls_challenge:
             # save predictions to msls_challenge format
