@@ -143,7 +143,7 @@ def parse_arguments():
     parser.add_argument("--is_text_pooling", type=int, default="0", help="pool text or not")
     parser.add_argument("--is_image_pooling", type=int, default="0", help="pool image or not")
     parser.add_argument("--cross_modal", type=int, default="0", help="cross modal 0=no/1=blip orig/2=our model")
-    parser.add_argument("--rerank_by_text", type=int, default="0", help="rerank by text or not")
+    parser.add_argument("--rerank_by_text", type=int, default="1", help="rerank by text or not")
     parser.add_argument("--bfloat16", type=int, default="0", help="bfloat16 or not")
     parser.add_argument("--rerank_by_matching", type=int, default="0", help="rerank_by_matching or not")    
     parser.add_argument("--rerank_by_vllm", type=int, default="0", help="rerank_by_vllm or not")    
