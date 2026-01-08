@@ -168,7 +168,7 @@ def rerank_predictions_by_VLLM(test_ds, predictions, query_index, max_rerank=5):
     model_id = "microsoft/phi-4-multimodal-instruct"
 
     # 1. Load Processor
-    processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+    processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True, use_fast=True)
 
     # 2. Load Model with BF16 and Flash Attention 2
     model = AutoModelForCausalLM.from_pretrained(
