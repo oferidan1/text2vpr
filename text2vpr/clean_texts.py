@@ -58,7 +58,8 @@ def clean_texts_from_csv(csv_file):
             results.append([image_path, new_description, description])
     
     # save results to updated 
-    csv_file_name = os.path.basename(csv_file)
+    #csv_file_name = os.path.basename(csv_file)
+    csv_file_name = 'amstertime_objects_cleaned.csv'
     df2 = pd.DataFrame(results, columns=['image_path', 'description', 'original_description'])
     df2.to_csv(csv_file_name, index=False)
     
