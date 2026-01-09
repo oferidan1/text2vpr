@@ -150,7 +150,7 @@ def clean_texts_from_csv(csv_file, model_id):
 if __name__ == "__main__":
     csv_file = 'amstertime_objects.csv'
     model_id = "meta-llama/Llama-3.3-70B-Instruct"
-    model_id = "microsoft/Phi-4-mini-instruct"
+    #model_id = "microsoft/Phi-4-mini-instruct"
 
     clean_texts_from_csv(csv_file, model_id)
 
