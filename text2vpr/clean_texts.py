@@ -115,9 +115,7 @@ def remove_topic_v2(model, tokenizer, new_paragraph, new_topic):
     response = outputs[0][input_ids.shape[-1]:]
     return tokenizer.decode(response, skip_special_tokens=True)
 
-def clean_texts_from_csv(csv_file):    
-    
-    model_id = "meta-llama/Llama-3.3-70B-Instruct"
+def clean_texts_from_csv(csv_file, model_id):    
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     model = AutoModelForCausalLM.from_pretrained(
@@ -151,6 +149,9 @@ def clean_texts_from_csv(csv_file):
 
 if __name__ == "__main__":
     csv_file = 'amstertime_objects.csv'
+    model_id = "meta-llama/Llama-3.3-70B-Instruct"
+    model_id = "microsoft/Phi-4-mini-instruct"
+
     clean_texts_from_csv(csv_file)
 
         
