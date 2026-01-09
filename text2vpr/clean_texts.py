@@ -152,6 +152,6 @@ if __name__ == "__main__":
     model_id = "meta-llama/Llama-3.3-70B-Instruct"
     model_id = "microsoft/Phi-4-mini-instruct"
 
-    clean_texts_from_csv(csv_file)
+    clean_texts_from_csv(csv_file, model_id)
 
         
