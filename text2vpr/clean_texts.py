@@ -127,6 +127,8 @@ def clean_texts_from_csv(csv_file, model_id):
     results = []
     # parse csv file
     df = pd.read_csv(csv_file)
+    i = 0
+    csv_file_name = 'amstertime_objects_cleaned.csv'
     # go line by line and read columns
     for index, row in df.iterrows():
         image_path = row['image_path']
@@ -135,13 +137,17 @@ def clean_texts_from_csv(csv_file, model_id):
         if to_filter is nan:
             results.append([image_path, description])
         else:
-            new_description = remove_topic_v2(model, tokenizer, description, to_filter)
-    
+            new_description = remove_topic_v2(model, tokenizer, description, to_filter)    
             results.append([image_path, new_description, description])
+            
+        i+=1
+        if i%10 == 0:
+            df2 = pd.DataFrame(results, columns=['image_path', 'description', 'original_description'])
+            df2.to_csv(csv_file_name, index=False)
+            print(i)
     
     # save results to updated 
-    #csv_file_name = os.path.basename(csv_file)
-    csv_file_name = 'amstertime_objects_cleaned.csv'
+    #csv_file_name = os.path.basename(csv_file)    
     df2 = pd.DataFrame(results, columns=['image_path', 'description', 'original_description'])
     df2.to_csv(csv_file_name, index=False)
 
