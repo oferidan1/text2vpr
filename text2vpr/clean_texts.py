@@ -116,6 +116,19 @@ def remove_topic_v2(model, tokenizer, new_paragraph, new_topic):
     return tokenizer.decode(response, skip_special_tokens=True)
 
 def clean_texts_from_csv(csv_file, model_id):    
+    results = []  
+     # parse csv file
+    df = pd.read_csv(csv_file)
+    i = 0
+    csv_file_name = 'amstertime_objects_cleaned.csv'
+    # open csv_file_name and make short list of all files not in csv_file
+    if os.path.exists(csv_file_name):
+        df2 = pd.read_csv(csv_file_name)
+        files_in_csv = df2['image_path'].tolist()
+        description_in_csv = df2['description'].tolist()
+        original_description_in_csv = df2['original_description'].tolist()
+        results = list(zip(files_in_csv, description_in_csv, original_description_in_csv))        
+        df = df[~df['image_path'].isin(files_in_csv)]
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     model = AutoModelForCausalLM.from_pretrained(
@@ -124,11 +137,6 @@ def clean_texts_from_csv(csv_file, model_id):
         device_map="auto"
     )
     
-    results = []
-    # parse csv file
-    df = pd.read_csv(csv_file)
-    i = 0
-    csv_file_name = 'amstertime_objects_cleaned.csv'
     # go line by line and read columns
     for index, row in df.iterrows():
         image_path = row['image_path']

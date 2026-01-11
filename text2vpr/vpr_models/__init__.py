@@ -3,7 +3,8 @@ import torch
 from vpr_models.resizing_wrapper import ResizingWrapper
 
 try:
-    from vpr_models import apgem, clique_mining, convap, mixvpr, netvlad, sfrs, boq, dinomix
+    from vpr_models import apgem, clique_mining, convap, mixvpr, netvlad, sfrs, boq, dinomix, cricavpr_small
+    from vpr_models.cricavpr_small import CricaVPRNet
 except ModuleNotFoundError:
     raise ModuleNotFoundError(
         "\n\nIf you're getting this error it's almost certainly because you ran "
@@ -53,6 +54,9 @@ def get_model(method, backbone=None, descriptors_dimension=None):
     elif method == "cricavpr":
         cricavpr = torch.hub.load("Lu-Feng/CricaVPR", "trained_model")
         model = ResizingWrapper(cricavpr, resize_type=224)
+    elif method == "cricavpr_small":
+        cricavpr = cricavpr_small.get_cricavpr_small()
+        model = ResizingWrapper(cricavpr, resize_type=224)    
     elif method == "megaloc":
         model = torch.hub.load("gmberton/MegaLoc", "get_trained_model")
 
