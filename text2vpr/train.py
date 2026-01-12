@@ -16,10 +16,10 @@ def parse_arguments():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # Resume parameters
     parser.add_argument("--vpr_dim", type=int, default=512, help="dimension of the vpr embeddings")
-    #parser.add_argument("--vpr_model_name", type=str, default="mixvpr")
+    parser.add_argument("--vpr_model_name", type=str, default="mixvpr")
     #parser.add_argument("--vpr_dim", type=int, default=10752, help="dimension of the vpr embeddings")    
     #parser.add_argument("--vpr_model_name", type=str, default="cricavpr")    
-    parser.add_argument("--vpr_model_name", type=str, default="Salesforce/blip-itm-base-coco")    
+    # parser.add_argument("--vpr_model_name", type=str, default="Salesforce/blip-itm-base-coco")    
     parser.add_argument("--vpr_model_backbone", type=str, default="ResNet50")
     # Other parameters
     parser.add_argument("--gpu", type=str, default='1', help="gpu id(s) to use")    

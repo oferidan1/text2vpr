@@ -36,9 +36,9 @@ def parse_arguments():
     parser.add_argument("--database_folder", type=str, default="/mnt/d/data/msls/val/database")    
     parser.add_argument("--queries_folder", type=str, default="/mnt/d/data/msls/val/query")   
     parser.add_argument("--image_root", type=str, default="/mnt/d/data/msls/val/")    
-    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_predictions.csv")
+    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_predictions.csv")
     # #parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text_blur.csv")
-    # parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text_snow.csv")
+    parser.add_argument("--queries_csv", type=str, default="/mnt/d/data/msls/val/msls_val_w_text_snow.csv")
 
     # parser.add_argument("--database_folder", type=str, default="/mnt/d/data/msls_challenge")    
     # parser.add_argument("--queries_folder", type=str, default=None)       
