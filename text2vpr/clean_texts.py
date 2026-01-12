@@ -216,11 +216,9 @@ def clean_texts_from_csv(csv_file, model_id):
                     batch_items = []     
                     batch_images = []
                     batch_descriptions = []          
-        i+=1
-        if i%batch_size == 0:
-            df2 = pd.DataFrame(results, columns=['image_path', 'description', 'original_description'])
-            df2.to_csv(csv_file_name, index=False)
-            print(i)
+
+                df2 = pd.DataFrame(results, columns=['image_path', 'description', 'original_description'])
+                df2.to_csv(csv_file_name, index=False)
     
     if len(batch_items)>0:
         new_descriptions = remove_topic_v2_batch(model, tokenizer, messages)
