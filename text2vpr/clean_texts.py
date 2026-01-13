@@ -4,7 +4,7 @@ import numpy as np
 from numpy import nan
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
 def clean_texts_from_csv_phi4(csv_file):    
     
@@ -64,8 +64,8 @@ def clean_texts_from_csv_phi4(csv_file):
     df2.to_csv(csv_file_name, index=False)
     
 
-def build_context(new_paragraph, new_topic):
-     # 1. Define the 1-shot example data
+def remove_topic_v2(model, tokenizer, new_paragraph, new_topic):
+    # 1. Define the 1-shot example data
     example_topic = "tower"
     example_input = (
         "A multi-story brick building with a tiled gabled roof, dormer window, and "
@@ -97,10 +97,7 @@ def build_context(new_paragraph, new_topic):
         # THE ACTUAL REQUEST
         {"role": "user", "content": f"Topic: {new_topic}\nParagraph: {new_paragraph}"}
     ]
-    return messages
 
-def remove_topic_v2(model, tokenizer, messages):
-   
     # 3. Execution
     input_ids = tokenizer.apply_chat_template(
         messages, 
@@ -110,49 +107,13 @@ def remove_topic_v2(model, tokenizer, messages):
 
     outputs = model.generate(
         input_ids,
-        max_new_tokens=1024,
+        max_new_tokens=512,
         temperature=0.1,
         do_sample=False # Greedy decoding for maximum consistency
     )
 
-    #my output is batch     
     response = outputs[0][input_ids.shape[-1]:]
     return tokenizer.decode(response, skip_special_tokens=True)
-
-def remove_topic_v2_batch(model, tokenizer, messages_batch):
-    """
-    messages_batch: List of lists (e.g., [[{"role": "user", "content": "..."}], [...]])
-    """
-    # 1. Ensure padding token is set
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    # 2. Apply chat template to the batch
-    # padding=True and return_dict=True are essential for batching
-    inputs = tokenizer.apply_chat_template(
-        messages_batch,
-        add_generation_prompt=True,
-        tokenize=True,
-        return_tensors="pt",
-        padding=True,
-        return_dict=True
-    ).to(model.device)
-
-    # 3. Execution
-    outputs = model.generate(
-        **inputs, # Unpack input_ids and attention_mask
-        max_new_tokens=1024,
-        temperature=0.1,
-        do_sample=False
-    )
-
-    # 4. Extract only the NEW tokens for the entire batch
-    # We slice from the length of the input sequence
-    input_length = inputs.input_ids.shape[1]
-    generated_tokens = outputs[:, input_length:]
-
-    # 5. Decode all responses in the batch
-    return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
 
 def clean_texts_from_csv(csv_file, model_id):    
     results = []  
@@ -168,34 +129,13 @@ def clean_texts_from_csv(csv_file, model_id):
         original_description_in_csv = df2['original_description'].tolist()
         results = list(zip(files_in_csv, description_in_csv, original_description_in_csv))        
         df = df[~df['image_path'].isin(files_in_csv)]
-        
-    # 1. Define FP8 Quantization Config
-    # Note: Ensure you have bitsandbytes installed
-    quantization_config = BitsAndBytesConfig(
-        load_in_8bit=True, # Standard 8-bit
-        # For actual FP8 (hardware accelerated), usually requires pre-quantized weights 
-        # or libraries like vLLM/AutoFP8.
-    )
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
-    # model = AutoModelForCausalLM.from_pretrained(
-    #     model_id,
-    #     torch_dtype=torch.bfloat16,
-    #     device_map="auto"
-    # )
-    # 2. Load model with Flash Attention and Quantization
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
-        quantization_config=quantization_config,
-        torch_dtype=torch.bfloat16, # Compute dtype should stay bfloat16
-        device_map="auto",
-        attn_implementation="flash_attention_2" # Enforce Flash Attention 2
+        torch_dtype=torch.bfloat16,
+        device_map="auto"
     )
-    
-    batch_size = 100    
-    batch_items = []
-    batch_images = []
-    batch_descriptions = []    
     
     # go line by line and read columns
     for index, row in df.iterrows():
@@ -205,26 +145,14 @@ def clean_texts_from_csv(csv_file, model_id):
         if to_filter is nan:
             results.append([image_path, description])
         else:
-            messages = build_context(description, to_filter)
-            batch_items.append(messages)
-            batch_images.append(image_path)
-            batch_descriptions.append(description)
-            if len(batch_items) == batch_size:
-                new_descriptions = remove_topic_v2_batch(model, tokenizer, messages)
-                for img, new_desc, old_desc in zip(batch_images, new_descriptions, batch_descriptions):
-                    results.append([img, new_desc.strip(), old_desc])
-                    batch_items = []     
-                    batch_images = []
-                    batch_descriptions = []          
-
-                df2 = pd.DataFrame(results, columns=['image_path', 'description', 'original_description'])
-                df2.to_csv(csv_file_name, index=False)
-    
-    if len(batch_items)>0:
-        new_descriptions = remove_topic_v2_batch(model, tokenizer, messages)
-        for img, new_desc, old_desc in zip(batch_images, new_descriptions, batch_descriptions):
-            results.append([img, new_desc.strip(), old_desc])
+            new_description = remove_topic_v2(model, tokenizer, description, to_filter)    
+            results.append([image_path, new_description, description])
             
+        i+=1
+        if i%10 == 0:
+            df2 = pd.DataFrame(results, columns=['image_path', 'description', 'original_description'])
+            df2.to_csv(csv_file_name, index=False)
+    
     # save results to updated 
     #csv_file_name = os.path.basename(csv_file)    
     df2 = pd.DataFrame(results, columns=['image_path', 'description', 'original_description'])

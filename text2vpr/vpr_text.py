@@ -64,6 +64,7 @@ class VPR_Text_Model(pl.LightningModule):
                 lora_all_linear=False,
                 lora_target_modules=None,
                 lora_r=64,
+                text_encoder_dim=1024,
                  ):
         super().__init__()
         
@@ -108,7 +109,7 @@ class VPR_Text_Model(pl.LightningModule):
         
         self.fusion_type = fusion_type
         self.embeds_dim = embeds_dim        
-        text_encoder_dim = 1024        
+        self.text_encoder_dim = text_encoder_dim        
         if 'blip' in vpr_model_name or 'clip' in vpr_model_name:
             text_encoder_dim = vpr_encoder_dim
 

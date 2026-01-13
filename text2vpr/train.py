@@ -49,6 +49,8 @@ def parse_arguments():
     parser.add_argument("--lora_all_linear", type=int, default="0", help="lora all linear 0=no/1=yes")
     parser.add_argument("--lora_target_modules", nargs='+', default=["query", "value", "qkv"], help="when not lora_all_linear, lora target modules")    
     parser.add_argument("--lora_r", type=int, default="16", help="lora_all_linear 0=no/1=yes")     
+    parser.add_argument("--text_dim", type=int, default=1024, help="dimension of the text embeddings")
+
 
     args = parser.parse_args()
     
@@ -136,6 +138,7 @@ if __name__ == '__main__':
         lora_all_linear=args.lora_all_linear,
         lora_target_modules=args.lora_target_modules,
         lora_r=args.lora_r,
+        text_encoder_dim=args.text_dim,
     )
     
     # if args.is_encode_image and  args.vpr_resume_model is not None:
@@ -148,9 +151,9 @@ if __name__ == '__main__':
         # model params saving using Pytorch Lightning
         # we save the best 3 models accoring to Recall@1 on pittsburg val
         checkpoint_cb = ModelCheckpoint(
-            monitor='pitts30k_test/R1',
+            monitor='pitts30k_val/R1',
             filename=f'{"resnet50"}' +
-            '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_test/R1:.4f}]_R5[{pitts30k_test/R5:.4f}]',
+            '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_val/R1:.4f}]_R5[{pitts30k_val/R5:.4f}]',
             auto_insert_metric_name=False,
             save_weights_only=True,
             save_top_k=3,
