@@ -145,13 +145,14 @@ def clean_texts_from_csv(csv_file, model_id):
         description = row['description']    
         to_filter = row['manualy filter']
         # split to_filter to substring by ';' tag
-        to_filter_list = to_filter.split(';')                
+        if to_filter is not nan:
+            to_filter_list = to_filter.split(';')                
         bFilter = False
         # check if any item in to_filter_list is in to to_clean_list
         if to_filter is not nan and any(item in to_clean_list for item in to_filter_list):
             bFilter = True
         if not bFilter:
-            results.append([image_path, description])
+            results.append([image_path, description, ''])
         else:
             new_description = remove_topic_v2(model, tokenizer, description, to_filter)    
             results.append([image_path, new_description, description])
