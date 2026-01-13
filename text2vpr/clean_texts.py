@@ -121,6 +121,8 @@ def clean_texts_from_csv(csv_file, model_id):
     df = pd.read_csv(csv_file)
     i = 0
     csv_file_name = 'amstertime_objects_cleaned.csv'
+    
+    to_clean_list = ['railing', 'railings', 'utility pole', 'utility poles']
     # open csv_file_name and make short list of all files not in csv_file
     if os.path.exists(csv_file_name):
         df2 = pd.read_csv(csv_file_name)
@@ -142,7 +144,13 @@ def clean_texts_from_csv(csv_file, model_id):
         image_path = row['image_path']
         description = row['description']    
         to_filter = row['manualy filter']
-        if to_filter is nan:
+        # split to_filter to substring by ';' tag
+        to_filter_list = to_filter.split(';')                
+        bFilter = False
+        # check if any item in to_filter_list is in to to_clean_list
+        if any(item in to_clean_list for item in to_filter_list):
+            bFilter = True
+        if to_filter is nan or not bFilter:
             results.append([image_path, description])
         else:
             new_description = remove_topic_v2(model, tokenizer, description, to_filter)    
