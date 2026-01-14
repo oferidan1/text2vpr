@@ -5,6 +5,7 @@ from numpy import nan
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+import argparse
 
 def clean_texts_from_csv_phi4(csv_file):    
     
@@ -115,12 +116,12 @@ def remove_topic_v2(model, tokenizer, new_paragraph, new_topic):
     response = outputs[0][input_ids.shape[-1]:]
     return tokenizer.decode(response, skip_special_tokens=True)
 
-def clean_texts_from_csv(csv_file, model_id):    
+def clean_texts_from_csv(csv_file, out_file, model_id):    
     results = []  
      # parse csv file
     df = pd.read_csv(csv_file)
     i = 0
-    csv_file_name = 'amstertime_objects_cleaned.csv'
+    csv_file_name = out_file
     
     to_clean_list = ['railing', 'railings', 'utility pole', 'utility poles']
     # open csv_file_name and make short list of all files not in csv_file
@@ -169,11 +170,15 @@ def clean_texts_from_csv(csv_file, model_id):
 
     
 
-if __name__ == "__main__":
-    csv_file = 'amstertime_objects.csv'
+if __name__ == "__main__":    
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--csv_file", type=str, default="amstertime_objects.csv")
+    parser.add_argument("--out_file", type=str, default="amstertime_objects_cleaned.csv")
+    args = parser.parse_args()       
+    
     model_id = "meta-llama/Llama-3.3-70B-Instruct"
     #model_id = "microsoft/Phi-4-mini-instruct"
 
-    clean_texts_from_csv(csv_file, model_id)
+    clean_texts_from_csv(args.csv_file, args.out_file, model_id)
 
         

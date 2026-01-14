@@ -84,6 +84,7 @@ class VLM_Model:
                 is_pca=args.is_pca,
                 is_text_pooling=args.is_text_pooling,
                 is_image_pooling=args.is_image_pooling,
+                text_encoder_dim=args.text_dim,                
             )
 
             if args.lora_path is not None:
