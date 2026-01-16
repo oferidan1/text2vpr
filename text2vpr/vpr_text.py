@@ -125,8 +125,10 @@ class VPR_Text_Model(pl.LightningModule):
         #     # self.pca = PCA(n_components=embeds_dim)
         
         if is_encode_image and is_encode_text:
-            if is_text_pooling:
+            if is_text_pooling==1:
                  self.text_pooling = CLSReweightingPooler(text_encoder_dim)
+            elif is_text_pooling==2:
+                self.text_pooling = MeanReweightingPooler(text_encoder_dim)
             if is_image_pooling:
                 self.image_pooling = CLSReweightingPooler(self.vpr_encoder_dim)
                 
@@ -246,16 +248,7 @@ class VPR_Text_Model(pl.LightningModule):
                 nn.init.constant_(module.bias, 0)
         
     
-    def mean_pooling(self, token_embeddings, attention_mask):
-        # First element of model_output contains all token embeddings
-        #token_embeddings = model_output[0] 
-        input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-        sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
-        # Sum of the attention mask
-        sum_mask = torch.clamp(attention_mask.sum(1), min=1e-9).unsqueeze(1)
-        # Mean Pooling
-        return sum_embeddings / sum_mask
-
+    
     # the forward pass of the lightning model
     def forward(self, img, text):
         w = None
@@ -705,6 +698,72 @@ class CLSReweightingPooler(nn.Module):
 
         # ---- 1. CLS embedding ----
         cls = hidden_states[:, 0]  # [B, H]
+
+        # ---- 2. Attention scores for each token ----
+        scores = self.attention(hidden_states).squeeze(-1)  # [B, T]
+        
+        # Mask out CLS token
+        scores[:, 0] = -1e4
+
+        if mask is not None:
+            scores = scores.masked_fill(~mask.bool(), -1e4)
+
+        weights = torch.softmax(scores, dim=-1)  # [B, T]
+
+        # ---- 3. Attention-based pooled vector ----
+        pooled = torch.sum(hidden_states * weights.unsqueeze(-1), dim=1)  # [B, H]
+
+        # # ---- 4. Concatenate CLS + attention-pooled ----
+        combined = torch.cat([cls, pooled], dim=-1)  # [B, 2H]        
+        combined = self.dropout(combined) 
+
+        # ---- 5. Learnable mixing ----
+        pooled = self.activation(self.mix(combined))  # [B, H]
+        
+        #pooled = cls + attn_pooled  # [B, H]
+
+        if return_scores:
+            return pooled, weights  # return per-token weights
+        return pooled   
+
+def mean_pooling(token_embeddings, attention_mask):
+    # First element of model_output contains all token embeddings
+    #token_embeddings = model_output[0] 
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
+    # Sum of the attention mask
+    sum_mask = torch.clamp(attention_mask.sum(1), min=1e-9).unsqueeze(1)
+    # Mean Pooling
+    return sum_embeddings / sum_mask
+    
+class MeanReweightingPooler(nn.Module):
+    """
+    Combines the Mean token with attention-pooled tokens.
+    Output: a single pooled vector per sequence.
+    """
+
+    def __init__(self, hidden_size):
+        super().__init__()
+
+        # Attention for token-level importance
+        self.attention = nn.Linear(hidden_size, 1)
+        
+        self.dropout = nn.Dropout(0.1)
+
+        # Learnable mixing of CLS and attention-pooled vector
+        self.mix = nn.Linear(hidden_size * 2, hidden_size)
+
+        # Optional nonlinearity
+        self.activation = nn.Tanh()
+
+    def forward(self, hidden_states, mask=None, return_scores=False):
+        """
+        hidden_states: [B, T, H]
+        mask (optional): [B, T] (1 = keep token, 0 = ignore)
+        """
+
+        # ---- 1. CLS embedding ----
+        cls = mean_pooling(hidden_states, mask)  # [B, H]        
 
         # ---- 2. Attention scores for each token ----
         scores = self.attention(hidden_states).squeeze(-1)  # [B, T]

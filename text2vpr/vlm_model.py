@@ -55,7 +55,7 @@ class VLM_Model:
                 self.text_encoder = AutoModel.from_pretrained(self.text_model_name).to(args.device)
                 self.text_encoder.eval()
             else:
-                self.text_encoder = SentenceTransformer(self.text_model_name)
+                self.text_encoder = SentenceTransformer(self.text_model_name, model_kwargs={"attn_implementation": "sdpa"}).to(args.device)    
             
             self.vpr_encoder = vpr_models.get_model(args.vpr_model_name.lower(), args.vpr_model_backbone, self.vpr_encoder_dim)
             self.vpr_encoder = self.vpr_encoder.eval().to(args.device)
@@ -84,6 +84,7 @@ class VLM_Model:
                 is_pca=args.is_pca,
                 is_text_pooling=args.is_text_pooling,
                 is_image_pooling=args.is_image_pooling,
+                text_encoder_name=args.text_model_name,
                 text_encoder_dim=args.text_dim,                
             )
 
