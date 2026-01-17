@@ -139,8 +139,7 @@ def save_preds(predictions, eval_ds, log_dir, save_only_wrong_preds=None, use_la
 
     viz_dir = log_dir / "preds"
     viz_dir.mkdir()
-    query_text = None
-    pred_texts = []
+    query_text = None    
     for query_index, preds in enumerate(tqdm(predictions, desc=f"Saving preds in {viz_dir}")):
         query_path = eval_ds.queries_paths[query_index]
         if texts is not None:
@@ -149,6 +148,7 @@ def save_preds(predictions, eval_ds, log_dir, save_only_wrong_preds=None, use_la
         list_of_images_paths = [query_path]
         # List of None (query), True (correct preds) or False (wrong preds)
         preds_correct = [None]
+        pred_texts = []
         for pred_index, pred in enumerate(preds):
             pred_path = eval_ds.database_paths[pred]
             list_of_images_paths.append(pred_path)

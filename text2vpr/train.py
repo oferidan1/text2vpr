@@ -50,8 +50,8 @@ def parse_arguments():
     parser.add_argument("--lora_target_modules", nargs='+', default=["query", "value", "qkv"], help="when not lora_all_linear, lora target modules")    
     parser.add_argument("--lora_r", type=int, default="16", help="lora_all_linear 0=no/1=yes")     
     parser.add_argument("--text_dim", type=int, default=1024, help="dimension of the text embeddings")
-
-
+    parser.add_argument("--text_dim", type=int, default=1024, help="dimension of the text embeddings")
+    parser.add_argument("--img_per_place", type=int, default=4, help="number of images per place")
     args = parser.parse_args()
     
     return args            
@@ -75,8 +75,8 @@ if __name__ == '__main__':
         
     datamodule = GSVCitiesDataModule(
         batch_size=args.batch_size,
-        img_per_place=4,
-        min_img_per_place=4,
+        img_per_place=args.img_per_place,
+        min_img_per_place=args.img_per_place,
         shuffle_all=False, # shuffle all images or keep shuffling in-city only
         random_sample_from_each_place=True,
         image_size=(image_size, image_size),
