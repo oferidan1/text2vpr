@@ -119,15 +119,14 @@ def remove_topic_v2_batch(model, tokenizer, messages_batch):
     # 5. Decode all responses in the batch
     return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
 
-def clean_texts_from_csv(csv_file, model_id):    
+def clean_texts_from_csv(csv_file_in, csv_file_out,  model_id):    
     results = []  
      # parse csv file
-    df = pd.read_csv(csv_file)
-    i = 0
-    csv_file_name = 'amstertime_objects_cleaned.csv'
+    df = pd.read_csv(csv_file_in)
+    i = 0    
     # open csv_file_name and make short list of all files not in csv_file
-    if os.path.exists(csv_file_name):
-        df2 = pd.read_csv(csv_file_name)
+    if os.path.exists(csv_file_out):
+        df2 = pd.read_csv(csv_file_out)
         files_in_csv = df2['image_path'].tolist()
         description_in_csv = df2['description'].tolist()
         original_description_in_csv = df2['original_description'].tolist()
@@ -179,7 +178,7 @@ def clean_texts_from_csv(csv_file, model_id):
                 batch_descriptions = []          
 
             df2 = pd.DataFrame(results, columns=['image_path', 'description', 'original_description'])
-            df2.to_csv(csv_file_name, index=False)
+            df2.to_csv(csv_file_out, index=False)
     
     if len(batch_items)>0:
         new_descriptions = remove_topic_v2_batch(model, tokenizer, batch_items)
@@ -189,17 +188,17 @@ def clean_texts_from_csv(csv_file, model_id):
     # save results to updated 
     #csv_file_name = os.path.basename(csv_file)    
     df2 = pd.DataFrame(results, columns=['image_path', 'description', 'original_description'])
-    df2.to_csv(csv_file_name, index=False)
+    df2.to_csv(csv_file_out, index=False)
 
     
 
 if __name__ == "__main__":
-    csv_file = 'amstertime_objects.csv'
+    csv_file_in = 'amstertime_objects.csv'
+    csv_file_out = 'amstertime_objects_cleaned.csv'
     model_id = "meta-llama/Llama-3.3-70B-Instruct"
     #model_id = "microsoft/Phi-4-mini-instruct"
 
-    clean_texts_from_csv(csv_file, model_id)
-
+    clean_texts_from_csv(csv_file_in, csv_file_out, model_id)
         
         
        
