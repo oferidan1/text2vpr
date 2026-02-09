@@ -191,14 +191,18 @@ def clean_texts_from_csv(csv_file_in, csv_file_out,  model_id):
     df2.to_csv(csv_file_out, index=False)
 
     
-
+import argparse
 if __name__ == "__main__":
-    csv_file_in = 'amstertime_objects.csv'
-    csv_file_out = 'amstertime_objects_cleaned.csv'
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--csv_file", type=str, default="amstertime_descriptions.csv")
+    parser.add_argument("--out_file", type=str, default="amstertime_short.csv")
+    args = parser.parse_args()       
+    
+ 
     model_id = "meta-llama/Llama-3.3-70B-Instruct"
     #model_id = "microsoft/Phi-4-mini-instruct"
 
-    clean_texts_from_csv(csv_file_in, csv_file_out, model_id)
+    clean_texts_from_csv(args.csv_file, args.out_file, model_id)
         
         
        
