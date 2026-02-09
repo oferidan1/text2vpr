@@ -135,12 +135,11 @@ def build_context(new_paragraph):
     )
 
     # 2. Build the message list with the 1-shot example
-    messages = [
-        {
-             {"role": "system", 
-              "content": "You are an expert in Geospatial localization and Computer Vision. Your task is to compress long scene descriptions into highly discriminative Spatial Signatures for a text-to-image retrieval system. Condense this scene into a 50-word spatial signature, preserving unique landmarks, distinctive signs texts, and precise object-to-object positioning while removing all non-visual narrative fluff."
-              },
+    messages = [        
+        {"role": "system", 
+        "content": "You are an expert in Geospatial localization and Computer Vision. Your task is to compress long scene descriptions into highly discriminative Spatial Signatures for a text-to-image retrieval system. Condense this scene into a 50-word spatial signature, preserving unique landmarks, distinctive signs texts, and precise object-to-object positioning while removing all non-visual narrative fluff."
         },
+        
         # THE 1-SHOT EXAMPLE
         {"role": "user", "content": example_input},
         {"role": "assistant", "content": example_output},
