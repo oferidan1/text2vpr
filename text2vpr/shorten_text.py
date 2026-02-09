@@ -119,6 +119,38 @@ def remove_topic_v2_batch(model, tokenizer, messages_batch):
     # 5. Decode all responses in the batch
     return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
 
+
+def build_context(new_paragraph):
+     # 1. Define the 1-shot example data
+    example_input = (
+        "A multi-story brick building with a tiled gabled roof, dormer window, and "
+        "rectangular grid windows, featuring the text 'DE COST GAET VOOR DE BAET UYT.' "
+        "and 'HANDELSINRICHTINGEN' on its facade; a boat docked in a canal; a dark brick "
+        "bridge structure with a railing; a tall, ornate streetlight; a light-colored "
+        "building with classical architectural elements; a second tall, ornate streetlight; "
+        "a large, dark brick building with a prominent, narrow, pointed-roof tower and tall windows."
+    )
+    example_output = (
+        "brick building with 'DE COST GAET VOOR DE BAET UYT.' and 'HANDELSINRICHTINGEN' on facade, dormer, and grid windows. Canal boat docked alongside. Adjacent dark brick bridge with railing. Ornate streetlight stands between gabled structure and light classical building. Second streetlight positioned before a large, dark brick building."
+    )
+
+    # 2. Build the message list with the 1-shot example
+    messages = [
+        {
+             {"role": "system", 
+              "content": "You are an expert in Geospatial localization and Computer Vision. Your task is to compress long scene descriptions into highly discriminative Spatial Signatures for a text-to-image retrieval system. Condense this scene into a 50-word spatial signature, preserving unique landmarks, distinctive signs texts, and precise object-to-object positioning while removing all non-visual narrative fluff."
+              },
+        },
+        # THE 1-SHOT EXAMPLE
+        {"role": "user", "content": example_input},
+        {"role": "assistant", "content": example_output},
+        
+        # THE ACTUAL REQUEST
+        {"role": "user", "content": new_paragraph}
+    ]
+    return messages
+
+
 def clean_texts_from_csv(csv_file_in, csv_file_out,  model_id):    
     results = []  
      # parse csv file
@@ -161,10 +193,12 @@ def clean_texts_from_csv(csv_file_in, csv_file_out,  model_id):
         image_path = row['image_path']
         description = row['description']    
 
-        messages = [
-            {"role": "system", "content": "You are an expert in Geospatial localization and Computer Vision. Your task is to compress long scene descriptions into highly discriminative Spatial Signatures for a text-to-image retrieval system."},
-            {"role": "user", "content": f"Condense this scene into a 50-word spatial signature, preserving unique landmarks, distinctive signs, and precise object-to-object positioning while removing all non-visual narrative fluff.':\n\n{description}"}
-        ]
+        # messages = [
+        #     {"role": "system", "content": "You are an expert in Geospatial localization and Computer Vision. Your task is to compress long scene descriptions into highly discriminative Spatial Signatures for a text-to-image retrieval system."},
+        #     {"role": "user", "content": f"Condense this scene into a 50-word spatial signature, preserving unique landmarks, distinctive signs texts, and precise object-to-object positioning while removing all non-visual narrative fluff.':\n\n{description}"}
+        # ]
+        
+        messages = build_context(description)
         
         batch_items.append(messages)
         batch_images.append(image_path)
