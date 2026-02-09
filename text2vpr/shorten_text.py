@@ -131,13 +131,14 @@ def build_context(new_paragraph):
         "a large, dark brick building with a prominent, narrow, pointed-roof tower and tall windows."
     )
     example_output = (
-        "brick building with 'DE COST GAET VOOR DE BAET UYT.' and 'HANDELSINRICHTINGEN' on facade, dormer, and grid windows. Canal boat docked alongside. Adjacent dark brick bridge with railing. Ornate streetlight stands between gabled structure and light classical building. Second streetlight positioned before a large, dark brick building."
+        #"brick building with 'DE COST GAET VOOR DE BAET UYT.' and 'HANDELSINRICHTINGEN' on facade, dormer, and grid windows. Canal boat docked alongside. Adjacent dark brick bridge with railing. Ornate streetlight stands between gabled structure and light classical building. Second streetlight positioned before a large, dark brick building."
+        "Gabled 'DE COST GAET' facade left, canal boat below, brick bridge center, two ornate streetlights foreground, classical light building right."
     )
 
     # 2. Build the message list with the 1-shot example
     messages = [        
         {"role": "system", 
-        "content": "You are an expert in Geospatial localization and Computer Vision. Your task is to compress long scene descriptions into highly discriminative Spatial Signatures for a text-to-image retrieval system. Condense this scene into a 50-word spatial signature, preserving unique landmarks, distinctive signs texts, and precise object-to-object positioning while removing all non-visual narrative fluff."
+        "content": "You are an expert in Geospatial localization and Computer Vision. Your task is to compress long scene descriptions into highly discriminative Spatial Signatures for a text-to-image retrieval system. Condense this scene into a 20-word spatial signature, preserving unique landmarks, distinctive signs texts, and precise object-to-object positioning while removing all non-visual narrative fluff."
         },
         
         # THE 1-SHOT EXAMPLE
