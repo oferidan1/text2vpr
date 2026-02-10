@@ -106,7 +106,7 @@ def remove_topic_v2_batch(model, tokenizer, messages_batch):
     # 3. Execution
     outputs = model.generate(
         **inputs, # Unpack input_ids and attention_mask
-        max_new_tokens=1024,
+        max_new_tokens=256,
         temperature=0.1,
         do_sample=False
     )
@@ -119,9 +119,7 @@ def remove_topic_v2_batch(model, tokenizer, messages_batch):
     # 5. Decode all responses in the batch
     return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
 
-
 def build_context(new_paragraph):
-     # 1. Define the 1-shot example data
     example_input = (
         "A multi-story brick building with a tiled gabled roof, dormer window, and "
         "rectangular grid windows, featuring the text 'DE COST GAET VOOR DE BAET UYT.' "
@@ -130,23 +128,21 @@ def build_context(new_paragraph):
         "building with classical architectural elements; a second tall, ornate streetlight; "
         "a large, dark brick building with a prominent, narrow, pointed-roof tower and tall windows."
     )
-    example_output = (
-        #"brick building with 'DE COST GAET VOOR DE BAET UYT.' and 'HANDELSINRICHTINGEN' on facade, dormer, and grid windows. Canal boat docked alongside. Adjacent dark brick bridge with railing. Ornate streetlight stands between gabled structure and light classical building. Second streetlight positioned before a large, dark brick building."
-        "brick building with 'DE COST GAET VOOR DE BAET UYT.' and 'HANDELSINRICHTINGEN' signs, canal, brick bridge , two ornate streetlights."
-    )
+    # Capitalized the start and removed any possible hidden spaces
+    example_output = ("Brick building with 'DE COST GAET VOOR DE BAET UYT.' signs, canal, brick bridge, two ornate streetlights.")
 
-    # 2. Build the message list with the 1-shot example
     messages = [        
-        {"role": "system", 
-        "content": "You are an expert in Geospatial localization and Computer Vision. Your task is to compress long scene descriptions into highly discriminative Spatial Signatures for a text-to-image retrieval system. Condense this scene into a maximum of 20 words spatial signature, preserving unique landmarks, distinctive signs texts, and precise object-to-object positioning while removing all non-visual narrative fluff. make sure you have maximum of 20 words."
+        {
+            "role": "system", 
+            "content": (
+                "You are an expert in Geospatial localization and Computer Vision. Your task is to compress long scene descriptions into highly discriminative Spatial Signatures for a text-to-image retrieval system. "
+                "Condense this scene into spatial signature, preserving unique landmarks, distinctive signs texts, and precise object-to-object positioning while removing all non-visual narrative fluff."                
+            )
         },
-        
-        # THE 1-SHOT EXAMPLE
         {"role": "user", "content": example_input},
         {"role": "assistant", "content": example_output},
-        
-        # THE ACTUAL REQUEST
-        {"role": "user", "content": new_paragraph}
+        # Explicit instruction in the final user call helps prevent 'hallucinated' prefixes
+        {"role": "user", "content": f"Compress to max 20 words: {new_paragraph}"}
     ]
     return messages
 
@@ -167,21 +163,21 @@ def clean_texts_from_csv(csv_file_in, csv_file_out,  model_id):
         
     # 1. Define FP8 Quantization Config
     # Note: Ensure you have bitsandbytes installed
-    # quantization_config = BitsAndBytesConfig(
-    #     load_in_8bit=True, # Standard 8-bit
-    # )
+    quantization_config = BitsAndBytesConfig(
+        load_in_8bit=True, # Standard 8-bit
+    )
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     # 2. Load model with Flash Attention and Quantization
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
-        # quantization_config=quantization_config,
+        quantization_config=quantization_config,
         torch_dtype=torch.bfloat16, # Compute dtype should stay bfloat16
         device_map="auto",
         attn_implementation="flash_attention_2" # Enforce Flash Attention 2
     )
     
-    batch_size = 10    
+    batch_size = 100    
     batch_items = []
     batch_images = []
     batch_descriptions = []    
