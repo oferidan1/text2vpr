@@ -132,7 +132,7 @@ def build_context(new_paragraph):
     )
     example_output = (
         #"brick building with 'DE COST GAET VOOR DE BAET UYT.' and 'HANDELSINRICHTINGEN' on facade, dormer, and grid windows. Canal boat docked alongside. Adjacent dark brick bridge with railing. Ornate streetlight stands between gabled structure and light classical building. Second streetlight positioned before a large, dark brick building."
-        "Gabled 'DE COST GAET' facade left, canal boat below, brick bridge center, two ornate streetlights foreground, classical light building right."
+        "brick building with 'DE COST GAET VOOR DE BAET UYT.' and 'HANDELSINRICHTINGEN' signs, canal, brick bridge , two ornate streetlights."
     )
 
     # 2. Build the message list with the 1-shot example
@@ -167,23 +167,21 @@ def clean_texts_from_csv(csv_file_in, csv_file_out,  model_id):
         
     # 1. Define FP8 Quantization Config
     # Note: Ensure you have bitsandbytes installed
-    quantization_config = BitsAndBytesConfig(
-        load_in_8bit=True, # Standard 8-bit
-        # For actual FP8 (hardware accelerated), usually requires pre-quantized weights 
-        # or libraries like vLLM/AutoFP8.
-    )
+    # quantization_config = BitsAndBytesConfig(
+    #     load_in_8bit=True, # Standard 8-bit
+    # )
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     # 2. Load model with Flash Attention and Quantization
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
-        quantization_config=quantization_config,
+        # quantization_config=quantization_config,
         torch_dtype=torch.bfloat16, # Compute dtype should stay bfloat16
         device_map="auto",
         attn_implementation="flash_attention_2" # Enforce Flash Attention 2
     )
     
-    batch_size = 100    
+    batch_size = 10    
     batch_items = []
     batch_images = []
     batch_descriptions = []    
