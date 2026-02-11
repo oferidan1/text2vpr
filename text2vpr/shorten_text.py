@@ -122,7 +122,7 @@ def remove_topic_v2_batch(model, tokenizer, messages_batch):
     return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
 
 
-def build_context(new_paragraph):
+def build_context(new_paragraph, max_len):
      # 1. Define the 1-shot example data
     example_input = (
         "A multi-story brick building with a tiled gabled roof, dormer window, and "
@@ -140,7 +140,7 @@ def build_context(new_paragraph):
     # 2. Build the message list with the 1-shot example
     messages = [        
         {"role": "system", 
-        "content": "You are an expert in Geospatial localization and Computer Vision. Your task is to compress long scene descriptions into highly discriminative Spatial Signatures for a text-to-image retrieval system. Condense this scene into a maximum of 20 words spatial signature, preserving unique landmarks, distinctive signs texts, and precise object-to-object positioning while removing all non-visual narrative fluff. make sure you have maximum of 20 words."
+        "content": f"You are an expert in Geospatial localization and Computer Vision. Your task is to compress long scene descriptions into highly discriminative Spatial Signatures for a text-to-image retrieval system. Condense this scene into a maximum of {max_len} words spatial signature, preserving unique landmarks, distinctive signs texts, and precise object-to-object positioning while removing all non-visual narrative fluff. make sure you have maximum of {max_len} words."
         },
         
         # THE 1-SHOT EXAMPLE
@@ -153,7 +153,7 @@ def build_context(new_paragraph):
     return messages
 
 
-def clean_texts_from_csv(csv_file_in, csv_file_out,  model_id):    
+def clean_texts_from_csv(csv_file_in, csv_file_out, max_len, model_id):    
     results = []  
      # parse csv file
     df = pd.read_csv(csv_file_in)
@@ -198,7 +198,7 @@ def clean_texts_from_csv(csv_file_in, csv_file_out,  model_id):
         #     {"role": "user", "content": f"Condense this scene into a 50-word spatial signature, preserving unique landmarks, distinctive signs texts, and precise object-to-object positioning while removing all non-visual narrative fluff.':\n\n{description}"}
         # ]
         
-        messages = build_context(description)
+        messages = build_context(description, max_len)
         
         batch_items.append(messages)
         batch_images.append(image_path)
@@ -230,13 +230,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--csv_file", type=str, default="amstertime_descriptions.csv")
     parser.add_argument("--out_file", type=str, default="amstertime_short.csv")
+    parser.add_argument("--max_len", type=str, default="40")
     args = parser.parse_args()       
     
  
     model_id = "meta-llama/Llama-3.3-70B-Instruct"
     #model_id = "microsoft/Phi-4-mini-instruct"
 
-    clean_texts_from_csv(args.csv_file, args.out_file, model_id)
+    clean_texts_from_csv(args.csv_file, args.out_file, args.max_len, model_id)
         
         
        
