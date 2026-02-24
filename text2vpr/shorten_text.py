@@ -193,12 +193,12 @@ def clean_texts_from_csv(csv_file_in, csv_file_out, max_len, model_id):
         image_path = row['image_path']
         description = row['description']    
 
-        # messages = [
-        #     {"role": "system", "content": "You are an expert in Geospatial localization and Computer Vision. Your task is to compress long scene descriptions into highly discriminative Spatial Signatures for a text-to-image retrieval system."},
-        #     {"role": "user", "content": f"Condense this scene into a 50-word spatial signature, preserving unique landmarks, distinctive signs texts, and precise object-to-object positioning while removing all non-visual narrative fluff.':\n\n{description}"}
-        # ]
+        messages = [
+            {"role": "system", "content": f"You are an expert in Geospatial localization and Computer Vision. Your task is to compress long scene descriptions into highly discriminative Spatial Signatures for a text-to-image retrieval system. Condense this scene into a maximum of {max_len} words spatial signature, preserving unique landmarks, distinctive signs texts, and precise object-to-object positioning while removing all non-visual narrative fluff. make sure you have maximum of {max_len} words."},
+            {"role": "user", "content": f".'Description:\n\n{description}"}
+        ]
         
-        messages = build_context(description, max_len)
+        #messages = build_context(description, max_len)
         
         batch_items.append(messages)
         batch_images.append(image_path)
@@ -220,7 +220,6 @@ def clean_texts_from_csv(csv_file_in, csv_file_out, max_len, model_id):
             results.append([img, new_desc.strip(), old_desc])
             
     # save results to updated 
-    #csv_file_name = os.path.basename(csv_file)    
     df2 = pd.DataFrame(results, columns=['image_path', 'description', 'original_description'])
     df2.to_csv(csv_file_out, index=False)
 
